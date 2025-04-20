@@ -1,0 +1,61 @@
+# STM32CubeIDE / STM32CubeMX generated files
+*.ioc
+*.launch
+*.log
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.lst
+*.srec
+*.d
+*.o
+*.su
+*.dep
+*.pyc
+*.pyo
+
+# Backup & temporary files
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Build directories (CubeIDE default)
+Debug/
+Release/
+
+# CubeIDE settings
+.cproject
+.project
+.settings/
+.metadata/
+mxproject.xml
+
+# CubeMX generated folder
+Core/Inc/.mxproject
+Drivers/.mxproject
+
+# VSCode settings
+.vscode/
+.vs/
+
+# Build system outputs
+build/
+out/
+obj/
+
+# CMake or Make-related
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Miscellaneous
+.DS_Store
+Thumbs.db

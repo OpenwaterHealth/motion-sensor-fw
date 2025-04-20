@@ -1,0 +1,824 @@
+/*
+ * camera_manager.c
+ *
+ *  Created on: Mar 5, 2025
+ *      Author: GeorgeVigelette
+ */
+
+#include "main.h"
+#include "crosslink.h"
+#include "0X02C1B.h"
+#include "i2c_master.h"
+#include "uart_comms.h"
+#include "utils.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+
+#define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
+CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
+
+static int _active_cam_idx = 0;
+
+volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
+static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
+uint8_t frame_id = 0;
+extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
+extern uint8_t event_bits;
+extern bool fake_data_gen;
+extern ScanPacket scanPacketA;
+extern ScanPacket scanPacketB;
+
+static void generate_fake_histogram(uint8_t *histogram_data) {
+    // Cast the byte buffer to uint32_t pointer to store histogram data
+    uint32_t *histogram = (uint32_t *)histogram_data;
+
+    // Initialize histogram bins to zero
+    memset(histogram, 0, HISTOGRAM_DATA_SIZE/4);
+
+    // Generate random 10-bit grayscale image and compute histogram
+    switch(HISTO_TEST_PATTERN){
+    	case 0:
+			for (int i = 0; i < WIDTH * HEIGHT; i++) {
+					uint32_t pixel_value = rand() % HISTOGRAM_BINS; // Random 10-bit value (0-1023)
+					histogram[pixel_value]++;
+				}
+			break;
+    	case 1:
+    		for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] = (uint32_t) (i + frame_id);
+    		}
+
+    }
+
+    histogram[HISTOGRAM_BINS-1] |= ((uint32_t) frame_id)<<24; // fill in the frame_id to the last bin's spacer
+}
+
+static void init_camera(CameraDevice *cam){
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	// Reconfigure CRESETB Pin
+	HAL_GPIO_DeInit(cam->cresetb_port, cam->cresetb_pin);
+	GPIO_InitStruct.Pin = cam->cresetb_pin; // Same pin
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Push-pull output
+	GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Set the speed
+	HAL_GPIO_Init(cam->cresetb_port, &GPIO_InitStruct);
+
+	// Reconfigure GPIO0 Pin
+	HAL_GPIO_DeInit(cam->gpio0_port, cam->gpio0_pin);
+	GPIO_InitStruct.Pin = cam->gpio0_pin; // Same pin
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Push-pull output
+	GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Set the speed
+	HAL_GPIO_Init(cam->gpio0_port, &GPIO_InitStruct);
+
+	cam->streaming_enabled = false;
+}
+
+void init_camera_sensors() {
+	int i = 0;
+
+	//Configure, initialize, and set default camera
+	cam_array[0].id = 0;
+	cam_array[0].cresetb_port = CRESET_1_GPIO_Port;
+	cam_array[0].cresetb_pin = CRESET_1_Pin;
+	cam_array[0].gpio0_port = GPIO0_1_GPIO_Port;
+	cam_array[0].gpio0_pin = GPIO0_1_Pin;
+	cam_array[0].useUsart = true;
+	cam_array[0].useDma = true;
+	cam_array[0].pI2c = &hi2c1;
+	cam_array[0].device_address = FPGA_I2C_ADDRESS;
+	cam_array[0].pSpi = NULL;
+	cam_array[0].pUart = &husart2;
+	cam_array[0].i2c_target = 0;
+	cam_array[0].pRecieveHistoBuffer = NULL;
+
+	cam_array[1].id = 1;
+	cam_array[1].cresetb_port = CRESET_2_GPIO_Port;
+	cam_array[1].cresetb_pin = CRESET_2_Pin;
+	cam_array[1].gpio0_port = GPIO0_2_GPIO_Port;
+	cam_array[1].gpio0_pin = GPIO0_2_Pin;
+	cam_array[1].useUsart = false;
+	cam_array[1].useDma = false;
+	cam_array[1].pI2c = &hi2c1;
+	cam_array[1].device_address = FPGA_I2C_ADDRESS;
+	cam_array[1].pSpi = &hspi6;
+	cam_array[1].pUart = NULL;
+	cam_array[1].i2c_target = 1;
+	cam_array[1].pRecieveHistoBuffer = NULL;
+
+	cam_array[2].id = 2;
+	cam_array[2].cresetb_port = CRESET_3_GPIO_Port;
+	cam_array[2].cresetb_pin = CRESET_3_Pin;
+	cam_array[2].gpio0_port = GPIO0_3_GPIO_Port;
+	cam_array[2].gpio0_pin = GPIO0_3_Pin;
+	cam_array[2].useUsart = true;
+	cam_array[2].useDma = true;
+	cam_array[2].pI2c = &hi2c1;
+	cam_array[2].device_address = FPGA_I2C_ADDRESS;
+	cam_array[2].pSpi = NULL;
+	cam_array[2].pUart = &husart3;
+	cam_array[2].i2c_target = 2;
+	cam_array[2].pRecieveHistoBuffer = NULL;
+
+	cam_array[3].id = 3;
+	cam_array[3].cresetb_port = CRESET_4_GPIO_Port;
+	cam_array[3].cresetb_pin = CRESET_4_Pin;
+	cam_array[3].gpio0_port = GPIO0_4_GPIO_Port;
+	cam_array[3].gpio0_pin = GPIO0_4_Pin;
+	cam_array[3].useUsart = true;
+	cam_array[3].useDma = true;
+	cam_array[3].pI2c = &hi2c1;
+	cam_array[3].device_address = FPGA_I2C_ADDRESS;
+	cam_array[3].pSpi = NULL;
+	cam_array[3].pUart = &husart6;
+	cam_array[3].i2c_target = 3;
+	cam_array[3].pRecieveHistoBuffer = NULL;
+
+	cam_array[4].id = 4;
+	cam_array[4].cresetb_port = CRESET_5_GPIO_Port;
+	cam_array[4].cresetb_pin = CRESET_5_Pin;
+	cam_array[4].gpio0_port = GPIO0_5_GPIO_Port;
+	cam_array[4].gpio0_pin = GPIO0_5_Pin;
+	cam_array[4].useUsart = true;
+	cam_array[4].useDma = true;
+	cam_array[4].pI2c = &hi2c1;
+	cam_array[4].device_address = FPGA_I2C_ADDRESS;
+	cam_array[4].pSpi = NULL;
+	cam_array[4].pUart = &husart1;
+	cam_array[4].i2c_target = 4;
+	cam_array[4].pRecieveHistoBuffer = NULL;
+
+	cam_array[5].id = 5;
+	cam_array[5].cresetb_port = CRESET_6_GPIO_Port;
+	cam_array[5].cresetb_pin = CRESET_6_Pin;
+	cam_array[5].gpio0_port = GPIO0_6_GPIO_Port;
+	cam_array[5].gpio0_pin = GPIO0_6_Pin;
+	cam_array[5].useUsart = false;
+	cam_array[5].useDma = true;
+	cam_array[5].pI2c = &hi2c1;
+	cam_array[5].device_address = FPGA_I2C_ADDRESS;
+	cam_array[5].pSpi = &hspi3;
+	cam_array[5].pUart = NULL;
+	cam_array[5].i2c_target = 5;
+	cam_array[5].pRecieveHistoBuffer = NULL;
+
+	cam_array[6].id = 6;
+	cam_array[6].cresetb_port = CRESET_7_GPIO_Port;
+	cam_array[6].cresetb_pin = CRESET_7_Pin;
+	cam_array[6].gpio0_port = GPIO0_7_GPIO_Port;
+	cam_array[6].gpio0_pin = GPIO0_7_Pin;
+	cam_array[6].useUsart = false;
+	cam_array[6].useDma = true;
+	cam_array[6].pI2c = &hi2c1;
+	cam_array[6].device_address = FPGA_I2C_ADDRESS;
+	cam_array[6].pSpi = &hspi2;
+	cam_array[6].pUart = NULL;
+	cam_array[6].i2c_target = 6;
+	cam_array[6].pRecieveHistoBuffer = NULL;
+
+	cam_array[7].id = 7;
+	cam_array[7].cresetb_port = CRESET_8_GPIO_Port;
+	cam_array[7].cresetb_pin = CRESET_8_Pin;
+	cam_array[7].gpio0_port = GPIO0_8_GPIO_Port;
+	cam_array[7].gpio0_pin = GPIO0_8_Pin;
+	cam_array[7].useUsart = false;
+	cam_array[7].useDma = true;
+	cam_array[7].pI2c = &hi2c1;
+	cam_array[7].device_address = FPGA_I2C_ADDRESS;
+	cam_array[7].pSpi = &hspi4;
+	cam_array[7].pUart = NULL;
+	cam_array[7].i2c_target = 7;
+	cam_array[7].pRecieveHistoBuffer = NULL;
+
+	for(i=0; i<CAMERA_COUNT; i++){
+		cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
+		init_camera(&cam_array[i]);
+	}
+
+	event_bits = 0x00;
+	event_bits_enabled = 0x00;
+
+	scanPacketA = (ScanPacket ) { 0 };
+	scanPacketB = (ScanPacket ) { 0 };
+	// for (int i = 0; i < 8; i++) {
+	//	toggle_camera_stream(i);
+	// }
+}
+
+CameraDevice* get_active_cam(void) {
+	return &cam_array[_active_cam_idx];
+}
+
+CameraDevice* set_active_camera(int id) {
+	if(id < 0 || id >= CAMERA_COUNT) return NULL;
+
+	_active_cam_idx = id;
+	return &cam_array[_active_cam_idx];
+}
+
+CameraDevice* get_camera_byID(int id) {
+	if(id < 0 || id >= CAMERA_COUNT)
+		return NULL;
+	return &cam_array[id];
+}
+
+_Bool reset_camera(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Hard Reset Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Hard Reset Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+    HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
+    HAL_Delay(5);
+
+    HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
+    HAL_Delay(1000);
+
+	return true;
+}
+
+_Bool enable_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Enable FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Enable FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+    HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
+    HAL_Delay(2);
+	return true;
+}
+
+_Bool disable_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Disable FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Disable FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+    HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
+    HAL_Delay(2);
+
+	return true;
+}
+
+_Bool activate_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_send_activation(cam->pI2c, cam->device_address) == 1)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+	return true;
+}
+
+_Bool verify_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_checkid(cam->pI2c, cam->device_address) == 1)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+	return true;
+}
+
+_Bool enter_sram_prog_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_enter_sram_prog_mode(cam->pI2c, cam->device_address) == 1)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+	return true;
+}
+
+_Bool exit_sram_prog_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_enter_sram_prog_mode(cam->pI2c, cam->device_address) == 1)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+	return true;
+}
+
+_Bool erase_sram_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_erase_sram(cam->pI2c, cam->device_address) == 1)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+	return true;
+}
+
+uint32_t read_status_fpga(uint8_t cam_id)
+{
+	uint32_t ret_val = 0;
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return ret_val;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	ret_val = fpga_read_status(cam->pI2c, cam->device_address);
+
+	return ret_val;
+}
+
+uint32_t read_usercode_fpga(uint8_t cam_id)
+{
+	uint32_t ret_val = 0;
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Activate FPGA Camera %d Failed\r\n", cam_id);
+		return ret_val;
+	}
+
+	printf("Activate FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	ret_val = fpga_read_usercode(cam->pI2c, cam->device_address);
+
+	return ret_val;
+}
+
+_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Program FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_program_sram(cam->pI2c, cam->device_address, rom_bitstream, pData, Data_Len) == 1)
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	return true;
+}
+
+_Bool program_fpga(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Program FPGA Camera %d Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(fpga_configure(cam->pI2c, cam->device_address, cam->cresetb_port, cam->cresetb_pin) == 1)
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	return true;
+}
+
+_Bool configure_camera_sensor(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Configure Camera %d Registers Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Configure Camera %d Registers Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(X02C1B_configure_sensor(cam) == 1)
+	{
+		printf("Configure Camera %d Registers Failed\r\n", cam_id);
+		return false;
+	}
+
+	return true;
+}
+
+_Bool configure_camera_testpattern(uint8_t cam_id)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Configure Camera %d Registers Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Configure Camera %d Test Pattern Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	if(X02C1B_set_test_pattern(cam) == 1)
+	{
+		printf("Configure Camera %d Test Pattern Failed\r\n", cam_id);
+		return false;
+	}
+
+	return true;
+}
+
+_Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
+{
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Capture HISTO for Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Get HISTO for Camera %d Registers Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+    if (!cam->pRecieveHistoBuffer) {
+        printf("No histogram buffer for camera %d\r\n", cam_id);
+        return false;
+    }
+
+    // Copy data into the provided buffer
+    memcpy(data, cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
+    *data_len = HISTOGRAM_DATA_SIZE;
+
+    return true;
+}
+
+_Bool capture_single_histogram(uint8_t cam_id)
+{
+	_Bool ret = true;
+	HAL_StatusTypeDef status = HAL_OK;
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Capture HISTO for Camera %d Failed\r\n", cam_id);
+		return false;
+	}
+
+	printf("Capture HISTO for Camera %d Registers Started\r\n", cam_id);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
+	HAL_Delay(25);
+
+	cam->streaming_enabled = false;
+
+	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, HISTOGRAM_DATA_SIZE);
+
+	if(cam->useUsart)
+	{
+		status = HAL_USART_Receive_DMA(cam->pUart, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
+	} else {
+		status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
+	}
+
+	if(status != HAL_OK)
+	{
+		printf("failed to setup receive for Camera %d channel\r\n", cam_id);
+		return false;
+	}
+
+	X02C1B_stream_on(cam);
+	HAL_Delay(10);
+
+	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
+	HAL_Delay(25);
+	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
+	HAL_Delay(25);
+	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
+	HAL_Delay(25);
+	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
+
+	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
+	while(!cam->streaming_enabled){
+	    if (HAL_GetTick() > timeout) {
+	        printf("USART receive timeout!\r\n");
+	        if(cam->useUsart) {
+	            HAL_DMA_Abort(cam->pUart->hdmarx); // safely abort DMA
+	            __HAL_USART_DISABLE(cam->pUart);   // disable USART
+	            cam->pUart->RxXferCount = 0;       // force clear counters
+	            __HAL_USART_ENABLE(cam->pUart);    // re-enable USART
+	        } else {
+	            HAL_DMA_Abort(cam->pSpi->hdmarx);  // safely abort DMA
+	            __HAL_SPI_DISABLE(cam->pSpi);      // disable SPI
+	            cam->pSpi->RxXferCount = 0;
+	            __HAL_SPI_ENABLE(cam->pSpi);       // re-enable SPI
+	        }
+	    	ret = false;
+	        break;
+	    }
+	    HAL_Delay(1);
+	}
+
+	HAL_Delay(10);
+	X02C1B_stream_off(cam);
+	printf("Received Frame\r\n");
+
+	return ret;
+}
+
+void switch_frame_buffer(void) {
+    _active_buffer = 1 - _active_buffer; // Toggle between 0 and 1
+    // Reassign each camera’s buffer pointer
+    for (int i = 0; i < CAMERA_COUNT; i++) {
+        cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
+    }
+}
+
+uint8_t* get_active_frame_buffer(void) {
+    return (uint8_t*)frame_buffer[_active_buffer];
+}
+
+uint8_t* get_inactive_frame_buffer(void) {
+    return (uint8_t*)frame_buffer[1 - _active_buffer];
+}
+
+void fill_frame_buffers(void) {
+    for (int i = 0; i < CAMERA_COUNT; i++) {
+    	generate_fake_histogram(cam_array[i].pRecieveHistoBuffer);
+    }
+}
+
+void SendHistogramData(void) {
+
+	if (event_bits == event_bits_enabled && event_bits_enabled > 0) {
+		event_bits = 0x00;
+		frame_id++;
+
+		UartPacket telem;
+		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
+		telem.packet_type = OW_DATA;
+		telem.command = OW_HISTO;
+		telem.data_len = SPI_PACKET_LENGTH;
+		telem.addr = 0;
+
+		for (int i = 0; i < 8; i++) {
+			CameraDevice cam = cam_array[i];
+			HAL_StatusTypeDef status;
+
+			if (cam.streaming_enabled ) {
+				// Step 1. send out the packet
+				// just send out each histo over the buffer
+				// this is vile but if it works i'm going to be upset
+				HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+				telem.data = cam_array[i].pRecieveHistoBuffer;
+				telem.id = 0;
+				telem.addr = i;
+				comms_interface_send(&telem);
+				HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
+//                	Step 2 Switch the buffer
+//        		    cam_array[i].pRecieveHistoBuffer = (cam_array[i].pRecieveHistoBuffer == scanPacketA.cam0_buffer) ? scanPacketB.cam0_buffer : scanPacketA.cam0_buffer;
+
+				// Step 3 set up the next event
+				if(!fake_data_gen) {
+
+					//TODO refactor this out
+					if (cam.useUsart) {
+						if (cam.useDma) {
+							status = HAL_USART_Receive_DMA(cam.pUart,
+									cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
+						} else {
+							status = HAL_USART_Receive_IT(cam.pUart,
+									cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
+						}
+					} else {
+						if (cam.useDma) {
+							status = HAL_SPI_Receive_DMA(cam.pSpi,
+									cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+						} else {
+							status = HAL_SPI_Receive_IT(cam.pSpi,
+									cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+						}
+					}
+					if (status != HAL_OK) {
+						Error_Handler();
+					}
+				}
+				else fill_frame_buffers(); //TODO make this faster + dynamic
+
+			}
+		}
+	}
+}
+
+
+int toggle_camera_stream(uint8_t cam_id){
+    // add to the event bits
+    printf("Event bits before toggling: %02X\r\n", event_bits_enabled);
+
+    event_bits_enabled ^= (1 << cam_id);
+    printf("Event bits after toggling: %02X\r\n", event_bits_enabled);
+
+    bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
+    get_camera_byID(cam_id)->streaming_enabled = enabled;
+    HAL_StatusTypeDef status;
+    if(enabled){
+        printf("Enabled camera stream %d\r\n", cam_id +1);
+
+        // kick off the reception
+        if(get_camera_byID(cam_id)->useUsart) {
+            if(get_camera_byID(cam_id)->useDma)
+            	status = HAL_USART_Receive_DMA(get_camera_byID(cam_id)->pUart, get_camera_byID(cam_id)->pRecieveHistoBuffer, USART_PACKET_LENGTH);
+            else
+            	status = HAL_USART_Receive_IT(get_camera_byID(cam_id)->pUart, get_camera_byID(cam_id)->pRecieveHistoBuffer, USART_PACKET_LENGTH);
+        }
+        else{
+            if(get_camera_byID(cam_id)->useDma)
+            	status = HAL_SPI_Receive_DMA(get_camera_byID(cam_id)->pSpi, get_camera_byID(cam_id)->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+            else
+            	status = HAL_SPI_Receive_IT(get_camera_byID(cam_id)->pSpi, get_camera_byID(cam_id)->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+        }
+    }
+    else{
+        printf("Disabled camera stream %d\r\n", cam_id +1);
+        // disable the reception
+		if(get_camera_byID(cam_id)->useUsart) {
+			if(get_camera_byID(cam_id)->useDma)
+				status = HAL_USART_Abort(get_camera_byID(cam_id)->pUart);
+			else
+				status = HAL_USART_Abort_IT(get_camera_byID(cam_id)->pUart);
+		}
+		else{
+			if(get_camera_byID(cam_id)->useDma)
+				status = HAL_SPI_Abort(get_camera_byID(cam_id)->pSpi);
+			else
+				status = HAL_SPI_Abort_IT(get_camera_byID(cam_id)->pSpi);
+		}
+    }
+    return status;
+}
+
+void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart)
+{
+	for(int i = 0; i < CAMERA_COUNT; i ++){
+		if(cam_array[i].pUart == husart){
+			cam_array[i].streaming_enabled = true;
+			break;
+		}
+	}
+}
+
+void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi)
+{
+	for(int i = 0; i < CAMERA_COUNT; i ++){
+		if(cam_array[i].pSpi == hspi){
+			cam_array[i].streaming_enabled = true;
+			break;
+		}
+	}
+}
