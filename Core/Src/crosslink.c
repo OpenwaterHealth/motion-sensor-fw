@@ -32,9 +32,11 @@ volatile uint8_t rxComplete = 0;
 volatile uint8_t i2cError = 0;
 
 unsigned char activation_key[5] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
+uint8_t expected_idcode[] = {0x01, 0x2C, 0x00, 0x43};
 unsigned char write_buf[4];
 unsigned char read_buf[4];
 
+const uint8_t max_attempts = 3;
 extern uint8_t bitstream_buffer[];
 extern uint32_t bitstream_len;
 
@@ -257,6 +259,9 @@ int fpga_program_sram(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, bool rom_bit
 
 int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin) {
 	int ret_status = 0;
+	uint8_t attempt = 0;
+	_Bool idcode_match = false;
+
 	if(verbose_on) printf("Starting FPGA configuration...\r\n");
 
     // Set GPIO HIGH
@@ -267,24 +272,42 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
     HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
     HAL_Delay(250);
 
-    HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-    HAL_Delay(250);
+    while (attempt < max_attempts && !idcode_match) {
+        attempt++;
+		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
+		HAL_Delay(100);
 
-    // Set GPIO LOW
-    HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
-    HAL_Delay(1000);
+		// Set GPIO LOW
+		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
+		HAL_Delay(1000);
 
-    // Activation Key
-    uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
-    xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
-    HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-    HAL_Delay(10);
+		// Activation Key
+		uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
+		xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
+		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
+		HAL_Delay(10);
 
-    // IDCODE
-    memset(read_buf, 0, 4);
-    memcpy(write_buf, (uint8_t[]){0xE0,0x00,0x00,0x00}, 4);
-    xi2c_write_and_read(hi2c, DevAddress, write_buf, 4, read_buf, 4);
-    if(verbose_on) print_hex_buf("IDCODE", read_buf, 4);
+		// IDCODE
+		memset(read_buf, 0, 4);
+		memcpy(write_buf, (uint8_t[]){0xE0,0x00,0x00,0x00}, 4);
+		xi2c_write_and_read(hi2c, DevAddress, write_buf, 4, read_buf, 4);
+		if(verbose_on) print_hex_buf("IDCODE", read_buf, 4);
+
+	    // Check if IDCODE matches expected
+	    if (memcmp(read_buf, expected_idcode, 4) == 0) {
+	        idcode_match = true;
+	        break;
+	    }
+    }
+
+    if (!idcode_match) {
+        printf("ERROR: Failed to match IDCODE after %d attempts.\r\n", max_attempts);
+        // Optionally return or handle error
+        return HAL_ERROR;
+    } else {
+        printf("IDCODE matched successfully.\r\n");
+        // Proceed with the next steps
+    }
 
     // Enable SRAM
     memcpy(write_buf, (uint8_t[]){0xC6,0x00,0x00,0x00}, 4);
