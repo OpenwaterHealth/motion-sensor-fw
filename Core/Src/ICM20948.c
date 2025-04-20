@@ -104,12 +104,12 @@ uint8_t ICM_Init(void)
 
     // 7. Configure gyroscope (±2000 dps, 17Hz BW)
     uint8_t gyro_config_1 = 0x06; // FCHOICE=0, DLPFCFG=6 (17Hz), FS_SEL=3 (±2000dps)
-    status = ICM_WriteBytes(0x01, &gyro_config_1, 1);
+    status = ICM_WriteBytes(ICM20948_GYRO_CONFIG_1, &gyro_config_1, 1);
     if (status != HAL_OK) return status;
 
     // 8. Configure accelerometer (±16g, 17Hz BW)
     uint8_t accel_config = 0x06; // FCHOICE=1, DLPFCFG=6, FS_SEL=3 (±16g)
-    status = ICM_WriteBytes(0x14, &accel_config, 1);
+    status = ICM_WriteBytes(ICM20948_ACCEL_CONFIG, &accel_config, 1);
     if (status != HAL_OK) return status;
 
     // 9. Return to USER BANK 0
@@ -138,6 +138,36 @@ float ICM_ReadTemperature(void) {
     temperatureC = ((float)temp_raw / 333.87f) + 21.0f;  // per datasheet Page 14
 
     return temperatureC;
+}
+
+uint8_t ICM_ReadAccel(ICM_Axis3D *accel)
+{
+    uint8_t rawData[6];
+    ICM_SelectBank(ICM20948_USER_BANK_0);
+
+    if (ICM_readBytes(ICM20948_ACCEL_XOUT_H, rawData, 6) != HAL_OK)
+        return HAL_ERROR;
+
+    accel->x = (int16_t)((rawData[0] << 8) | rawData[1]);
+    accel->y = (int16_t)((rawData[2] << 8) | rawData[3]);
+    accel->z = (int16_t)((rawData[4] << 8) | rawData[5]);
+
+    return HAL_OK;
+}
+
+uint8_t ICM_ReadGyro(ICM_Axis3D *gyro)
+{
+    uint8_t rawData[6];
+    ICM_SelectBank(ICM20948_USER_BANK_0);
+
+    if (ICM_readBytes(ICM20948_GYRO_XOUT_H, rawData, 6) != HAL_OK)
+        return HAL_ERROR;
+
+    gyro->x = (int16_t)((rawData[0] << 8) | rawData[1]);
+    gyro->y = (int16_t)((rawData[2] << 8) | rawData[3]);
+    gyro->z = (int16_t)((rawData[4] << 8) | rawData[5]);
+
+    return HAL_OK;
 }
 
 void ICM_DumpRegisters(void)

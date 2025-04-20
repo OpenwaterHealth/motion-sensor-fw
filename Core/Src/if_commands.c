@@ -21,6 +21,8 @@ extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
 static float cam_temp;
 volatile float imu_temp = 0;
+static ICM_Axis3D accel;
+static ICM_Axis3D gyro;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 {
@@ -30,17 +32,21 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 	{
 	case OW_CMD_NOP:
 		uartResp->command = OW_CMD_NOP;
+		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_PING:
 		uartResp->command = OW_CMD_PING;
+		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_VERSION:
 		uartResp->command = OW_CMD_VERSION;
+		uartResp->packet_type = OW_RESP;
 		uartResp->data_len = sizeof(FIRMWARE_VERSION_DATA);
 		uartResp->data = FIRMWARE_VERSION_DATA;
 		break;
 	case OW_CMD_HWID:
 		uartResp->command = OW_CMD_HWID;
+		uartResp->packet_type = OW_RESP;
 		id_words[0] = HAL_GetUIDw0();
 		id_words[1] = HAL_GetUIDw1();
 		id_words[2] = HAL_GetUIDw2();
@@ -50,20 +56,25 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 	case OW_CMD_ECHO:
 		// exact copy
 		uartResp->command = OW_CMD_ECHO;
+		uartResp->packet_type = OW_RESP;
 		uartResp->data_len = cmd.data_len;
 		uartResp->data = cmd.data;
 		break;
 	case OW_CMD_TOGGLE_LED:
 		printf("Toggle LED\r\n");
 		uartResp->command = OW_CMD_TOGGLE_LED;
+		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 		break;
 	case OW_CMD_I2C_BROADCAST:
 		printf("Broadcasting I2C on all channels\r\n");
+		uartResp->command = OW_CMD_I2C_BROADCAST;
+		uartResp->packet_type = OW_RESP;
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
 	case OW_TOGGLE_CAMERA_STREAM:
 		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
+		uartResp->packet_type = OW_RESP;
 		if (cmd.data_len == 1)
 		{
 			uint8_t cam_id = cmd.data[0];
@@ -86,6 +97,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
+		uartResp->packet_type = OW_RESP;
 		// softreset
 		break;
 	default:
@@ -129,6 +141,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	{
 	case OW_FPGA_ON:
 		uartResp->command = OW_FPGA_ON;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!enable_fpga(i))
@@ -141,6 +154,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_OFF:
 		uartResp->command = OW_FPGA_OFF;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!disable_fpga(i))
@@ -153,6 +167,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_ACTIVATE:
 		uartResp->command = OW_FPGA_ACTIVATE;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!activate_fpga(i))
@@ -165,6 +180,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_ID:
 		uartResp->command = OW_FPGA_ID;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!verify_fpga(i))
@@ -177,6 +193,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_ENTER_SRAM_PROG:
 		uartResp->command = OW_FPGA_ENTER_SRAM_PROG;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!enter_sram_prog_fpga(i))
@@ -189,6 +206,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_EXIT_SRAM_PROG:
 		uartResp->command = OW_FPGA_EXIT_SRAM_PROG;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!exit_sram_prog_fpga(i))
@@ -201,6 +219,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_ERASE_SRAM:
 		uartResp->command = OW_FPGA_ERASE_SRAM;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		if(!erase_sram_fpga(i))
@@ -213,6 +232,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_PROG_SRAM:
 		uartResp->command = OW_FPGA_PROG_SRAM;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	_Bool func_ret = false;
@@ -232,6 +252,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_USERCODE:
 		uartResp->command = OW_FPGA_USERCODE;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	read_usercode_fpga(i);
@@ -240,6 +261,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_BITSTREAM:
 		uartResp->command = OW_FPGA_BITSTREAM;
+		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			if(cmd.addr == 0){
 				// first block
@@ -262,6 +284,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_STATUS:
 		uartResp->command = OW_FPGA_STATUS;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	    		read_status_fpga(i);
@@ -270,6 +293,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_RESET:
 		uartResp->command = OW_FPGA_RESET;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!reset_camera(i))
@@ -286,6 +310,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_FPGA_SOFT_RESET:
 		uartResp->command = OW_FPGA_SOFT_RESET;
+		uartResp->packet_type = OW_RESP;
 		//fpga_soft_reset(pCam);
 		if(pCam->useUsart){
 			// method 1: clear the rxfifo
@@ -310,9 +335,42 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_IMU_GET_TEMP:
+		printf("OW_IMU_GET_TEMP\r\n");
+		uartResp->command = OW_IMU_GET_TEMP;
+		uartResp->packet_type = OW_RESP;
 		imu_temp = ICM_ReadTemperature();
 		uartResp->data_len = 4;
 		uartResp->data = (uint8_t *)&imu_temp;
+		break;
+	case OW_IMU_GET_ACCEL:
+		uartResp->command = OW_IMU_GET_ACCEL;
+		uartResp->packet_type = OW_RESP;
+		if(ICM_ReadAccel(&accel) != HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+		    uartResp->data_len = 0;
+		    uartResp->data = NULL;
+			printf("Failed to read accelerometer data\r\n");
+		}else{
+			uartResp->data_len = sizeof(accel);
+			uartResp->data = (uint8_t *)&accel;
+	        printf("Accelerometer size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(accel), accel.x, accel.y, accel.z);
+		}
+		break;
+	case OW_IMU_GET_GYRO:
+		uartResp->command = OW_IMU_GET_GYRO;
+		uartResp->packet_type = OW_RESP;
+		if(ICM_ReadGyro(&gyro) != HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+		    uartResp->data_len = 0;
+		    uartResp->data = NULL;
+			printf("Failed to read gyroscope data\r\n");
+		}else{
+			uartResp->data_len = sizeof(gyro);
+			uartResp->data = (uint8_t *)&gyro;
+	        printf("Gyroscope size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(gyro), gyro.x, gyro.y, gyro.z);
+		}
 		break;
 	default:
 		uartResp->data_len = 0;
@@ -347,6 +405,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_SET_CONFIG:
 		uartResp->command = OW_CAMERA_SET_CONFIG;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!configure_camera_sensor(i))
@@ -360,6 +419,8 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_SINGLE_HISTOGRAM:
 		printf("Capture single histogram frame\r\n");
+		uartResp->command = OW_CAMERA_SINGLE_HISTOGRAM;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!capture_single_histogram(i))
@@ -373,6 +434,8 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_GET_HISTOGRAM:
 		printf("Capture single histogram frame\r\n");
+		uartResp->command = OW_CAMERA_GET_HISTOGRAM;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!get_single_histogram(i, uartResp->data, &uartResp->data_len))
@@ -386,6 +449,8 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_SET_TESTPATTERN:
 		printf("Set Gradient Test Pattern\r\n");
+		uartResp->command = OW_CAMERA_SET_TESTPATTERN;
+		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!configure_camera_testpattern(i))
@@ -422,6 +487,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_FSIN:
 		printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
+		uartResp->command = OW_CAMERA_FSIN;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			result = X02C1B_fsin_off();
@@ -436,6 +502,8 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		break;
 	case OW_CAMERA_SWITCH:
 		uint8_t channel = cmd.data[0];
+		uartResp->command = OW_CAMERA_SWITCH;
+		uartResp->packet_type = OW_RESP;
 		printf("Switching to camera %d\r\n",channel+1);
         TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel);
         set_active_camera(channel);
