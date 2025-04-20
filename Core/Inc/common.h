@@ -36,6 +36,7 @@ typedef enum {
 	OW_JSON = 0xE5,
 	OW_FPGA = 0xE6,
 	OW_CAMERA = 0xE7,
+	OW_IMU = 0xE8,
 	OW_I2C_PASSTHRU = 0xE9,
 	OW_BAD_PARSE = 0xEC,
 	OW_BAD_CRC = 0xED,
@@ -80,6 +81,18 @@ typedef enum {
 	OW_FPGA_SOFT_RESET = 0x1A,
 	OW_HISTO = 0x1B,
 } MotionFPGACommands;
+
+typedef enum {
+	OW_IMU_INIT = 0x30,
+	OW_IMU_ON = 0x31,
+	OW_IMU_OFF = 0x32,
+	OW_IMU_SET_CONFIG = 0x33,
+	OW_IMU_GET_TEMP = 0x34,
+	OW_IMU_GET_ACCEL = 0x35,
+	OW_IMU_GET_GYRO = 0x36,
+	OW_IMU_GET_MAG = 0x37,
+} MotionIMUCommands;
+
 
 typedef enum {
 	OW_CAMERA_SCAN = 0x20,

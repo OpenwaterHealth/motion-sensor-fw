@@ -11,6 +11,7 @@
 #include "jsmn.h"
 #include "i2c_master.h"
 #include "i2c_protocol.h"
+#include "ICM20948.h"
 #include "0X02C1B.h"
 
 #include <stdio.h>
@@ -18,7 +19,8 @@
 
 extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
-static float temp;
+static float cam_temp;
+volatile float imu_temp = 0;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 {
@@ -303,6 +305,22 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 }
 
 
+static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
+{
+	switch (cmd.command)
+	{
+	case OW_IMU_GET_TEMP:
+		imu_temp = ICM_ReadTemperature();
+		uartResp->data_len = 4;
+		uartResp->data = (uint8_t *)&imu_temp;
+		break;
+	default:
+		uartResp->data_len = 0;
+		uartResp->packet_type = OW_UNKNOWN;
+		break;
+	}
+}
+
 static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 {
 	CameraDevice* pCam = get_active_cam();
@@ -426,15 +444,15 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		printf("Reading Camera %d Temp\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_READ_TEMP;
 		uartResp->packet_type = OW_RESP;
-		temp = X02C1B_read_temp(pCam);
-		if(temp<0){
+		cam_temp = X02C1B_read_temp(pCam);
+		if(cam_temp<0){
 			// error
 			uartResp->packet_type = OW_ERROR;
 	        uartResp->data_len = 0;
 	        uartResp->data = NULL; // No valid data to send
 		}else{
-	        uartResp->data_len = sizeof(temp);
-	        uartResp->data = (uint8_t *)&temp; // Point to the static temp variable
+	        uartResp->data_len = sizeof(cam_temp);
+	        uartResp->data = (uint8_t *)&cam_temp; // Point to the static temp variable
 		}
 		break;
 	case OW_CAMERA_FSIN_EXTERNAL:
@@ -528,6 +546,9 @@ UartPacket process_if_command(UartPacket cmd)
 		break;
 	case OW_CAMERA:
 		process_camera_commands(&uartResp, cmd);
+		break;
+	case OW_IMU:
+		process_imu_commands(&uartResp, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
 

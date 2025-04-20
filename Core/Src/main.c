@@ -251,11 +251,6 @@ int main(void)
 		printf("IMU detected\r\n");
 	    HAL_Delay(100);
 	    ICM_DumpRegisters();
-
-		float current_temp = ICM_ReadTemperature();
-		int temp_int = (int)current_temp;
-		int temp_frac = (int)((current_temp - temp_int) * 100); // 2 decimal places
-		printf("Temperature: %d.%02d\r\n", temp_int, temp_frac);
 	}
   }
   else
