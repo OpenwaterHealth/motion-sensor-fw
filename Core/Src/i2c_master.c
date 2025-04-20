@@ -14,12 +14,6 @@
 
 // I2C Expander specific
 #define TCA9548_ADDR 0x70
-#define ICM20948_ADDR 0x68
-
-// IMU Sensor Specific
-#define ICM20948_WHO_AM_I_REG 0x00  // WHO_AM_I register address
-#define ICM20948_EXPECTED_ID 0xEA   // Expected device ID
-
 
 
 uint8_t I2C_scan(I2C_HandleTypeDef * pI2c, uint8_t* addr_list, size_t list_size, bool display) {
@@ -170,45 +164,4 @@ HAL_StatusTypeDef TCA9548A_SelectBroadcast(I2C_HandleTypeDef *hi2c, uint8_t addr
 {
     uint8_t data = 0xFF;  // Set the corresponding bit for the channel
     return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
-}
-
-
-HAL_StatusTypeDef ICM20948_ReadID(I2C_HandleTypeDef *hi2c, uint8_t *id)
-{
-    HAL_StatusTypeDef result;
-    uint8_t reg = ICM20948_WHO_AM_I_REG;
-
-    // Send the register address to read from
-    result = HAL_I2C_Master_Transmit(hi2c, ICM20948_ADDR << 1, &reg, 1, HAL_MAX_DELAY);
-    if (result != HAL_OK)
-    {
-        return result;  // Return if there's an error transmitting the register address
-    }
-
-    // Read the WHO_AM_I register
-    result = HAL_I2C_Master_Receive(hi2c, ICM20948_ADDR << 1, id, 1, HAL_MAX_DELAY);
-    return result;
-}
-
-HAL_StatusTypeDef ICM20948_IsAlive(I2C_HandleTypeDef *hi2c,   uint8_t id)
-{
-	  HAL_StatusTypeDef status = ICM20948_ReadID(hi2c, &id);
-	  if (status == HAL_OK)
-	  {
-	      if (id == ICM20948_EXPECTED_ID)
-	      {
-	          printf("ICM-20948 detected! WHO_AM_I = 0x%02X\r\n", id);
-	          return HAL_OK;
-	      }
-	      else
-	      {
-	          Error_Handler();
-	          return HAL_ERROR;
-	      }
-	  }
-	  else
-	  {
-	      Error_Handler();
-	      return HAL_ERROR;
-	  }
 }

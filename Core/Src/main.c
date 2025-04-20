@@ -28,6 +28,7 @@
 #include "logging.h"
 #include "utils.h"
 #include "i2c_master.h"
+#include "ICM20948.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -240,10 +241,27 @@ int main(void)
   HAL_Delay(100);
   X02C1B_FSIN_EXT_disable();
 
-  if (ICM20948_IsAlive(&hi2c1, 0) == HAL_OK)
-    printf("IMU detected\r\n");
+  if (ICM_WHOAMI() == ICM20948_EXPECTED_ID)
+  {
+	if(ICM_Init() != HAL_OK){
+		printf("Failed to initialize IMU\r\n\n");
+	}
+	else
+	{
+		printf("IMU detected\r\n");
+	    HAL_Delay(100);
+	    ICM_DumpRegisters();
+
+		float current_temp = ICM_ReadTemperature();
+		int temp_int = (int)current_temp;
+		int temp_frac = (int)((current_temp - temp_int) * 100); // 2 decimal places
+		printf("Temperature: %d.%02d\r\n", temp_int, temp_frac);
+	}
+  }
   else
-    printf("IMU detected\r\n\n");
+  {
+    printf("IMU NOT detected\r\n\n");
+  }
 
   HAL_Delay(10);
 
