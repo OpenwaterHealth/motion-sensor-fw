@@ -28,8 +28,6 @@ Debug/
 Release/
 
 # CubeIDE settings
-.cproject
-.project
 .settings/
 .metadata/
 mxproject.xml

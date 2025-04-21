@@ -623,7 +623,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	{
 		status = HAL_USART_Receive_DMA(cam->pUart, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
 	} else {
-		status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
+		status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
 	}
 
 	if(status != HAL_OK)
