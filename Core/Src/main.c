@@ -238,6 +238,7 @@ int main(void)
 
   // test i2c
   PrintI2CSpeed(&hi2c1);
+  // I2C_scan(&hi2c1, NULL, 0, true);
   HAL_Delay(100);
   X02C1B_FSIN_EXT_disable();
 

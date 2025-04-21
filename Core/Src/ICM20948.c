@@ -94,9 +94,17 @@ uint8_t ICM_Init(void)
     status = ICM_WriteBytes(ICM20948_LP_CONFIG, &lp_config, 1);  // LP_CONFIG register (bank 0)
     if (status != HAL_OK) return status;
 
-    // 5. Disable I2C Master (to use I2C slave interface)
-    uint8_t user_ctrl = 0x00;
+    // 5. Enable I2C master interface (to use I2C slave interface)
+    uint8_t user_ctrl = 0x20;
     status = ICM_WriteBytes(ICM20948_USER_CTRL, &user_ctrl, 1);
+    if (status != HAL_OK) return status;
+
+    // Switch to USER BANK 3
+    ICM_SelectBank(ICM20948_USER_BANK_3);
+
+    // Set I2C Master Clock Speed (400kHz)
+    uint8_t i2c_mst_ctrl = 0x07;  // I2C_MST_CLK = 7 = 345.6 kHz (closest to 400kHz)
+    status = ICM_WriteBytes(0x01, &i2c_mst_ctrl, 1);
     if (status != HAL_OK) return status;
 
     // 6. Select USER BANK 2 for gyro and accel config
@@ -111,6 +119,26 @@ uint8_t ICM_Init(void)
     uint8_t accel_config = 0x06; // FCHOICE=1, DLPFCFG=6, FS_SEL=3 (±16g)
     status = ICM_WriteBytes(ICM20948_ACCEL_CONFIG, &accel_config, 1);
     if (status != HAL_OK) return status;
+
+    // Set I2C_SLV0 to write to AK09916 CNTL2 (0x31) to set continuous mode 2 (100Hz)
+    uint8_t slv0_addr = 0x0C;  // AK09916 I2C addr (write)
+    uint8_t reg = 0x31;
+    uint8_t data = 0x08; // Continuous measurement mode 2 (100Hz)
+
+    // Set register to write to (CNTL2)
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_ADDR, &slv0_addr, 1);
+    if (status != HAL_OK) return status;
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_REG, &reg, 1);
+    if (status != HAL_OK) return status;
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_DO, &data, 1);
+    if (status != HAL_OK) return status;
+
+    // Enable I2C_SLV0 for one write
+    uint8_t ctrl = 0x81;  // Enable, 1 byte
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_CTRL, &ctrl, 1);
+    if (status != HAL_OK) return status;
+
+    HAL_Delay(10);  // Let mag config complete
 
     // 9. Return to USER BANK 0
     ICM_SelectBank(ICM20948_USER_BANK_0);
@@ -166,6 +194,40 @@ uint8_t ICM_ReadGyro(ICM_Axis3D *gyro)
     gyro->x = (int16_t)((rawData[0] << 8) | rawData[1]);
     gyro->y = (int16_t)((rawData[2] << 8) | rawData[3]);
     gyro->z = (int16_t)((rawData[4] << 8) | rawData[5]);
+
+    return HAL_OK;
+}
+
+uint8_t ICM_ReadMag(ICM_Axis3D *mag)
+{
+	HAL_StatusTypeDef status;
+    uint8_t mag_raw[6];
+
+
+    // Configure I2C_SLV0 to auto-read 6 bytes from AK09916 starting at 0x11 (HXL)
+    ICM_SelectBank(ICM20948_USER_BANK_3);
+
+    uint8_t slv0_addr = 0x8C; // AK09916 read address (0x0C << 1 | 1)
+    uint8_t start_reg = 0x11; // HXL
+    uint8_t ctrl = 0x86;      // Enable, read 6 bytes
+
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_ADDR, &slv0_addr, 1);
+    if (status != HAL_OK) return status;
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_REG, &start_reg, 1);
+    if (status != HAL_OK) return status;
+    status = ICM_WriteBytes(ICM20948_I2C_SLV0_CTRL, &ctrl, 1);
+    if (status != HAL_OK) return status;
+
+    HAL_Delay(10);  // Wait for data to populate
+
+    ICM_SelectBank(ICM20948_USER_BANK_0);
+
+    if (ICM_readBytes(ICM20948_EXT_SENS_DATA_00, mag_raw, 6) != HAL_OK)
+        return HAL_ERROR;
+
+    mag->x = (int16_t)((mag_raw[1] << 8) | mag_raw[0]);
+    mag->y = (int16_t)((mag_raw[3] << 8) | mag_raw[2]);
+    mag->z = (int16_t)((mag_raw[5] << 8) | mag_raw[4]);
 
     return HAL_OK;
 }
