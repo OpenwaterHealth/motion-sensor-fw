@@ -1,5 +1,4 @@
 # STM32CubeIDE / STM32CubeMX generated files
-*.ioc
 *.launch
 *.log
 *.elf
