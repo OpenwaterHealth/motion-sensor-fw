@@ -25,8 +25,6 @@
 /* USER CODE END Includes */
 extern DMA_HandleTypeDef hdma_spi2_rx;
 
-extern DMA_HandleTypeDef hdma_spi3_rx;
-
 extern DMA_HandleTypeDef hdma_spi4_rx;
 
 extern DMA_HandleTypeDef hdma_spi6_rx;
@@ -389,25 +387,6 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     GPIO_InitStruct.Alternate = GPIO_AF7_SPI3;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    /* SPI3 DMA Init */
-    /* SPI3_RX Init */
-    hdma_spi3_rx.Instance = DMA1_Stream3;
-    hdma_spi3_rx.Init.Request = DMA_REQUEST_SPI3_RX;
-    hdma_spi3_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_spi3_rx.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_spi3_rx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_spi3_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_spi3_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_spi3_rx.Init.Mode = DMA_NORMAL;
-    hdma_spi3_rx.Init.Priority = DMA_PRIORITY_MEDIUM;
-    hdma_spi3_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-    if (HAL_DMA_Init(&hdma_spi3_rx) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    __HAL_LINKDMA(hspi,hdmarx,hdma_spi3_rx);
-
     /* SPI3 interrupt Init */
     HAL_NVIC_SetPriority(SPI3_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(SPI3_IRQn);
@@ -594,9 +573,6 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_11|GPIO_PIN_10);
 
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_2);
-
-    /* SPI3 DMA DeInit */
-    HAL_DMA_DeInit(hspi->hdmarx);
 
     /* SPI3 interrupt DeInit */
     HAL_NVIC_DisableIRQ(SPI3_IRQn);

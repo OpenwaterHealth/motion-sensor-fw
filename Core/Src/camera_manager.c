@@ -632,7 +632,10 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	{
 		status = HAL_USART_Receive_DMA(cam->pUart, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
 	} else {
-		status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
+		if(cam->useDma)
+			status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
+		else
+			status = HAL_SPI_Receive_IT(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
 	}
 
 	if(status != HAL_OK)
@@ -648,9 +651,9 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	HAL_Delay(25);
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
 	HAL_Delay(25);
-	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-	HAL_Delay(25);
-	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
+//	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
+//	HAL_Delay(25);
+//	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
 
 	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
 	while(!cam->streaming_enabled){
