@@ -511,6 +511,15 @@ _Bool program_fpga(uint8_t cam_id)
 		return false;
 	}
 
+	// If the selected camera is one that uses USART, 
+	// reset the USART to ensure it is in a known state
+	// !! This is required for the USART to work properly after FPGA programming !!
+	if(cam->useUsart)
+	{
+		cam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
+		cam->pUart->Instance->CR1 |= USART_CR1_UE;
+	}
+
 	return true;
 }
 
