@@ -100,6 +100,8 @@ ScanPacket scanPacketB;
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
+volatile bool fake_data_send_flag = false;
+
 uint8_t cameras_present = 0x00;
 
 // Debug flags
@@ -321,8 +323,28 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     comms_host_check_received(); // check comms
-    //SendHistogramData();
-    //HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+//    if(fake_data_gen && fake_data_send_flag){
+//
+//		UartPacket telem;
+//		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
+//		telem.packet_type = OW_DATA;
+//		telem.command = OW_HISTO;
+//		telem.data_len = SPI_PACKET_LENGTH;
+//		telem.addr = 0;
+//
+//    	for(int i = 0; i<8; i++) {
+//    		telem.data = get_camera_byID(i)->pRecieveHistoBuffer;
+//			telem.id = 0;
+//			telem.addr = i;
+//			comms_interface_send(&telem);
+//    	}
+//    	fake_data_send_flag = false;
+//    	fill_frame_buffers();
+//    }
+//    else {
+//      SendHistogramData();
+//    }
+//    HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
   }
   /* USER CODE END 3 */
 }
