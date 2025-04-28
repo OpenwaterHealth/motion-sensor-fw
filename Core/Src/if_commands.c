@@ -448,12 +448,17 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_SET_TESTPATTERN:
-		printf("Set Gradient Test Pattern\r\n");
+		if(cmd.data_len != 1){
+			uartResp->packet_type = OW_ERROR;
+			printf("Invalid data length for test pattern\r\n");
+			break;
+		}
+		uint8_t test_pattern = cmd.data[0];
 		uartResp->command = OW_CAMERA_SET_TESTPATTERN;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
-	        	if(!configure_camera_testpattern(i))
+	        	if(!configure_camera_testpattern(i,test_pattern))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
 	    			printf("Failed set camera test pattern for camera %d\r\n", i);

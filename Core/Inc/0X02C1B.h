@@ -38,7 +38,7 @@ int X02C1B_soft_reset(CameraDevice *cam);
 int X02C1B_stream_on(CameraDevice *cam);
 int X02C1B_stream_off(CameraDevice *cam);
 int X02C1B_configure_sensor(CameraDevice *cam);
-int X02C1B_set_test_pattern(CameraDevice *cam);
+int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern);
 int X02C1B_detect(CameraDevice *cam);
 int X02C1B_fsin_on();
 int X02C1B_fsin_off();
