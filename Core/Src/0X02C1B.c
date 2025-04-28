@@ -89,20 +89,9 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 
 int X02C1B_set_test_pattern(CameraDevice *cam)
 {
-    int ret = X02C1B_write(cam->pI2c, 0x0100, 0x00);  // Stream off register address and value
-    if (ret < 0) {
-        printf("Camera %d Failed to stop streaming\r\n", cam->id+1);
-        return ret;
-    }
-    ret = X02C1B_write(cam->pI2c, 0x0107, 0x01);  // undocumented
-	if (ret < 0) {
-		printf("Camera %d Failed to stop streaming\r\n", cam->id+1);
-		return ret;
-	}
-
 	HAL_Delay(100);
 
-    ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
+	int ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
     if (ret < 0) {
         printf("Camera %d Sensor test pattern failed\r\n", cam->id+1);
         return ret;
