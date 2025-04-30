@@ -204,9 +204,7 @@ void init_camera_sensors() {
 
 	scanPacketA = (ScanPacket ) { 0 };
 	scanPacketB = (ScanPacket ) { 0 };
-	// for (int i = 0; i < 8; i++) {
-	//	toggle_camera_stream(i);
-	// }
+	
 }
 
 CameraDevice* get_active_cam(void) {
@@ -705,115 +703,163 @@ void fill_frame_buffers(void) {
     }
 }
 
-void SendHistogramData(void) {
+_Bool send_fake_data(void) {
+//	UartPacket telem;
+//		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
+//		telem.packet_type = OW_DATA;
+//		telem.command = OW_HISTO;
+//		telem.data_len = SPI_PACKET_LENGTH;
+//		telem.addr = 0;
+//
+//   	for(int i = 0; i<8; i++) {
+//   		telem.data = get_camera_byID(i)->pRecieveHistoBuffer;
+//			telem.id = 0;
+//			telem.addr = i;
+//			comms_interface_send(&telem);
+//   	}
+//   	fill_frame_buffers();
 
-	if (event_bits == event_bits_enabled && event_bits_enabled > 0) {
-		event_bits = 0x00;
-		frame_id++;
+   	printf("FAKE DATA send triggered\r\n");
+   	return true;
+}
 
-		UartPacket telem;
-		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
-		telem.packet_type = OW_DATA;
-		telem.command = OW_HISTO;
-		telem.data_len = SPI_PACKET_LENGTH;
-		telem.addr = 0;
+_Bool start_data_reception(int cam_id){
+	HAL_StatusTypeDef status;
+	CameraDevice cam = cam_array[cam_id];
 
-		for (int i = 0; i < 8; i++) {
-			CameraDevice cam = cam_array[i];
-			HAL_StatusTypeDef status;
-
-			if (cam.streaming_enabled ) {
-				// Step 1. send out the packet
-				// just send out each histo over the buffer
-				// this is vile but if it works i'm going to be upset
-				HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-				telem.data = cam_array[i].pRecieveHistoBuffer;
-				telem.id = 0;
-				telem.addr = i;
-				comms_interface_send(&telem);
-				HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-
-//                	Step 2 Switch the buffer
-//        		    cam_array[i].pRecieveHistoBuffer = (cam_array[i].pRecieveHistoBuffer == scanPacketA.cam0_buffer) ? scanPacketB.cam0_buffer : scanPacketA.cam0_buffer;
-
-				// Step 3 set up the next event
-				if(!fake_data_gen) {
-
-					//TODO refactor this out
-					if (cam.useUsart) {
-						if (cam.useDma) {
-							status = HAL_USART_Receive_DMA(cam.pUart,
-									cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
-						} else {
-							status = HAL_USART_Receive_IT(cam.pUart,
-									cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
-						}
-					} else {
-						if (cam.useDma) {
-							status = HAL_SPI_Receive_DMA(cam.pSpi,
-									cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-						} else {
-							status = HAL_SPI_Receive_IT(cam.pSpi,
-									cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-						}
-					}
-					if (status != HAL_OK) {
-						Error_Handler();
-					}
-				}
-				else fill_frame_buffers(); //TODO make this faster + dynamic
-
-			}
+	if (cam.useUsart) {
+		if (cam.useDma) {
+			status = HAL_USART_Receive_DMA(cam.pUart,
+					cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
+		} else {
+			status = HAL_USART_Receive_IT(cam.pUart,
+					cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
+		}
+	} else {
+		if (cam.useDma) {
+			status = HAL_SPI_Receive_DMA(cam.pSpi,
+					cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+		} else {
+			status = HAL_SPI_Receive_IT(cam.pSpi,
+					cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
 		}
 	}
+	if (status != HAL_OK) {
+		return false;
+	}
+	return true;
+}
+
+_Bool abort_data_reception(uint8_t cam_id){
+	HAL_StatusTypeDef status;
+	// disable the reception
+	if(get_camera_byID(cam_id)->useUsart) {
+		if(get_camera_byID(cam_id)->useDma)
+			status = HAL_USART_Abort(get_camera_byID(cam_id)->pUart);
+		else
+			status = HAL_USART_Abort_IT(get_camera_byID(cam_id)->pUart);
+	}
+	else{
+		if(get_camera_byID(cam_id)->useDma)
+			status = HAL_SPI_Abort(get_camera_byID(cam_id)->pSpi);
+		else
+			status = HAL_SPI_Abort_IT(get_camera_byID(cam_id)->pSpi);
+	}
+	if (status != HAL_OK) {
+		return false;
+	}
+	return true;
+}
+
+_Bool enable_camera_stream(uint8_t cam_id){
+	bool status = false;
+	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
+	if(enabled){
+		printf("Camera %d already enabled\r\n", cam_id);
+		return true;
+	}
+	CameraDevice *cam = get_camera_byID(cam_id);
+	status |= start_data_reception(cam_id);
+	status |= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
+
+	if(!status)
+	{
+		printf("Failed to start camera %d stream\r\n", cam_id);
+		return false;
+	}
+	event_bits_enabled |= (1 << cam_id);
+	printf("Event bits enabled: %20X\r\n", event_bits_enabled);
+	cam->streaming_enabled = true;
+	
+	HAL_Delay(10);
+
+	return true;
+}
+
+_Bool disable_camera_stream(uint8_t cam_id){
+	bool status = false;
+	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
+	if(!enabled){
+		printf("Camera %d already disabled\r\n", cam_id);
+		return true;
+	}
+	CameraDevice *cam = get_camera_byID(cam_id);
+	status |= abort_data_reception(cam_id);
+	status |= (X02C1B_stream_off(cam) < 0); // returns -1 if failed
+
+	if(!status)
+	{
+		printf("Failed to stop camera %d stream\r\n", cam_id);
+		return false;
+	}
+	event_bits_enabled &= ~(1 << cam_id);
+	cam->streaming_enabled = false;
+
+	HAL_Delay(10);
+
+	return true;
 }
 
 
-int toggle_camera_stream(uint8_t cam_id){
-    // add to the event bits
-    printf("Event bits before toggling: %02X\r\n", event_bits_enabled);
-
-    event_bits_enabled ^= (1 << cam_id);
-    printf("Event bits after toggling: %02X\r\n", event_bits_enabled);
-
+_Bool toggle_camera_stream(uint8_t cam_id){
+	_Bool status = false;
     bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
-    get_camera_byID(cam_id)->streaming_enabled = enabled;
-    HAL_StatusTypeDef status;
-    if(enabled){
-        printf("Enabled camera stream %d\r\n", cam_id +1);
+	printf("Toggle Camera %d stream\r\n", cam_id+1);
+	if(enabled) status = disable_camera_stream(cam_id);
+	else status = enable_camera_stream(cam_id);
 
-        // kick off the reception
-        if(get_camera_byID(cam_id)->useUsart) {
-            if(get_camera_byID(cam_id)->useDma)
-            	status = HAL_USART_Receive_DMA(get_camera_byID(cam_id)->pUart, get_camera_byID(cam_id)->pRecieveHistoBuffer, USART_PACKET_LENGTH);
-            else
-            	status = HAL_USART_Receive_IT(get_camera_byID(cam_id)->pUart, get_camera_byID(cam_id)->pRecieveHistoBuffer, USART_PACKET_LENGTH);
-        }
-        else{
-            if(get_camera_byID(cam_id)->useDma)
-            	status = HAL_SPI_Receive_DMA(get_camera_byID(cam_id)->pSpi, get_camera_byID(cam_id)->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-            else
-            	status = HAL_SPI_Receive_IT(get_camera_byID(cam_id)->pSpi, get_camera_byID(cam_id)->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-        }
-    }
-    else{
-        printf("Disabled camera stream %d\r\n", cam_id +1);
-        // disable the reception
-		if(get_camera_byID(cam_id)->useUsart) {
-			if(get_camera_byID(cam_id)->useDma)
-				status = HAL_USART_Abort(get_camera_byID(cam_id)->pUart);
-			else
-				status = HAL_USART_Abort_IT(get_camera_byID(cam_id)->pUart);
-		}
-		else{
-			if(get_camera_byID(cam_id)->useDma)
-				status = HAL_SPI_Abort(get_camera_byID(cam_id)->pSpi);
-			else
-				status = HAL_SPI_Abort_IT(get_camera_byID(cam_id)->pSpi);
-		}
-    }
-    return status;
+	return status;
 }
+
+_Bool send_histogram_data(void) {
+	frame_id++;
+	_Bool status = true;
+
+	UartPacket telem;
+	telem.id = 0; // arbitrarily deciding that all telem packets have id 0
+	telem.packet_type = OW_DATA;
+	telem.command = OW_HISTO;
+	telem.data_len = SPI_PACKET_LENGTH;
+	telem.addr = 0;
+
+	for (int i = 0; i < 8; i++) {
+		CameraDevice cam = cam_array[i];
+		HAL_StatusTypeDef status;
+		if (cam.streaming_enabled ) {
+			printf("Sending histogram data for camera %d\r\n", i+1);
+			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+			telem.data = cam_array[i].pRecieveHistoBuffer;
+			telem.id = 0;
+			telem.addr = i;
+			// status |= comms_interface_send(&telem); TODO
+			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+			status |= start_data_reception(i);
+		}
+	}
+
+	return status;
+}
+
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart)
 {

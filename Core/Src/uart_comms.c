@@ -38,7 +38,7 @@ void ClearBuffer_DMA(void)
                             HAL_MAX_DELAY);
 }
 
-void comms_interface_send(UartPacket *pResp) {
+_Bool comms_interface_send(UartPacket *pResp) {
 	tx_flag = 0;  // Clear the flag before starting transmission
 
 //    memset(txBuffer, 0, sizeof(txBuffer));
@@ -59,7 +59,7 @@ void comms_interface_send(UartPacket *pResp) {
 	if ((bufferIndex + pResp->data_len + 4) > sizeof(txBuffer)) {
 		printf("Packet too large to send\r\n");
 		// Handle error: packet too large for txBuffer
-		return;
+		return false;
 	}
 
 	// Add data payload if any
@@ -86,9 +86,10 @@ void comms_interface_send(UartPacket *pResp) {
 		if ((HAL_GetTick() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
 			printf("TX Timeout\r\n");
-			break;
+			return false;
 		}
 	}
+	return true;
 }
 
 void comms_host_start(void) {

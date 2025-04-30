@@ -323,28 +323,17 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     comms_host_check_received(); // check comms
-//    if(fake_data_gen && fake_data_send_flag){
-//
-//		UartPacket telem;
-//		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
-//		telem.packet_type = OW_DATA;
-//		telem.command = OW_HISTO;
-//		telem.data_len = SPI_PACKET_LENGTH;
-//		telem.addr = 0;
-//
-//    	for(int i = 0; i<8; i++) {
-//    		telem.data = get_camera_byID(i)->pRecieveHistoBuffer;
-//			telem.id = 0;
-//			telem.addr = i;
-//			comms_interface_send(&telem);
-//    	}
-//    	fake_data_send_flag = false;
-//    	fill_frame_buffers();
-//    }
-//    else {
-//      SendHistogramData();
-//    }
-//    HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
+    // Send out data if all the histograms have come in
+    if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
+      send_histogram_data();
+      event_bits = 0x00;
+    }
+    else if(fake_data_gen && fake_data_send_flag){
+      send_fake_data();
+      fake_data_send_flag = false;
+ 		}
+    
   }
   /* USER CODE END 3 */
 }
@@ -1476,7 +1465,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  Camera_SPI_RxCpltCallback_Handler(hspi);
+//  Camera_SPI_RxCpltCallback_Handler(hspi);
 
   uint8_t xBitToSet = 0x00;
   if (hspi->Instance == SPI2)
@@ -1500,7 +1489,7 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-  Camera_USART_RxCpltCallback_Handler(husart);
+//  Camera_USART_RxCpltCallback_Handler(husart);
 
   uint8_t xBitToSet = 0x00;
   if (husart->Instance == USART1)
