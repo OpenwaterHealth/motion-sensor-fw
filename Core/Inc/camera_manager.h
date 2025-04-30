@@ -69,6 +69,9 @@ _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len);
 _Bool start_data_reception(int cam_id);
 _Bool send_fake_data(void);
 _Bool send_histogram_data(void);
+_Bool enable_camera_stream(uint8_t cam_id);
+_Bool disable_camera_stream(uint8_t cam_id);
+
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);

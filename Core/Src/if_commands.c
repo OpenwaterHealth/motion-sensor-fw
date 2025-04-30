@@ -80,7 +80,16 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 			uint8_t cam_id = cmd.data[0];
 			if (cam_id < 8)
 			{
-				toggle_camera_stream(cam_id);
+				if(cmd.reserved == 1)
+				{
+					// Enable camera stream
+					enable_camera_stream(cam_id);
+				}
+				else
+				{
+					// Disable camera stream
+					disable_camera_stream(cam_id);
+				}
 			    uartResp->packet_type = OW_ACK;
 			}
 			else
