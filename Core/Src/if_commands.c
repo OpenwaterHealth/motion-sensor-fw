@@ -73,37 +73,26 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
 	case OW_TOGGLE_CAMERA_STREAM:
-		printf("Toggle Camera Stream\r\n");
 		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
-		if (cmd.data_len == 1)
-		{
-			uint8_t cam_id = cmd.data[0];
-			if (cam_id < 8)
-			{
+		uint8_t status = 0;
+
+		for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
 				if(cmd.reserved == 1)
-				{
-					// Enable camera stream
-					enable_camera_stream(cam_id);
+					status |= (enable_camera_stream(i)<<i);
+				else {
+					status |= (disable_camera_stream(i)<<i);
 				}
-				else
-				{
-					// Disable camera stream
-					disable_camera_stream(cam_id);
-				}
-			    uartResp->packet_type = OW_ACK;
-			}
-			else
-			{
-				uartResp->packet_type = OW_ERROR;
-				printf("Invalid camera ID: %d\r\n", cam_id);
-			}
-		}
-		else
+	        }
+	    }
+		if(status !=0xFF)
 		{
 			uartResp->packet_type = OW_ERROR;
-			printf("Invalid data length: %d\r\n", cmd.data_len);
+			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
+
 		}
+		else uartResp->packet_type = OW_ACK;
 		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
