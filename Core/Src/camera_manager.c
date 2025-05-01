@@ -31,6 +31,9 @@ extern bool fake_data_gen;
 extern ScanPacket scanPacketA;
 extern ScanPacket scanPacketB;
 
+ __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH];
+
+
 static void generate_fake_histogram(uint8_t *histogram_data) {
     // Cast the byte buffer to uint32_t pointer to store histogram data
     uint32_t *histogram = (uint32_t *)histogram_data;
@@ -102,7 +105,7 @@ void init_camera_sensors() {
 	cam_array[1].gpio0_port = GPIO0_2_GPIO_Port;
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
 	cam_array[1].useUsart = false;
-	cam_array[1].useDma = false;
+	cam_array[1].useDma = true;
 	cam_array[1].pI2c = &hi2c1;
 	cam_array[1].device_address = FPGA_I2C_ADDRESS;
 	cam_array[1].pSpi = &hspi6;
@@ -198,6 +201,8 @@ void init_camera_sensors() {
 		cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
 		init_camera(&cam_array[i]);
 	}
+
+	cam_array[1].pRecieveHistoBuffer = spi6_buffer;
 
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
