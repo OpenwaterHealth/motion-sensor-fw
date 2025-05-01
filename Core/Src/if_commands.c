@@ -73,6 +73,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
 	case OW_TOGGLE_CAMERA_STREAM:
+		printf("Toggle Camera Stream\r\n");
 		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
 		if (cmd.data_len == 1)
@@ -495,7 +496,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_FSIN:
-		printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
+		// printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 		uartResp->command = OW_CAMERA_FSIN;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){

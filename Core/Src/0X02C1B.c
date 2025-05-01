@@ -193,14 +193,12 @@ int X02C1B_fsin_off()
     }
     status = HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
     HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET); //D12
-	if(status == HAL_OK)
+	if(status != HAL_OK)
 	{
-		printf("Frame Sync OFF\r\n");
-	}else{
 		printf("Error disabling Frame Sync\r\n");
 		return -1;
 	}
-    return HAL_OK;
+    return status;
 }
 
 float X02C1B_read_temp(CameraDevice *cam)

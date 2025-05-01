@@ -753,6 +753,7 @@ _Bool start_data_reception(int cam_id){
 _Bool abort_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
 	// disable the reception
+	printf("Abort C:%d\r\n", cam_id);
 	if(get_camera_byID(cam_id)->useUsart) {
 		if(get_camera_byID(cam_id)->useDma)
 			status = HAL_USART_Abort(get_camera_byID(cam_id)->pUart);
@@ -790,13 +791,12 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	event_bits_enabled |= (1 << cam_id);
 	printf("Event bits enabled: %20X\r\n", event_bits_enabled);
 	cam->streaming_enabled = true;
-	
-	HAL_Delay(10);
 
 	return true;
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
+	printf("Disable C: %d\r\n",cam_id);
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
@@ -815,8 +815,6 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
 
-	HAL_Delay(10);
-
 	return true;
 }
 
@@ -832,7 +830,6 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 }
 
 _Bool send_histogram_data(void) {
-	frame_id++;
 	_Bool status = true;
 
 	UartPacket telem;
@@ -846,7 +843,7 @@ _Bool send_histogram_data(void) {
 		CameraDevice cam = cam_array[i];
 		HAL_StatusTypeDef status;
 		if (cam.streaming_enabled ) {
-			printf("Sending histogram data for camera %d\r\n", i+1);
+			printf("F:%dC:%d\r\n",frame_id, i+1);
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 			telem.data = cam_array[i].pRecieveHistoBuffer;
 			telem.id = 0;
@@ -856,6 +853,8 @@ _Bool send_histogram_data(void) {
 			status |= start_data_reception(i);
 		}
 	}
+
+	frame_id++;
 
 	return status;
 }

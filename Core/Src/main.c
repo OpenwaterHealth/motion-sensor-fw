@@ -326,7 +326,7 @@ int main(void)
 
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
-      send_histogram_data();
+      if(!send_histogram_data()) Error_Handler();
       event_bits = 0x00;
     }
     else if(fake_data_gen && fake_data_send_flag){
@@ -335,6 +335,8 @@ int main(void)
  		}
     
   }
+	 HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
   /* USER CODE END 3 */
 }
 
