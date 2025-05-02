@@ -110,6 +110,13 @@ bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = true;
 
+const char *bit_rep[16] = {
+    [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
+    [ 4] = "0100", [ 5] = "0101", [ 6] = "0110", [ 7] = "0111",
+    [ 8] = "1000", [ 9] = "1001", [10] = "1010", [11] = "1011",
+    [12] = "1100", [13] = "1101", [14] = "1110", [15] = "1111",
+};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -318,15 +325,23 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t most_recent_frame = HAL_GetTick();;
+  uint32_t ticks_at_start = HAL_GetTick();
+  bool streaming = false;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     comms_host_check_received(); // check comms
-
+    
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
+      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
+      printf(".\r\n");
+      most_recent_frame = HAL_GetTick();
+      streaming = true;
+
       if(!send_histogram_data()) Error_Handler();
       event_bits = 0x00;
     }
@@ -335,6 +350,30 @@ int main(void)
       fake_data_send_flag = false;
  		}
     
+    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
+    {
+      streaming = false;
+      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
+      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
+
+      printf("No data received in 75ms\r\n");
+      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
+      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
+      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
+      printf("total_time_streaming: %f\r\n", total_time_streaming);
+
+      for (int i = 0; i < 8; i++)
+      {
+        get_camera_status(i);
+      }
+      Error_Handler();
+    }
+
+    if(streaming==false) ticks_at_start = HAL_GetTick();
+
+    // HAL_Delay(1);
+
+
   }
 	 HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 

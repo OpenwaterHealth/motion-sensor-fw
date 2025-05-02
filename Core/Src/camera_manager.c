@@ -728,7 +728,7 @@ _Bool send_fake_data(void) {
    	return true;
 }
 
-_Bool start_data_reception(int cam_id){
+_Bool start_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 
@@ -750,6 +750,8 @@ _Bool start_data_reception(int cam_id){
 		}
 	}
 	if (status != HAL_OK) {
+		printf("failed to setup receive for Camera %d channel\r\n", cam_id+1);
+//		abort_data_reception(cam_id);
 		return false;
 	}
 	return true;
@@ -860,20 +862,95 @@ _Bool send_histogram_data(void) {
 		CameraDevice cam = cam_array[i];
 		HAL_StatusTypeDef status;
 		if (cam.streaming_enabled ) {
-			printf("F:%dC:%d\r\n",frame_id, i+1);
+			// printf("F:%dC:%d\r\n",frame_id, i+1);
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 			telem.data = cam_array[i].pRecieveHistoBuffer;
 			telem.id = 0;
 			telem.addr = i;
 			// status |= comms_interface_send(&telem); TODO
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-			status |= start_data_reception(i);
+			if(!start_data_reception(i)) status = false;
 		}
 	}
 
 	frame_id++;
 
 	return status;
+}
+
+//Get SPI/usart status for the camera
+_Bool get_camera_status(uint8_t cam_id) {
+	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
+		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+	if (cam->useUsart) {
+		HAL_USART_StateTypeDef usart_state;
+		usart_state = HAL_USART_GetState(cam->pUart);
+		
+		if(usart_state == HAL_USART_STATE_RESET){
+			printf("USART state: HAL_USART_STATE_RESET\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_READY){
+			printf("USART state: HAL_USART_STATE_READY\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_BUSY){
+			printf("USART state: HAL_USART_STATE_BUSY\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_BUSY_TX){
+			printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_BUSY_RX){
+			printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
+			printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_TIMEOUT){
+			printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
+		}
+		else if(usart_state == HAL_USART_STATE_ERROR){
+			printf("USART state: HAL_USART_STATE_ERROR\r\n");
+		}
+		else{
+			printf("USART state: Unknown\r\n");
+		}
+		return HAL_USART_GetState(cam->pUart) == HAL_USART_STATE_READY;
+	} else {
+		HAL_SPI_StateTypeDef spi_state;
+		spi_state = HAL_SPI_GetState(cam->pSpi);
+
+		if(spi_state == HAL_SPI_STATE_RESET){
+			printf("SPI state: HAL_SPI_STATE_RESET\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_READY){
+			printf("SPI state: HAL_SPI_STATE_READY\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_BUSY){
+			printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_BUSY_TX){
+			printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_BUSY_RX){
+			printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
+			printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_ERROR){
+			printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
+		}
+		else if(spi_state == HAL_SPI_STATE_ABORT){
+			printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
+		}
+		else{
+			printf("SPI state: Unknown\r\n");
+		}
+		return HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY;
+	}
 }
 
 
