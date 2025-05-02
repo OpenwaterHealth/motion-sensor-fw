@@ -1510,8 +1510,6 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-//  Camera_SPI_RxCpltCallback_Handler(hspi);
-
   uint8_t xBitToSet = 0x00;
   if (hspi->Instance == SPI2)
   {
@@ -1534,8 +1532,6 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-//  Camera_USART_RxCpltCallback_Handler(husart);
-
   uint8_t xBitToSet = 0x00;
   if (husart->Instance == USART1)
   { // Check if the interrupt is for USART2

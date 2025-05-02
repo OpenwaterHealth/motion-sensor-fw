@@ -627,19 +627,9 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
 	HAL_Delay(25);
 
-	cam->streaming_enabled = false;
-
 	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, HISTOGRAM_DATA_SIZE);
 
-	if(cam->useUsart)
-	{
-		status = HAL_USART_Receive_DMA(cam->pUart, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
-	} else {
-		if(cam->useDma)
-			status = HAL_SPI_Receive_DMA(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
-		else
-			status = HAL_SPI_Receive_IT(cam->pSpi, (uint8_t*)cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE - 4);
-	}
+	start_data_reception(cam_id);
 
 	if(status != HAL_OK)
 	{
@@ -659,7 +649,9 @@ _Bool capture_single_histogram(uint8_t cam_id)
 //	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
 
 	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
-	while(!cam->streaming_enabled){
+
+	uint8_t event_bit_single = 0x01 << cam_id;
+	while(event_bits != event_bit_single) {
 	    if (HAL_GetTick() > timeout) {
 	        printf("USART receive timeout!\r\n");
 	        if(cam->useUsart) {
@@ -950,26 +942,5 @@ _Bool get_camera_status(uint8_t cam_id) {
 			printf("SPI state: Unknown\r\n");
 		}
 		return HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY;
-	}
-}
-
-
-void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart)
-{
-	for(int i = 0; i < CAMERA_COUNT; i ++){
-		if(cam_array[i].pUart == husart){
-			cam_array[i].streaming_enabled = true;
-			break;
-		}
-	}
-}
-
-void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi)
-{
-	for(int i = 0; i < CAMERA_COUNT; i ++){
-		if(cam_array[i].pSpi == hspi){
-			cam_array[i].streaming_enabled = true;
-			break;
-		}
 	}
 }
