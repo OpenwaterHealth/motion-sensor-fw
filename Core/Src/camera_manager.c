@@ -553,7 +553,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	return true;
 }
 
-_Bool configure_camera_testpattern(uint8_t cam_id)
+_Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
@@ -571,7 +571,7 @@ _Bool configure_camera_testpattern(uint8_t cam_id)
 		return false;
 	}
 
-	if(X02C1B_set_test_pattern(cam) == 1)
+	if(X02C1B_set_test_pattern(cam, test_pattern) == 1)
 	{
 		printf("Configure Camera %d Test Pattern Failed\r\n", cam_id+1);
 		return false;

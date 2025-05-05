@@ -87,22 +87,37 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
     return 0;
 }
 
-int X02C1B_set_test_pattern(CameraDevice *cam)
+int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
 {
-    int ret = X02C1B_write(cam->pI2c, 0x0100, 0x00);  // Stream off register address and value
-    if (ret < 0) {
-        printf("Camera %d Failed to stop streaming\r\n", cam->id+1);
-        return ret;
+    HAL_Delay(100);
+    int ret = 0;
+    switch (test_pattern) {
+        case 0:
+            printf("Set X02C1B_test_gradient_bar Test Pattern\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
+            break;
+        case 1:
+            printf("Set X02C1B_test_solid_a Test Pattern\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_solid_a, ARRAY_SIZE(X02C1B_test_solid_a));
+            break;
+        case 2:
+            printf("Set X02C1B_test_square Test Pattern\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_square, ARRAY_SIZE(X02C1B_test_square));
+            break;
+        case 3:
+            printf("Set X02C1B_test_gradient_cont Test Pattern\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_cont, ARRAY_SIZE(X02C1B_test_gradient_cont));
+            break;
+        case 4:
+            printf("Set test patternt to disable\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_disable, ARRAY_SIZE(X02C1B_test_disable));
+            break;
+        default:
+            printf("Invalid test pattern %d\r\n", test_pattern);
+            printf("Setting test pattern to X02C1B_test_gradient_bar\r\n");
+            ret = X02C1B_write_array(cam->pI2c, X02C1B_test_solid_a, ARRAY_SIZE(X02C1B_test_solid_a));
     }
-    ret = X02C1B_write(cam->pI2c, 0x0107, 0x01);  // undocumented
-	if (ret < 0) {
-		printf("Camera %d Failed to stop streaming\r\n", cam->id+1);
-		return ret;
-	}
 
-	HAL_Delay(100);
-
-    ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
     if (ret < 0) {
         printf("Camera %d Sensor test pattern failed\r\n", cam->id+1);
         return ret;
