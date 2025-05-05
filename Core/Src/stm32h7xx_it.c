@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 extern volatile bool fake_data_send_flag;
+extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,7 +57,6 @@ extern volatile bool fake_data_send_flag;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
 extern I2C_HandleTypeDef hi2c1;
 extern DMA_HandleTypeDef hdma_spi2_rx;
 extern DMA_HandleTypeDef hdma_spi3_rx;
@@ -470,9 +471,8 @@ void USART6_IRQHandler(void)
 void OTG_HS_EP1_OUT_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 0 */
-
-  /* USER CODE END OTG_HS_EP1_OUT_IRQn 0 */
   HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+  /* USER CODE END OTG_HS_EP1_OUT_IRQn 0 */
   /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 1 */
 
   /* USER CODE END OTG_HS_EP1_OUT_IRQn 1 */
@@ -484,9 +484,8 @@ void OTG_HS_EP1_OUT_IRQHandler(void)
 void OTG_HS_EP1_IN_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 0 */
-
-  /* USER CODE END OTG_HS_EP1_IN_IRQn 0 */
   HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+  /* USER CODE END OTG_HS_EP1_IN_IRQn 0 */
   /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 1 */
 
   /* USER CODE END OTG_HS_EP1_IN_IRQn 1 */
@@ -498,9 +497,8 @@ void OTG_HS_EP1_IN_IRQHandler(void)
 void OTG_HS_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_IRQn 0 */
-
-  /* USER CODE END OTG_HS_IRQn 0 */
   HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+  /* USER CODE END OTG_HS_IRQn 0 */
   /* USER CODE BEGIN OTG_HS_IRQn 1 */
 
   /* USER CODE END OTG_HS_IRQn 1 */
