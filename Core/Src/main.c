@@ -21,14 +21,17 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "uart_comms.h"
 #include "0X02C1B.h"
 #include "usb_device.h"
-#include "usbd_cdc_if.h"
+#include "uart_comms.h"
+#include "usbd_histo.h"
+#include "usbd_imu.h"
+#include "usbd_comms.h"
 #include "logging.h"
 #include "utils.h"
 #include "i2c_master.h"
 #include "ICM20948.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -333,7 +336,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    comms_host_check_received(); // check comms
+	comms_host_check_received(); // check comms
     
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
@@ -1603,7 +1606,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM12)
   {
-    CDC_Idle_Timer_Handler();
+	  USBD_COMMS_Idle_Timer_Handler();
   }
 
   /* USER CODE END Callback 0 */
