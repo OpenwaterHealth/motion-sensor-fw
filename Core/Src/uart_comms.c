@@ -5,12 +5,14 @@
  *      Author: GeorgeVigelette
  */
 
-#include "if_commands.h"
 #include "main.h"
 #include "uart_comms.h"
+#include "if_commands.h"
+#include "usbd_comms.h"
 #include "utils.h"
+
 #include <string.h>
-#include "usbd_cdc_if.h"
+
 
 // Private variables
 extern uint8_t rxBuffer[COMMAND_MAX_SIZE];
@@ -22,7 +24,9 @@ volatile uint8_t rx_flag = 0;
 volatile uint8_t tx_flag = 0;
 const uint32_t zero_val = 0;
 
-#define TX_TIMEOUT 5
+extern USBD_HandleTypeDef hUsbDeviceHS;
+
+#define TX_TIMEOUT 500
 
 void ClearBuffer_DMA(void)
 {
@@ -77,7 +81,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_END_BYTE;
 
 	// Initiate transmission via USB CDC
-	CDC_Transmit_HS(txBuffer, bufferIndex);
+	USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
 
 	// Wait for the transmit complete flag with a timeout to avoid infinite loop.
 	uint32_t start_time = HAL_GetTick();
@@ -97,13 +101,12 @@ void comms_host_start(void) {
 	memset(rxBuffer, 0, sizeof(rxBuffer));
 	ptrReceive = 0;
 
-	CDC_FlushRxBuffer_HS();
+	USBD_COMMS_FlushRxBuffer();
 
 	rx_flag = 0;
 	tx_flag = 0;
 
-	CDC_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
-
+	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
 }
 
 // This is the FreeRTOS task
@@ -202,14 +205,16 @@ NextDataPacket:
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;
-	CDC_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
+	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
 }
 
+
 // Callback functions
-void CDC_handle_RxCpltCallback(uint16_t len) {
+void USBD_COMMS_RxCpltCallback(uint16_t len) {
 	rx_flag = 1;
 }
 
-void CDC_handle_TxCpltCallback() {
+void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
 	tx_flag = 1;
 }
+

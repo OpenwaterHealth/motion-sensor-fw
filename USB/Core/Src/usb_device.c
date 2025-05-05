@@ -23,8 +23,10 @@
 #include "usb_device.h"
 #include "usbd_core.h"
 #include "usbd_desc.h"
-#include "usbd_cdc.h"
-#include "usbd_cdc_if.h"
+#include "usbd_comms.h"
+#include "usbd_histo.h"
+#include "usbd_imu.h"
+#include "usbd_composite_builder.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -47,6 +49,12 @@ USBD_HandleTypeDef hUsbDeviceHS;
  * -- Insert your variables declaration here --
  */
 /* USER CODE BEGIN 0 */
+
+uint8_t COMMS_EpAdd_Inst[3] = {COMMS_IN_EP, COMMS_OUT_EP}; 	/* COMMS Endpoint Addresses array */
+uint8_t HISTO_EpAdd_Inst[1] = { HISTO_IN_EP }; 	/* HISTO Endpoint */
+uint8_t IMU_EpAdd_Inst[1] = { IMU_IN_EP }; 	/* IMU Endpoint */
+
+uint8_t COMMS_InstID = 0, HISTO_InstID = 0, IMU_InstID = 0;
 
 /* USER CODE END 0 */
 
@@ -72,14 +80,35 @@ void MX_USB_DEVICE_Init(void)
   {
     Error_Handler();
   }
-  if (USBD_RegisterClass(&hUsbDeviceHS, &USBD_CDC) != USBD_OK)
+
+  /* Store the COMMS Class */
+  COMMS_InstID = hUsbDeviceHS.classId;
+
+  /* Register CDC Class First Instance */
+  if(USBD_RegisterClassComposite(&hUsbDeviceHS, USBD_COMMS_CLASS, CLASS_TYPE_COMMS, COMMS_EpAdd_Inst) != USBD_OK)
   {
-    Error_Handler();
+	Error_Handler();
   }
-  if (USBD_CDC_RegisterInterface(&hUsbDeviceHS, &USBD_Interface_fops_HS) != USBD_OK)
+
+  /* Store HISTO Instance Class ID */
+  HISTO_InstID = hUsbDeviceHS.classId;
+
+  /* Register the HISTO Class */
+  if(USBD_RegisterClassComposite(&hUsbDeviceHS, USBD_HISTO_CLASS, CLASS_TYPE_HISTO, HISTO_EpAdd_Inst) != USBD_OK)
   {
-    Error_Handler();
+	Error_Handler();
   }
+
+  /* Store HISTO Instance Class ID */
+  IMU_InstID = hUsbDeviceHS.classId;
+
+  /* Register the HISTO Class */
+  if(USBD_RegisterClassComposite(&hUsbDeviceHS, USBD_IMU_CLASS, CLASS_TYPE_IMU, IMU_EpAdd_Inst) != USBD_OK)
+  {
+	Error_Handler();
+  }
+
+
   if (USBD_Start(&hUsbDeviceHS) != USBD_OK)
   {
     Error_Handler();
