@@ -200,7 +200,6 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       {
           // Transfer complete
           comms_ep_data = 0;
-          printf("USBD_COMMS_TxCpltCallback\r\n");
           USBD_COMMS_TxCpltCallback(pTxCommsBuff, tx_comms_total_len, COMMSInEpAdd);
           // Send ZLP to indicate completion
           USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
@@ -223,7 +222,6 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
   uint32_t rx_len = USBD_LL_GetRxDataSize(pdev, COMMSOutEpAdd);
   uint32_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
 
-  printf("USBD_Comms_DataOut rx_len: %ld  packet_size: %ld\r\n", rx_len, packet_size);
   if(pUserRxBuff){
 	  uint8_t* pUserRx = pUserRxBuff + rxIndex;
 	  memcpy(pUserRx, pRxCommsBuff, rx_len);
@@ -236,7 +234,6 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	  HAL_TIM_Base_Stop_IT(&htim12);
 	  __HAL_TIM_SET_COUNTER(&htim12, 0); // Reset the timer counter
 
-	  printf("start idle timer\r\n");
 	  HAL_TIM_Base_Start_IT(&htim12);
   }
 
@@ -272,7 +269,6 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 
 		pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
 		comms_ep_data = 1;
-		printf("Start TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
 		ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, pkt_len);
 	}
 	else
@@ -296,7 +292,6 @@ void USBD_COMMS_Idle_Timer_Handler()
 	HAL_TIM_Base_Stop_IT(&htim12);
 
 	if(pUserRxBuff){
-		printf("comms_handle_RxCpltCallback %d \r\n", rxIndex);
 		USBD_COMMS_RxCpltCallback(rxIndex);
 	}else{
 		printf("RX EMPTY\r\n");
