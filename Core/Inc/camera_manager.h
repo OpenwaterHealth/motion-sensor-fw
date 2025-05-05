@@ -66,6 +66,13 @@ _Bool configure_camera_sensor(uint8_t cam_id);
 _Bool configure_camera_testpattern(uint8_t cam_id);
 _Bool capture_single_histogram(uint8_t cam_id);
 _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len);
+_Bool start_data_reception(uint8_t cam_id);
+_Bool send_fake_data(void);
+_Bool send_histogram_data(void);
+_Bool enable_camera_stream(uint8_t cam_id);
+_Bool disable_camera_stream(uint8_t cam_id);
+_Bool get_camera_status(uint8_t cam_id);
+
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);
@@ -78,7 +85,6 @@ void switch_frame_buffer(void);
 uint8_t* get_active_frame_buffer(void);
 uint8_t* get_inactive_frame_buffer(void);
 void fill_frame_buffers(void);
-int toggle_camera_stream(uint8_t cam_id);
-void SendHistogramData(void);
+_Bool toggle_camera_stream(uint8_t cam_id);
 
 #endif /* INC_CAMERA_MANAGER_H_ */

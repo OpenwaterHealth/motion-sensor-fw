@@ -64,6 +64,7 @@ SPI_HandleTypeDef hspi3;
 SPI_HandleTypeDef hspi4;
 SPI_HandleTypeDef hspi6;
 DMA_HandleTypeDef hdma_spi2_rx;
+DMA_HandleTypeDef hdma_spi3_rx;
 DMA_HandleTypeDef hdma_spi4_rx;
 DMA_HandleTypeDef hdma_spi6_rx;
 
@@ -100,12 +101,21 @@ ScanPacket scanPacketB;
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
+volatile bool fake_data_send_flag = false;
+
 uint8_t cameras_present = 0x00;
 
 // Debug flags
 bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = true;
+
+const char *bit_rep[16] = {
+    [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
+    [ 4] = "0100", [ 5] = "0101", [ 6] = "0110", [ 7] = "0111",
+    [ 8] = "1000", [ 9] = "1001", [10] = "1010", [11] = "1011",
+    [12] = "1100", [13] = "1101", [14] = "1110", [15] = "1111",
+};
 
 /* USER CODE END PV */
 
@@ -315,15 +325,58 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t most_recent_frame = HAL_GetTick();;
+  uint32_t ticks_at_start = HAL_GetTick();
+  bool streaming = false;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     comms_host_check_received(); // check comms
-    //SendHistogramData();
-    //HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+    
+    // Send out data if all the histograms have come in
+    if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
+      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
+      printf(".\r\n");
+      most_recent_frame = HAL_GetTick();
+      streaming = true;
+
+      if(!send_histogram_data()) Error_Handler();
+      event_bits = 0x00;
+    }
+    else if(fake_data_gen && fake_data_send_flag){
+      send_fake_data();
+      fake_data_send_flag = false;
+ 		}
+    
+    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
+    {
+      streaming = false;
+      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
+      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
+
+      printf("No data received in 75ms\r\n");
+      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
+      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
+      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
+      printf("total_time_streaming: %f\r\n", total_time_streaming);
+
+      for (int i = 0; i < 8; i++)
+      {
+        get_camera_status(i);
+      }
+      Error_Handler();
+    }
+
+    if(streaming==false) ticks_at_start = HAL_GetTick();
+
+    // HAL_Delay(1);
+
+
   }
+	 HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
   /* USER CODE END 3 */
 }
 
@@ -1230,6 +1283,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA1_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
@@ -1277,7 +1333,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin */
   GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin;
@@ -1454,8 +1510,6 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  Camera_SPI_RxCpltCallback_Handler(hspi);
-
   uint8_t xBitToSet = 0x00;
   if (hspi->Instance == SPI2)
   {
@@ -1478,8 +1532,6 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-  Camera_USART_RxCpltCallback_Handler(husart);
-
   uint8_t xBitToSet = 0x00;
   if (husart->Instance == USART1)
   { // Check if the interrupt is for USART2

@@ -75,25 +75,24 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 	case OW_TOGGLE_CAMERA_STREAM:
 		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
-		if (cmd.data_len == 1)
-		{
-			uint8_t cam_id = cmd.data[0];
-			if (cam_id < 8)
-			{
-				toggle_camera_stream(cam_id);
-			    uartResp->packet_type = OW_ACK;
-			}
-			else
-			{
-				uartResp->packet_type = OW_ERROR;
-				printf("Invalid camera ID: %d\r\n", cam_id);
-			}
-		}
-		else
+		uint8_t status = 0;
+
+		for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+				if(cmd.reserved == 1)
+					status |= (enable_camera_stream(i)<<i);
+				else {
+					status |= (disable_camera_stream(i)<<i);
+				}
+	        }
+	    }
+		if(status !=0xFF)
 		{
 			uartResp->packet_type = OW_ERROR;
-			printf("Invalid data length: %d\r\n", cmd.data_len);
+			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
+
 		}
+		else uartResp->packet_type = OW_ACK;
 		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
@@ -486,7 +485,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_FSIN:
-		printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
+		// printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 		uartResp->command = OW_CAMERA_FSIN;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){

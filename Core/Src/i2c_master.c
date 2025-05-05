@@ -15,6 +15,7 @@
 // I2C Expander specific
 #define TCA9548_ADDR 0x70
 
+uint8_t I2C_current_target = 0x00; // Default target address
 
 uint8_t I2C_scan(I2C_HandleTypeDef * pI2c, uint8_t* addr_list, size_t list_size, bool display) {
 
@@ -157,11 +158,18 @@ HAL_StatusTypeDef TCA9548A_SelectChannel(I2C_HandleTypeDef *hi2c, uint8_t addres
     }
 
     uint8_t data = (1 << channel);  // Set the corresponding bit for the channel
+
+    if(I2C_current_target == data) return HAL_OK; // no need to change
+    
+    I2C_current_target = data;
     return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
 }
 
 HAL_StatusTypeDef TCA9548A_SelectBroadcast(I2C_HandleTypeDef *hi2c, uint8_t address)
 {
     uint8_t data = 0xFF;  // Set the corresponding bit for the channel
+    if(I2C_current_target == data) return HAL_OK; // no need to change
+
+    I2C_current_target = data;
     return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
 }

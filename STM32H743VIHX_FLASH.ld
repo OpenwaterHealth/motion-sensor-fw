@@ -48,6 +48,7 @@ MEMORY
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
   RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
   RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
+  SRAM4   (xrw)  : ORIGIN = 0x38000000, LENGTH = 64K  /* <-- add if missing */
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
@@ -175,6 +176,14 @@ SECTIONS
   }
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
+
+/* Place BDMA-safe buffers in SRAM4 */
+.sram4 (NOLOAD) :
+{
+  . = ALIGN(4);
+  *(.sram4)
+  . = ALIGN(4);
+} >SRAM4
 }
 
 
