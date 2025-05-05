@@ -309,6 +309,10 @@ static uint8_t USBD_CDC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   CDCCmdEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_INTR, (uint8_t)pdev->classId);
 #endif /* USE_USBD_COMPOSITE */
 
+  printf("CDC_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", CDCInEpAdd, (uint8_t)pdev->classId);
+  printf("CDC_Init DATA OUT EP: 0x%02X ClassID: 0x%02X\r\n", CDCOutEpAdd, (uint8_t)pdev->classId);
+  printf("CDC_Init CMD IN EP: 0x%02X ClassID: 0x%02X\r\n", CDCCmdEpAdd, (uint8_t)pdev->classId);
+
   if (pdev->dev_speed == USBD_SPEED_HIGH)
   {
     /* Open EP IN */
