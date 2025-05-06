@@ -202,7 +202,7 @@ void init_camera_sensors() {
 		init_camera(&cam_array[i]);
 	}
 
-	cam_array[1].pRecieveHistoBuffer = spi6_buffer;
+	cam_array[1].pRecieveHistoBuffer = (uint8_t *)spi6_buffer;
 
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
@@ -843,22 +843,21 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 _Bool send_histogram_data(void) {
 	_Bool status = true;
 
-	UartPacket telem;
-	telem.id = 0; // arbitrarily deciding that all telem packets have id 0
-	telem.packet_type = OW_DATA;
-	telem.command = OW_HISTO;
-	telem.data_len = SPI_PACKET_LENGTH;
-	telem.addr = 0;
+	//UartPacket telem;
+	//telem.id = 0; // arbitrarily deciding that all telem packets have id 0
+	//telem.packet_type = OW_DATA;
+	//telem.command = OW_HISTO;
+	//telem.data_len = SPI_PACKET_LENGTH;
+	//telem.addr = 0;
 
 	for (int i = 0; i < 8; i++) {
 		CameraDevice cam = cam_array[i];
-		HAL_StatusTypeDef status;
 		if (cam.streaming_enabled ) {
 			// printf("F:%dC:%d\r\n",frame_id, i+1);
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-			telem.data = cam_array[i].pRecieveHistoBuffer;
-			telem.id = 0;
-			telem.addr = i;
+			//telem.data = cam_array[i].pRecieveHistoBuffer;
+			//telem.id = 0;
+			//telem.addr = i;
 			// status |= comms_interface_send(&telem); TODO
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 			if(!start_data_reception(i)) status = false;

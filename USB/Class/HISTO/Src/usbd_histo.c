@@ -78,6 +78,7 @@ static uint8_t HISTOInEpAdd = HISTO_IN_EP;
 /* Private functions */
 static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
+  uint8_t ret = USBD_OK;
   UNUSED(cfgidx);
 
   #ifdef USE_USBD_COMPOSITE
@@ -104,7 +105,11 @@ static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     histo_ep_enabled = 1;
     pdev->ep_in[HISTOInEpAdd & 0xFU].bInterval = 0;
     pdev->ep_in[HISTOInEpAdd & 0xFU].is_used = 1U;
-    return (uint8_t)USBD_OK;
+
+	/* Send ZLP */
+	ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+
+    return ret;
 }
 
 extern uint8_t HISTO_InstID;
@@ -177,6 +182,9 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       {
           // Transfer complete
           histo_ep_data = 0;
+          USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
+		  /* Send ZLP */
+		  // ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
       }
   }else{
 	pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
@@ -229,4 +237,11 @@ uint8_t USBD_HISTO_RegisterInterface(USBD_HandleTypeDef *pdev, uint8_t *buffer)
   UNUSED(pdev);
   UNUSED(buffer);
   return (uint8_t)USBD_OK;
+}
+
+__weak void USBD_HISTO_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
+{
+	UNUSED(Buf);
+	UNUSED(Len);
+	UNUSED(epnum);
 }
