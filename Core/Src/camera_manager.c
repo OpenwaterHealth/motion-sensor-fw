@@ -743,7 +743,7 @@ _Bool start_data_reception(uint8_t cam_id){
 	}
 	if (status != HAL_OK) {
 		printf("failed to setup receive for Camera %d channel\r\n", cam_id+1);
-//		abort_data_reception(cam_id);
+		abort_data_reception(cam_id);
 		return false;
 	}
 	return true;
