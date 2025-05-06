@@ -371,11 +371,7 @@ int main(void)
 
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
-    // HAL_Delay(1);
-
-
   }
-	 HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
   /* USER CODE END 3 */
 }
@@ -1507,61 +1503,60 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   Error_Handler(); // Handle any error during re-enabling
 }
 
+
+void set_event_bit_atomic(uint32_t bit) {
+  __disable_irq();
+  event_bits |= bit;
+  __enable_irq();
+}
+
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  uint8_t xBitToSet = 0x00;
   if (hspi->Instance == SPI2)
   {
-    xBitToSet = BIT_6;
+    set_event_bit_atomic(BIT_6);
   }
   else if (hspi->Instance == SPI3)
   {
-    xBitToSet = BIT_5;
+    set_event_bit_atomic(BIT_5);
   }
   else if (hspi->Instance == SPI4)
   {
-    xBitToSet = BIT_7;
+    set_event_bit_atomic(BIT_7);
   }
   else if (hspi->Instance == SPI6)
   {
-    xBitToSet = BIT_1;
+    set_event_bit_atomic(BIT_1);
   }
-  event_bits = event_bits | xBitToSet;
 }
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-  uint8_t xBitToSet = 0x00;
   if (husart->Instance == USART1)
   { // Check if the interrupt is for USART2
-    xBitToSet = BIT_4;
+    set_event_bit_atomic(BIT_4);
   }
   else if (husart->Instance == USART2)
   { // Check if the interrupt is for USART2
-    xBitToSet = BIT_0;
+    set_event_bit_atomic(BIT_0);
   }
   else if (husart->Instance == USART3)
   { // Check if the interrupt is for USART2
-    xBitToSet = BIT_2;
+    set_event_bit_atomic(BIT_2);
   }
   else if (husart->Instance == USART6)
   { // Check if the interrupt is for USART2
-    xBitToSet = BIT_3;
+    set_event_bit_atomic(BIT_3);
   }
 
-  event_bits = event_bits | xBitToSet;
 }
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM4)
   {
-    if (fake_data_gen)
-    {
-      // trigger the send event
-      event_bits = event_bits_enabled;
-    }
+    if (fake_data_gen) fake_data_send_flag = true; // trigger the send event
   }
 }
 /* USER CODE END 4 */
