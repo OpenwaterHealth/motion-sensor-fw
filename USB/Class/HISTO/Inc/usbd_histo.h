@@ -20,11 +20,12 @@ extern "C" {
 
 #define HISTO_FS_MAX_PACKET_SIZE         64U    /* Full-speed USB */
 #define HISTO_HS_MAX_PACKET_SIZE         512U   /* High-speed USB */
-#define USB_HISTO_MAX_SIZE 				 64U
+#define USB_HISTO_MAX_SIZE 				 4096U
 extern USBD_ClassTypeDef USBD_HISTO;
 #define USBD_HISTO_CLASS &USBD_HISTO
 
 uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_t length);
+void USBD_HISTO_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum);
 
 #ifdef __cplusplus
 }

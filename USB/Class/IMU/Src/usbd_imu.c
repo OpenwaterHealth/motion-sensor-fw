@@ -211,6 +211,9 @@ static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 
   pdev->ep_in[IMUInEpAdd & 0xFU].bInterval = 0;
   pdev->ep_in[IMUInEpAdd & 0xFU].is_used = 1U;
+
+  USBD_LL_Transmit(pdev, IMUInEpAdd, NULL, 0U);
+
   return (uint8_t)USBD_OK;
 }
 
@@ -305,6 +308,9 @@ static uint8_t USBD_IMU_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       else
       {
     	  imu_ep_data = 0;
+          USBD_IMU_TxCpltCallback(pTxIMUBuff, tx_imu_total_len, IMUInEpAdd);
+		  /* Send ZLP */
+		  // ret = USBD_LL_Transmit (pdev, IMUInEpAdd, NULL, 0U);
       }
   }else{
 	pdev->ep_in[IMUInEpAdd & 0xFU].total_length = 0U;
@@ -328,7 +334,7 @@ uint8_t  USBD_IMU_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_
 	{
 #ifdef USE_USBD_COMPOSITE
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
-	  IMUInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, IMU_InstID);
+	  IMUInEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, IMU_InstID);
 #endif /* USE_USBD_COMPOSITE */
 	  USBD_LL_FlushEP(pdev, IMUInEpAdd);
 	  memset((uint32_t*)pTxIMUBuff,0,USB_IMU_MAX_SIZE/4);
@@ -356,6 +362,13 @@ uint8_t USBD_IMU_RegisterInterface(USBD_HandleTypeDef *pdev, uint8_t *buffer)
   UNUSED(pdev);
   UNUSED(buffer);
   return (uint8_t)USBD_OK;
+}
+
+__weak void USBD_IMU_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
+{
+	UNUSED(Buf);
+	UNUSED(Len);
+	UNUSED(epnum);
 }
 
 #ifndef USE_USBD_COMPOSITE
