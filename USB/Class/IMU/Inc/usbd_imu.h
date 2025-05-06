@@ -34,7 +34,7 @@ extern "C" {
 /* Packet sizes - adjust based on your needs */
 #define IMU_FS_MAX_PACKET_SIZE         64U    /* Full-speed USB */
 #define IMU_HS_MAX_PACKET_SIZE         512U   /* High-speed USB */
-#define USB_IMU_MAX_SIZE			   128U
+#define USB_IMU_MAX_SIZE			   200U
 
 /* Bulk endpoints don't use intervals */
 #define IMU_BINTERVAL                  0U

@@ -75,6 +75,7 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim12;
+TIM_HandleTypeDef htim14;
 
 UART_HandleTypeDef huart4;
 USART_HandleTypeDef husart1;
@@ -108,10 +109,17 @@ volatile bool fake_data_send_flag = false;
 
 uint8_t cameras_present = 0x00;
 
+ICM_Axis3D a;
+ICM_Axis3D m;
+ICM_Axis3D g;
+float t;
+char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = true;
+
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
 const char *bit_rep[16] = {
     [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
@@ -145,6 +153,7 @@ static void MX_TIM4_Init(void);
 static void MX_USART1_Init(void);
 static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
+static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -224,6 +233,7 @@ int main(void)
   MX_USART1_Init();
   MX_USART2_Init();
   MX_USART3_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
@@ -331,6 +341,10 @@ int main(void)
   uint32_t most_recent_frame = HAL_GetTick();;
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
+
+  //HAL_Delay(1000);
+  //HAL_TIM_Base_Start_IT(&htim14);
+
   while (1)
   {
     /* USER CODE END WHILE */
@@ -966,6 +980,37 @@ static void MX_TIM12_Init(void)
   /* USER CODE BEGIN TIM12_Init 2 */
 
   /* USER CODE END TIM12_Init 2 */
+
+}
+
+/**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 240-1;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 50000-1;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
 
 }
 
@@ -1615,7 +1660,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if (htim->Instance == TIM14)
+  {
+	  // call imu
+	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
+		  printf("IMU Read Error\r\n");
+	  }else{
+		  memset(usb_buf,0,128);
+		  int len = snprintf(
+		      usb_buf, sizeof(usb_buf),
+		      "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+		      g.x, g.y, g.z,
+		      m.x, m.y, m.z,
+		      a.x, a.y, a.z,
+			  (int)t, (int)((t - (int)t) * 100.0f)
+		  );
+		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
+	  }
+  }
   /* USER CODE END Callback 1 */
 }
 

@@ -65,7 +65,7 @@
 // USBD_PID     0x5A5A
 
 #define USBD_VID     					0x0483
-#define USBD_PID	     				0x5A5A
+#define USBD_PID	     				0x5A5B
 #define USBD_LANGID_STRING     			0x409
 #define USBD_MANUFACTURER_STRING     	"Openwater"
 #define USBD_PRODUCT_STRING_HS          "COMMS_HISTO_IMU(HS)"
