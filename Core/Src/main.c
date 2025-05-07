@@ -326,9 +326,9 @@ int main(void)
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 
-  HAL_Delay(500);
+  HAL_Delay(250);
   MX_USB_DEVICE_Init();
-  HAL_Delay(500);
+  HAL_Delay(1000);
   //GPIO_SetHiZ(GPIOA, GPIO_PIN_2);
 
   comms_host_start();
