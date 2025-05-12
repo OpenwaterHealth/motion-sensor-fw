@@ -29,18 +29,6 @@ typedef struct {
 
 } CameraDevice;
 
-typedef struct {
-	uint8_t cam0_buffer[USART_PACKET_LENGTH];
-	uint8_t cam1_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam2_buffer[USART_PACKET_LENGTH];
-	uint8_t cam3_buffer[USART_PACKET_LENGTH];
-	uint8_t cam4_buffer[USART_PACKET_LENGTH];
-	uint8_t cam5_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam6_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam7_buffer[SPI_PACKET_LENGTH];
-
-} ScanPacket;
-
 #define CAMERA_COUNT	8
 #define HISTOGRAM_DATA_SIZE	4100
 #define WIDTH 1920

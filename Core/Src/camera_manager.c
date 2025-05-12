@@ -28,8 +28,6 @@ uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
-extern ScanPacket scanPacketA;
-extern ScanPacket scanPacketB;
 
  __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH];
 
@@ -207,9 +205,9 @@ void init_camera_sensors() {
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
 
-	scanPacketA = (ScanPacket ) { 0 };
-	scanPacketB = (ScanPacket ) { 0 };
-	
+	fill_frame_buffers();
+	switch_frame_buffer();
+	fill_frame_buffers();
 }
 
 CameraDevice* get_active_cam(void) {

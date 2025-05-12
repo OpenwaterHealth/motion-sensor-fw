@@ -99,9 +99,6 @@ uint8_t txBuffer[COMMAND_MAX_SIZE];
 uint32_t bitstream_len;
 __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]; // 160KB buffer
 
-ScanPacket scanPacketA;
-ScanPacket scanPacketB;
-
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
