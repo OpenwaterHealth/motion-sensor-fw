@@ -53,10 +53,17 @@ static void generate_fake_histogram(uint8_t *histogram_data) {
     		for(int i=0;i<HISTOGRAM_BINS;i++){
     			histogram[i] = (uint32_t) (i + frame_id);
     		}
-
+			break;
+		case 2:
+    		for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] =  0xAA;
+    		}
+			break;
     }
 
     histogram[HISTOGRAM_BINS-1] |= ((uint32_t) frame_id)<<24; // fill in the frame_id to the last bin's spacer
+	histogram_data[0]=0x02;
+    histogram_data[HISTOGRAM_BINS-1] = 0x04;
 }
 
 static void init_camera(CameraDevice *cam){
@@ -705,21 +712,27 @@ _Bool send_fake_data(void) {
 
 	uint8_t *fb = get_active_frame_buffer();
 
-	// create dummy data for the buffer
-	int t = 7;
-	int offset = snprintf(fb,CAMERA_COUNT * HISTOGRAM_DATA_SIZE,
-							  "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
-		      1, 2, 3,
-		      4, 5, 6,
-		      7, 8, 9,
-			  (int)t, (int)((t - (int)t) * 100.0f)
-		  ); 
-
+	// // create dummy data for the buffer
+	// int t = 7;
+	// int offset = snprintf(fb,CAMERA_COUNT * HISTOGRAM_DATA_SIZE,
+	// 						  "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+	// 	      1, 2, 3,
+	// 	      4, 5, 6,
+	// 	      7, 8, 9,
+	// 		  (int)t, (int)((t - (int)t) * 100.0f)
+	// 	  ); 
 	
-	USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, offset);
+	// USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, offset);
+
+	fill_frame_buffers();
+	
+	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, 4100);// CAMERA_COUNT * HISTOGRAM_DATA_SIZE/2);
+	if(status != USBD_OK)
+		printf("failed to send\r\n");
+
 	switch_frame_buffer();
 
-   	printf("FAKE DATA send triggered\r\n");
+   	// printf("FAKE DATA send triggered\r\n");
    	return true;
 }
 

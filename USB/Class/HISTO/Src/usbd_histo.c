@@ -68,7 +68,7 @@ __ALIGN_BEGIN static uint8_t USBD_Histo_GetDeviceQualifierDescriptor[USB_LEN_DEV
 #endif /* USE_USBD_COMPOSITE  */
 
 extern uint8_t HISTO_InstID;
-uint8_t* pTxHistoBuff = 0;
+uint8_t* pTxHistoBuff = 0; // large buffer, should be one of the double buffers
 static uint16_t tx_histo_total_len = 0;
 static uint16_t tx_histo_ptr = 0;
 static __IO uint8_t histo_ep_enabled = 0;
@@ -175,6 +175,7 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       {
           uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
+          printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
 
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
       }
@@ -210,20 +211,9 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 		/* Get the Endpoints addresses allocated for this CDC class instance */
 		HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, HISTO_InstID);
 #endif /* USE_USBD_COMPOSITE */
-    // TODO handle case where new buffer is bigger than the old buffer
-    // if(length > HISTO_USB_FIFO_MAX_SIZE){
-    //   printf("Application buffer too large for USB TX FIFO\r\n");
-    //   return USBD_FAIL;
-    // }
-    // // TODO handle case where old buffer isn't finished sending
-    // if(histo_ep_data == 0){
-    //   printf("USB FIFO not finished sending\r\n");
-    //   return USBD_FAIL;
-      
-    // }
 		USBD_LL_FlushEP(pdev, HISTOInEpAdd);
-		memset((uint32_t*)pTxHistoBuff,0,HISTO_USB_FIFO_MAX_SIZE/4);
-		memcpy(pTxHistoBuff,pbuff,length);
+    printf("t: %d\r\n", length);
+    pTxHistoBuff = pbuff;
 
     tx_histo_total_len = length;
     tx_histo_ptr = 0;
