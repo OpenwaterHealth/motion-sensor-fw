@@ -11,6 +11,7 @@
 #include "i2c_master.h"
 #include "uart_comms.h"
 #include "utils.h"
+#include "usbd_histo.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,7 @@ uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
  __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH];
 
@@ -699,20 +701,23 @@ void fill_frame_buffers(void) {
 }
 
 _Bool send_fake_data(void) {
-//	UartPacket telem;
-//		telem.id = 0; // arbitrarily deciding that all telem packets have id 0
-//		telem.packet_type = OW_DATA;
-//		telem.command = OW_HISTO;
-//		telem.data_len = SPI_PACKET_LENGTH;
-//		telem.addr = 0;
-//
-//   	for(int i = 0; i<8; i++) {
-//   		telem.data = get_camera_byID(i)->pRecieveHistoBuffer;
-//			telem.id = 0;
-//			telem.addr = i;
-//			comms_interface_send(&telem);
-//   	}
-//   	fill_frame_buffers();
+	//TODO( get prev packet completed send, handle if not completed)
+
+	uint8_t *fb = get_active_frame_buffer();
+
+	// create dummy data for the buffer
+	int t = 7;
+	int offset = snprintf(fb,CAMERA_COUNT * HISTOGRAM_DATA_SIZE,
+							  "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+		      1, 2, 3,
+		      4, 5, 6,
+		      7, 8, 9,
+			  (int)t, (int)((t - (int)t) * 100.0f)
+		  ); 
+
+	
+	USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, offset);
+	switch_frame_buffer();
 
    	printf("FAKE DATA send triggered\r\n");
    	return true;

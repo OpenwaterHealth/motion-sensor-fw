@@ -86,7 +86,7 @@ static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
   #endif /* USE_USBD_COMPOSITE */
     printf("HISTO_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", HISTOInEpAdd, (uint8_t)pdev->classId);
-    pTxHistoBuff = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
+    pTxHistoBuff = (uint8_t*)malloc(HISTO_USB_FIFO_MAX_SIZE);
     if(pTxHistoBuff == NULL){
     	Error_Handler();
     }
@@ -186,10 +186,10 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 		  /* Send ZLP */
 		  // ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
       }
-  }else{
-	pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
-	/* Send ZLP */
-	ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+  } else {
+	  /* Send ZLP */
+    pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
+	  ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
   }
 
   return ret;
@@ -210,15 +210,25 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 		/* Get the Endpoints addresses allocated for this CDC class instance */
 		HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, HISTO_InstID);
 #endif /* USE_USBD_COMPOSITE */
-
+    // TODO handle case where new buffer is bigger than the old buffer
+    // if(length > HISTO_USB_FIFO_MAX_SIZE){
+    //   printf("Application buffer too large for USB TX FIFO\r\n");
+    //   return USBD_FAIL;
+    // }
+    // // TODO handle case where old buffer isn't finished sending
+    // if(histo_ep_data == 0){
+    //   printf("USB FIFO not finished sending\r\n");
+    //   return USBD_FAIL;
+      
+    // }
 		USBD_LL_FlushEP(pdev, HISTOInEpAdd);
-		memset((uint32_t*)pTxHistoBuff,0,USB_HISTO_MAX_SIZE/4);
+		memset((uint32_t*)pTxHistoBuff,0,HISTO_USB_FIFO_MAX_SIZE/4);
 		memcpy(pTxHistoBuff,pbuff,length);
 
-        tx_histo_total_len = length;
-        tx_histo_ptr = 0;
+    tx_histo_total_len = length;
+    tx_histo_ptr = 0;
 
-        uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, tx_histo_total_len);
+    uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, tx_histo_total_len);
 
 		pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = tx_histo_total_len;
 		histo_ep_data = 1;

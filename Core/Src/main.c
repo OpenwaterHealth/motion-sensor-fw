@@ -113,9 +113,9 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = false;
+bool fake_data_gen = true;
 bool scanI2cAtStart = true;
-
+bool stream_imu_data = true;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 const char *bit_rep[16] = {
@@ -335,12 +335,16 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t most_recent_frame = HAL_GetTick();;
+  uint32_t most_recent_frame = HAL_GetTick();
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
 
-  //HAL_Delay(1000);
-  //HAL_TIM_Base_Start_IT(&htim14);
+  if(stream_imu_data) {
+    HAL_Delay(1000);
+    HAL_TIM_Base_Start_IT(&htim14);
+  }
+  if(fake_data_gen)
+    X02C1B_fsin_on();
 
   while (1)
   {
@@ -1673,7 +1677,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			  (int)t, (int)((t - (int)t) * 100.0f)
 		  );
 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
-	  }
+    }
   }
   /* USER CODE END Callback 1 */
 }
