@@ -65,7 +65,7 @@ static void generate_fake_histogram(uint8_t *histogram_data) {
 			break;
 		case 3:
 			for(int i=0;i<HISTOGRAM_BINS;i++){
-    			histogram[i] =  (i>HISTOGRAM_BINS) ? (uint32_t) 1024: 2048;
+    			histogram[i] =  i;//(i>HISTOGRAM_BINS) ? (uint32_t) 1024: 2048;
     		}
 			break;
 		
@@ -729,16 +729,16 @@ _Bool send_fake_data(void) {
     
     for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
         offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
+		
 		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
-        // for (int i = 0; i < HISTO_SIZE_32B; ++i) {
-        //     offset += snprintf(json_buffer + offset, buf_size - offset,
-        //                        (i < HISTO_SIZE_32B - 1) ? "%d," : "%d", histo_ptr);
-		//     histo_ptr++;
-        // }
+        for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
+            offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
+        }
+		uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
+		offset += snprintf(json_buffer + offset, buf_size - offset, "%lu", 
+							(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
 
-        memcpy(json_buffer + offset, cam_array[cam].pRecieveHistoBuffer[cam], 4096);
-        offset += 4096;
-        offset += snprintf(json_buffer + offset, buf_size - offset,
+		offset += snprintf(json_buffer + offset, buf_size - offset,
                            (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
     }
 
