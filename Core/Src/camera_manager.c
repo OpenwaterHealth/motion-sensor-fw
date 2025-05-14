@@ -19,11 +19,15 @@
 #include <string.h>
 
 #define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
+#define HISTO_JSON_BUFFER_SIZE 34000
+#define HISTO_SIZE_32B 1024
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
 
 volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
+uint8_t json_buffer[HISTO_JSON_BUFFER_SIZE];
+
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
@@ -219,8 +223,6 @@ void init_camera_sensors() {
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
 
-	fill_frame_buffers();
-	switch_frame_buffer();
 	fill_frame_buffers();
 }
 
@@ -716,32 +718,44 @@ _Bool send_fake_data(void) {
 
 	uint8_t *fb = get_active_frame_buffer();
 
-	// // create dummy data for the buffer
-	// int t = 7;
-	// int offset = snprintf(fb,CAMERA_COUNT * HISTOGRAM_DATA_SIZE,
-	// 						  "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
-	// 	      1, 2, 3,
-	// 	      4, 5, 6,
-	// 	      7, 8, 9,
-	// 		  (int)t, (int)((t - (int)t) * 100.0f)
-	// 	  ); 
-	
-	// USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, offset);
-
 	fill_frame_buffers();
-	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, CAMERA_COUNT * HISTOGRAM_DATA_SIZE);
+	//uint8_t json_buffer[HISTO_JSON_BUFFER_SIZE];
+
+    // do the work of copying the data into from the camera buffers into the usb buffer
+    int offset = 0;
+    size_t buf_size = HISTO_JSON_BUFFER_SIZE;
+
+    offset += snprintf(json_buffer + offset, buf_size - offset, "{\n");
+    
+    for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
+        offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
+		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
+        // for (int i = 0; i < HISTO_SIZE_32B; ++i) {
+        //     offset += snprintf(json_buffer + offset, buf_size - offset,
+        //                        (i < HISTO_SIZE_32B - 1) ? "%d," : "%d", histo_ptr);
+		//     histo_ptr++;
+        // }
+
+        memcpy(json_buffer + offset, cam_array[cam].pRecieveHistoBuffer[cam], 4096);
+        offset += 4096;
+        offset += snprintf(json_buffer + offset, buf_size - offset,
+                           (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
+    }
+
+    offset += snprintf(json_buffer + offset, buf_size - offset,
+                       "  ,\"META\": {\n    \"frame_id\": %u\n  }\n", frame_id);
+
+    offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
+
+	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
 
 	//TODO( get prev packet completed send, handle if not completed)
 	if(status != USBD_OK)
 		printf("failed to send\r\n");
 
-
 	frame_id++;
 
-	// switch_frame_buffer();
-
-   	// printf("FAKE DATA send triggered\r\n");
-   	return true;
+	return true;
 }
 
 _Bool start_data_reception(uint8_t cam_id){
