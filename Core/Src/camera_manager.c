@@ -43,7 +43,7 @@ static void generate_fake_histogram(uint8_t *histogram_data) {
 
     // Generate random 10-bit grayscale image and compute histogram
     switch(HISTO_TEST_PATTERN){
-    	case 0:
+    	case 0: // this one will run VERY slow but look like an actual histo. run once at startup.
 			for (int i = 0; i < WIDTH * HEIGHT; i++) {
 					uint32_t pixel_value = rand() % HISTOGRAM_BINS; // Random 10-bit value (0-1023)
 					histogram[pixel_value]++;
@@ -56,14 +56,19 @@ static void generate_fake_histogram(uint8_t *histogram_data) {
 			break;
 		case 2:
     		for(int i=0;i<HISTOGRAM_BINS;i++){
-    			histogram[i] =  0xAA;
+    			histogram[i] =  (uint32_t) 0xAAAAAAAA;
     		}
 			break;
+		case 3:
+			for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] =  (i>HISTOGRAM_BINS) ? (uint32_t) 1024: 2048;
+    		}
+			break;
+		
     }
 
+	histogram_data[0]+= 0x06;
     histogram[HISTOGRAM_BINS-1] |= ((uint32_t) frame_id)<<24; // fill in the frame_id to the last bin's spacer
-	histogram_data[0]=0x02;
-    histogram_data[HISTOGRAM_BINS-1] = 0x04;
 }
 
 static void init_camera(CameraDevice *cam){
@@ -708,7 +713,6 @@ void fill_frame_buffers(void) {
 }
 
 _Bool send_fake_data(void) {
-	//TODO( get prev packet completed send, handle if not completed)
 
 	uint8_t *fb = get_active_frame_buffer();
 
@@ -725,12 +729,16 @@ _Bool send_fake_data(void) {
 	// USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, offset);
 
 	fill_frame_buffers();
-	
-	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, 4100);// CAMERA_COUNT * HISTOGRAM_DATA_SIZE/2);
+	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, fb, CAMERA_COUNT * HISTOGRAM_DATA_SIZE);
+
+	//TODO( get prev packet completed send, handle if not completed)
 	if(status != USBD_OK)
 		printf("failed to send\r\n");
 
-	switch_frame_buffer();
+
+	frame_id++;
+
+	// switch_frame_buffer();
 
    	// printf("FAKE DATA send triggered\r\n");
    	return true;
