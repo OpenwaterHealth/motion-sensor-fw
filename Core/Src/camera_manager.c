@@ -881,27 +881,38 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 _Bool send_histogram_data(void) {
 	_Bool status = true;
 
-	//UartPacket telem;
-	//telem.id = 0; // arbitrarily deciding that all telem packets have id 0
-	//telem.packet_type = OW_DATA;
-	//telem.command = OW_HISTO;
-	//telem.data_len = SPI_PACKET_LENGTH;
-	//telem.addr = 0;
+	int offset = 0;
+    size_t buf_size = HISTO_JSON_BUFFER_SIZE;
 
-	for (int i = 0; i < 8; i++) {
-		CameraDevice cam = cam_array[i];
-		if (cam.streaming_enabled ) {
-			// printf("F:%dC:%d\r\n",frame_id, i+1);
-			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-			//telem.data = cam_array[i].pRecieveHistoBuffer;
-			//telem.id = 0;
-			//telem.addr = i;
-			// status |= comms_interface_send(&telem); TODO
-			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-			if(!start_data_reception(i)) status = false;
-		}
+    offset += snprintf(json_buffer + offset, buf_size - offset, "{\n");
+    
+    for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
+        offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
+		
+		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
+        for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
+            offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
+        }
+		uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
+		offset += snprintf(json_buffer + offset, buf_size - offset, "%lu", 
+							(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
+
+		offset += snprintf(json_buffer + offset, buf_size - offset,
+                           (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
+    }
+
+    offset += snprintf(json_buffer + offset, buf_size - offset,
+                       "  ,\"META\": {\n    \"frame_id\": %u\n  }\n", frame_id);
+
+    offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
+
+	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
+
+	//TODO( get prev packet completed send, handle if not completed)
+	if(tx_status != USBD_OK){
+		printf("failed to send\r\n");
+		status = false;
 	}
-
 	frame_id++;
 
 	return status;

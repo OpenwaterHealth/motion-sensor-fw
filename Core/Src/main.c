@@ -113,9 +113,9 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = true;
+bool fake_data_gen = false;
 bool scanI2cAtStart = true;
-bool stream_imu_data = true;
+bool stream_imu_data = false;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 const char *bit_rep[16] = {
