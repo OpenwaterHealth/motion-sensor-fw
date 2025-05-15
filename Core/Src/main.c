@@ -359,8 +359,11 @@ int main(void)
       printf(".\r\n");
       most_recent_frame = HAL_GetTick();
       streaming = true;
+      HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
       if(!send_histogram_data()) Error_Handler();
+      HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
       event_bits = 0x00;
     }
     else if(fake_data_gen && fake_data_send_flag){
@@ -384,7 +387,8 @@ int main(void)
       {
         get_camera_status(i);
       }
-      Error_Handler();
+      if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
+    	  Error_Handler();
     }
 
     if(streaming==false) ticks_at_start = HAL_GetTick();

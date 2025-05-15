@@ -885,20 +885,23 @@ _Bool send_histogram_data(void) {
     size_t buf_size = HISTO_JSON_BUFFER_SIZE;
 
     offset += snprintf(json_buffer + offset, buf_size - offset, "{\n");
-    
     for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
-        offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
-		
-		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
-        for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
-            offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
-        }
-		uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
-		offset += snprintf(json_buffer + offset, buf_size - offset, "%lu", 
-							(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
+		if((event_bits_enabled & (0x01 << cam)) != 0) {
 
-		offset += snprintf(json_buffer + offset, buf_size - offset,
-                           (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
+			offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
+
+			uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
+			for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
+				offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
+			}
+			uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
+			offset += snprintf(json_buffer + offset, buf_size - offset, "%lu",
+								(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
+
+			offset += snprintf(json_buffer + offset, buf_size - offset,
+							   (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
+			//TODO(make this account for the case that camera 8 is disabled
+		}
     }
 
     offset += snprintf(json_buffer + offset, buf_size - offset,
@@ -906,12 +909,17 @@ _Bool send_histogram_data(void) {
 
     offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
 
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
+	uint8_t tx_status = USBD_OK;//USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
+	//TODO(fix this once the host software is ready)
 
 	//TODO( get prev packet completed send, handle if not completed)
 	if(tx_status != USBD_OK){
 		printf("failed to send\r\n");
 		status = false;
+	}
+	for(int i = 0;i<CAMERA_COUNT;i++){
+		if((event_bits_enabled & (0x01 << i)) != 0)
+			start_data_reception(i);
 	}
 	frame_id++;
 
