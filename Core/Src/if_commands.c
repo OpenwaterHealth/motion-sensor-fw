@@ -232,14 +232,15 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	case OW_FPGA_PROG_SRAM:
 		uartResp->command = OW_FPGA_PROG_SRAM;
 		uartResp->packet_type = OW_RESP;
+		// TODO: Adde parameter to force update currently defaults to false
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	_Bool func_ret = false;
 
 	        	if(cmd.reserved == 1) {
-	        		func_ret = program_fpga(i);
+	        		func_ret = program_fpga(i, false);
 	        	} else {
-	        		func_ret = program_sram_fpga(i, true, 0, 0);
+	        		func_ret = program_sram_fpga(i, true, 0, 0, false);
 	        	}
 	    		if(!func_ret)
 	    		{

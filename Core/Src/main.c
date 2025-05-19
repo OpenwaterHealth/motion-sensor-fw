@@ -88,7 +88,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 5};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 6};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -308,6 +308,8 @@ int main(void)
   if (cameras_present == 0xFF)
   {
     printf("All cameras found\r\n");
+  }else{
+	  print_active_cameras(cameras_present);
   }
 
   // Select default camera

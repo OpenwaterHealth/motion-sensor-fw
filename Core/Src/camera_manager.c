@@ -79,6 +79,8 @@ static void init_camera(CameraDevice *cam){
 	HAL_GPIO_Init(cam->gpio0_port, &GPIO_InitStruct);
 
 	cam->streaming_enabled = false;
+	cam->isConfigured = false;
+	cam->isProgrammed = false;
 }
 
 void init_camera_sensors() {
@@ -202,7 +204,7 @@ void init_camera_sensors() {
 		init_camera(&cam_array[i]);
 	}
 
-	cam_array[1].pRecieveHistoBuffer = spi6_buffer;
+	cam_array[1].pRecieveHistoBuffer = (uint8_t *)spi6_buffer;
 
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
@@ -246,6 +248,9 @@ _Bool reset_camera(uint8_t cam_id)
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
     HAL_Delay(1000);
+
+    cam->isConfigured = false;
+    cam->isProgrammed = false;
 
 	return true;
 }
@@ -411,6 +416,8 @@ _Bool erase_sram_fpga(uint8_t cam_id)
 	{
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
+	}else{
+		cam->isProgrammed = false;
 	}
 	return true;
 }
@@ -463,7 +470,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 	return ret_val;
 }
 
-_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len)
+_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
@@ -474,6 +481,13 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(!force_update)
+	{
+		if(cam->isProgrammed) return true;
+	} else {
+		cam->isProgrammed = false; // set programmed to false and Program FPGA
+	}
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
@@ -485,12 +499,14 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
+	}else{
+
 	}
 
 	return true;
 }
 
-_Bool program_fpga(uint8_t cam_id)
+_Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
@@ -502,6 +518,13 @@ _Bool program_fpga(uint8_t cam_id)
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
+	if(!force_update)
+	{
+		if(cam->isProgrammed) return true;
+	} else {
+		cam->isProgrammed = false; // set isProgrammed to false and program FPGA
+	}
+
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
 		printf("failed to select Camera %d channel\r\n", cam_id+1);
@@ -511,7 +534,11 @@ _Bool program_fpga(uint8_t cam_id)
 	if(fpga_configure(cam->pI2c, cam->device_address, cam->cresetb_port, cam->cresetb_pin) == 1)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
+
+		cam->isProgrammed = false;
 		return false;
+	} else {
+		cam->isProgrammed = true;
 	}
 
 	// If the selected camera is one that uses USART, 
@@ -547,7 +574,10 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	if(X02C1B_configure_sensor(cam) == 1)
 	{
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
+		cam->isConfigured = false;
 		return false;
+	}else{
+		cam->isConfigured = true;
 	}
 
 	return true;
@@ -564,6 +594,12 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 	printf("Configure Camera %d Test Pattern Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(!cam->isConfigured)
+	{
+		printf("Camera %d Register Update Failed it is not configured\r\n", cam_id+1);
+		return false;
+	}
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
@@ -852,7 +888,6 @@ _Bool send_histogram_data(void) {
 
 	for (int i = 0; i < 8; i++) {
 		CameraDevice cam = cam_array[i];
-		HAL_StatusTypeDef status;
 		if (cam.streaming_enabled ) {
 			// printf("F:%dC:%d\r\n",frame_id, i+1);
 			// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
@@ -943,4 +978,17 @@ _Bool get_camera_status(uint8_t cam_id) {
 		}
 		return HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY;
 	}
+}
+
+void print_active_cameras(uint8_t cameras_present)
+{
+    printf("Active cameras: ");
+    for (int i = 0; i < 8; ++i)
+    {
+        if (cameras_present & (1 << i))
+        {
+            printf("%d ", i + 1);  // Cameras are 1-based
+        }
+    }
+    printf("\r\n");
 }
