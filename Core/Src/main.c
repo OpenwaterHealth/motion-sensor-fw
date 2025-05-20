@@ -113,7 +113,7 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = false;
+bool fake_data_gen = true;
 bool scanI2cAtStart = true;
 bool stream_imu_data = false;
 extern USBD_HandleTypeDef hUsbDeviceHS;
@@ -343,15 +343,15 @@ int main(void)
     HAL_Delay(1000);
     HAL_TIM_Base_Start_IT(&htim14);
   }
-  if(fake_data_gen)
-    X02C1B_fsin_on();
+  // if(fake_data_gen)
+  //   X02C1B_fsin_on();
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	comms_host_check_received(); // check comms
+  	comms_host_check_received(); // check comms
     
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {

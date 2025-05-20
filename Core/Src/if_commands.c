@@ -86,7 +86,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 				}
 	        }
 	    }
-		if(status !=0xFF)
+		if(status != cmd.addr) // if the status bits are not true for all the cameras addressed, error
 		{
 			uartResp->packet_type = OW_ERROR;
 			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);

@@ -839,7 +839,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("Disable C: %d\r\n",cam_id);
+//	printf("Disable C: %d\r\n",cam_id);
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
@@ -864,7 +864,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
-	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
+//	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
 
@@ -909,8 +909,7 @@ _Bool send_histogram_data(void) {
 
     offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
 
-	uint8_t tx_status = USBD_OK;//USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
-	//TODO(fix this once the host software is ready)
+	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
 
 	//TODO( get prev packet completed send, handle if not completed)
 	if(tx_status != USBD_OK){

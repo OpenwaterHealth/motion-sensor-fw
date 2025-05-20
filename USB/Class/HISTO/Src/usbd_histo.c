@@ -175,7 +175,7 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       {
           uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
-          printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
+          // printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
 
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
       }
@@ -212,7 +212,7 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 		HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, HISTO_InstID);
 #endif /* USE_USBD_COMPOSITE */
 		USBD_LL_FlushEP(pdev, HISTOInEpAdd);
-    printf("t: %d\r\n", length);
+    // printf("t: %d\r\n", length);
     pTxHistoBuff = pbuff;
 
     tx_histo_total_len = length;

@@ -145,7 +145,7 @@ int X02C1B_stream_on(CameraDevice *cam) {
         printf("Failed to start streaming on camera %d\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d streaming started\r\n", cam->id+1);
+    // printf("Camera %d streaming started\r\n", cam->id+1);
     return 0;
 }
 
@@ -156,7 +156,7 @@ int X02C1B_stream_off(CameraDevice *cam) {
         printf("Failed to stop streaming on camera %d\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d streaming stopped\r\n", cam->id+1);
+    // printf("Camera %d streaming stopped\r\n", cam->id+1);
     return 0;
 }
 
