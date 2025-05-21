@@ -882,20 +882,18 @@ _Bool send_histogram_data(void) {
 	_Bool status = true;
 	int offset = 0;
 
-
 	uint8_t count = 0;
 	for (int i = 0; i < CAMERA_COUNT ; ++i) {
 		if (event_bits_enabled & (1 << i)) {
 			count++;
 		}
 	}
-	
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+2);
     size_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
     }
-	
+
 	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 	
 	// --- Header ---
@@ -913,7 +911,7 @@ _Bool send_histogram_data(void) {
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
 			printf("Cam ID sent: %d\r\n",cam_id);
-			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B);
+			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
 			packet_buffer[offset++] = HISTO_EOH;
 		}
