@@ -19,6 +19,7 @@
 
 extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
+static uint8_t camera_status[8] = {0};
 static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
@@ -477,9 +478,20 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_STATUS:
-		printf("Camera %d status not implemented\r\n",pCam->id+1);
+		printf("Camera status 0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_STATUS;
 		uartResp->packet_type = OW_RESP;
+
+
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	// update camera status requested
+	        	camera_status[i] = get_camera_status(i);
+	        }
+	    }
+
+	    uartResp->data = camera_status;
+	    uartResp->data_len = 8;
 		break;
 	case OW_CAMERA_RESET:
 		printf("Camera %d Sensor Reset\r\n",pCam->id+1);

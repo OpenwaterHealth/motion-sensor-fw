@@ -74,7 +74,7 @@ _Bool send_fake_data(void);
 _Bool send_histogram_data(void);
 _Bool enable_camera_stream(uint8_t cam_id);
 _Bool disable_camera_stream(uint8_t cam_id);
-_Bool get_camera_status(uint8_t cam_id);
+uint8_t get_camera_status(uint8_t cam_id);
 
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);

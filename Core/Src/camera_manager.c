@@ -905,8 +905,20 @@ _Bool send_histogram_data(void) {
 	return status;
 }
 
-//Get SPI/usart status for the camera
-_Bool get_camera_status(uint8_t cam_id) {
+// Get SPI/USART status for the specified camera ID
+// Returns a bitfield where each bit indicates a specific status:
+//
+// Bit 0: SPI or USART state is READY
+// Bit 1: Camera firmware is programmed
+// Bit 2: Camera is configured
+// Bit 7: Streaming is enabled
+//
+// Bits 3–6: Reserved (unused)
+//
+uint8_t get_camera_status(uint8_t cam_id) {
+	
+	uint8_t status_flags = 0x00;
+
 	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
 		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
 		return false;
@@ -944,7 +956,11 @@ _Bool get_camera_status(uint8_t cam_id) {
 		else{
 			printf("USART state: Unknown\r\n");
 		}
-		return HAL_USART_GetState(cam->pUart) == HAL_USART_STATE_READY;
+		
+		if (HAL_USART_GetState(cam->pUart) == HAL_USART_STATE_READY) {
+			status_flags |= (1 << 0);  // Set bit 0
+		}
+
 	} else {
 		HAL_SPI_StateTypeDef spi_state;
 		spi_state = HAL_SPI_GetState(cam->pSpi);
@@ -976,8 +992,25 @@ _Bool get_camera_status(uint8_t cam_id) {
 		else{
 			printf("SPI state: Unknown\r\n");
 		}
-		return HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY;
+				
+		if (HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY) {
+			status_flags |= (1 << 0);  // Set bit 0
+		}
 	}
+
+	if(cam->isProgrammed) {
+		status_flags |= (1 << 1);  // Set bit 1
+	}
+
+	if(cam->isConfigured) {
+		status_flags |= (1 << 2);  // Set bit 2		
+	}
+
+	if(cam->streaming_enabled) {
+		status_flags |= (1 << 7);  // Set bit 7		
+	}
+
+	return status_flags;
 }
 
 void print_active_cameras(uint8_t cameras_present)
