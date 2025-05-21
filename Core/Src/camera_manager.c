@@ -26,7 +26,7 @@ CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 static int _active_cam_idx = 0;
 
 volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
-uint8_t json_buffer[HISTO_JSON_BUFFER_SIZE];
+uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 uint8_t frame_id = 0;
@@ -716,38 +716,39 @@ void fill_frame_buffers(void) {
 
 _Bool send_fake_data(void) {
 
+	//TODO(update this to work similar to the other packetizer, refactor)
 	uint8_t *fb = get_active_frame_buffer();
 
 	fill_frame_buffers();
-	//uint8_t json_buffer[HISTO_JSON_BUFFER_SIZE];
+	//uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
 
     // do the work of copying the data into from the camera buffers into the usb buffer
     int offset = 0;
     size_t buf_size = HISTO_JSON_BUFFER_SIZE;
 
-    offset += snprintf(json_buffer + offset, buf_size - offset, "{\n");
+    offset += snprintf(packet_buffer + offset, buf_size - offset, "{\n");
     
     for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
-        offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
+        offset += snprintf(packet_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
 		
 		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
         for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
-            offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
+            offset += snprintf(packet_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
         }
 		uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
-		offset += snprintf(json_buffer + offset, buf_size - offset, "%lu", 
+		offset += snprintf(packet_buffer + offset, buf_size - offset, "%lu", 
 							(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
 
-		offset += snprintf(json_buffer + offset, buf_size - offset,
+		offset += snprintf(packet_buffer + offset, buf_size - offset,
                            (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
     }
 
-    offset += snprintf(json_buffer + offset, buf_size - offset,
+    offset += snprintf(packet_buffer + offset, buf_size - offset,
                        "  ,\"META\": {\n    \"frame_id\": %u\n  }\n", frame_id);
 
-    offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
+    offset += snprintf(packet_buffer + offset, buf_size - offset, "}\n");
 
-	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
+	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 
 	//TODO( get prev packet completed send, handle if not completed)
 	if(status != USBD_OK)
@@ -868,7 +869,6 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	return true;
 }
 
-
 _Bool toggle_camera_stream(uint8_t cam_id){
 	_Bool status = false;
     bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
@@ -880,42 +880,61 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 
 _Bool send_histogram_data(void) {
 	_Bool status = true;
-
 	int offset = 0;
-    size_t buf_size = HISTO_JSON_BUFFER_SIZE;
 
-    offset += snprintf(json_buffer + offset, buf_size - offset, "{\n");
-    for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
-		if((event_bits_enabled & (0x01 << cam)) != 0) {
 
-			offset += snprintf(json_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
-
-			uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
-			for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
-				offset += snprintf(json_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
-			}
-			uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
-			offset += snprintf(json_buffer + offset, buf_size - offset, "%lu",
-								(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
-
-			offset += snprintf(json_buffer + offset, buf_size - offset,
-							   (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
-			//TODO(make this account for the case that camera 8 is disabled
+	uint8_t count = 0;
+	for (int i = 0; i < CAMERA_COUNT ; ++i) {
+		if (event_bits_enabled & (1 << i)) {
+			count++;
 		}
+	}
+	
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+2);
+    size_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    if (HISTO_JSON_BUFFER_SIZE < total_size) {
+        return false;  // Buffer too small
     }
+	
+	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	
+	// --- Header ---
+    packet_buffer[offset++] = HISTO_SOF;
+    packet_buffer[offset++] = TYPE_HISTO;
+    packet_buffer[offset++] = (uint8_t)(payload_size & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((payload_size >> 8) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((payload_size >> 16) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((payload_size >> 24) & 0xFF);
 
-    offset += snprintf(json_buffer + offset, buf_size - offset,
-                       "  ,\"META\": {\n    \"frame_id\": %u\n  }\n", frame_id);
+	// --- Data ---
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
+		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
+			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
+		    packet_buffer[offset++] = HISTO_SOH;
+			packet_buffer[offset++] = cam_id;
+			printf("Cam ID sent: %d\r\n",cam_id);
+			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B);
+			offset += HISTO_SIZE_32B*4;
+			packet_buffer[offset++] = HISTO_EOH;
+		}
+	}
 
-    offset += snprintf(json_buffer + offset, buf_size - offset, "}\n");
+	// --- Footer --- 
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+    packet_buffer[offset++] = crc & 0xFF;
+    packet_buffer[offset++] = (crc >> 8) & 0xFF;
+    packet_buffer[offset++] = HISTO_EOF;
+		
+	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, json_buffer, offset);
-
-	//TODO( get prev packet completed send, handle if not completed)
+	//TODO( handle the case where the packet fails to send better)
 	if(tx_status != USBD_OK){
 		printf("failed to send\r\n");
 		status = false;
 	}
+	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
+	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){
 		if((event_bits_enabled & (0x01 << i)) != 0)
 			start_data_reception(i);

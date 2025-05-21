@@ -36,6 +36,15 @@ typedef struct {
 #define HISTOGRAM_BINS 1024
 #define HISTO_TEST_PATTERN 3
 
+#define HISTO_SOF  0xAA
+#define HISTO_SOH  0xFF
+#define HISTO_EOH  0xEE
+#define HISTO_EOF  0xDD
+#define TYPE_HISTO 0x00
+#define HISTO_HEADER_SIZE 6
+#define HISTO_TRAILER_SIZE 3
+
+
 void init_camera_sensors(void);
 CameraDevice* get_active_cam(void);
 CameraDevice* set_active_camera(int id);

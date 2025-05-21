@@ -113,7 +113,7 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = true;
+bool fake_data_gen = false;
 bool scanI2cAtStart = true;
 bool stream_imu_data = false;
 extern USBD_HandleTypeDef hUsbDeviceHS;
@@ -359,10 +359,8 @@ int main(void)
       printf(".\r\n");
       most_recent_frame = HAL_GetTick();
       streaming = true;
-      HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
       if(!send_histogram_data()) Error_Handler();
-      HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
       event_bits = 0x00;
     }
