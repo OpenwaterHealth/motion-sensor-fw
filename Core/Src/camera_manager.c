@@ -888,7 +888,7 @@ _Bool send_histogram_data(void) {
 			count++;
 		}
 	}
-	uint32_t payload_size = count*(HISTO_SIZE_32B*4+2);
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
     uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
