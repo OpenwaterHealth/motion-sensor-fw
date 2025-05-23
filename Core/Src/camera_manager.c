@@ -889,7 +889,7 @@ _Bool send_histogram_data(void) {
 		}
 	}
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+2);
-    size_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
     }
@@ -899,10 +899,10 @@ _Bool send_histogram_data(void) {
 	// --- Header ---
     packet_buffer[offset++] = HISTO_SOF;
     packet_buffer[offset++] = TYPE_HISTO;
-    packet_buffer[offset++] = (uint8_t)(payload_size & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((payload_size >> 8) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((payload_size >> 16) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((payload_size >> 24) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
@@ -910,7 +910,6 @@ _Bool send_histogram_data(void) {
 			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
-			printf("Cam ID sent: %d\r\n",cam_id);
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
 			packet_buffer[offset++] = HISTO_EOH;
