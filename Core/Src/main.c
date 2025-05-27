@@ -343,8 +343,8 @@ int main(void)
     HAL_Delay(1000);
     HAL_TIM_Base_Start_IT(&htim14);
   }
-  // if(fake_data_gen)
-  //   X02C1B_fsin_on();
+   if(fake_data_gen)
+     X02C1B_fsin_on();
 
   while (1)
   {

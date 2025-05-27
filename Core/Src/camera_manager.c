@@ -716,43 +716,56 @@ void fill_frame_buffers(void) {
 
 _Bool send_fake_data(void) {
 
-	//TODO(update this to work similar to the other packetizer, refactor)
-	uint8_t *fb = get_active_frame_buffer();
-
 	fill_frame_buffers();
-	//uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
 
-    // do the work of copying the data into from the camera buffers into the usb buffer
-    int offset = 0;
-    size_t buf_size = HISTO_JSON_BUFFER_SIZE;
+	_Bool status = true;
+	int offset = 0;
 
-    offset += snprintf(packet_buffer + offset, buf_size - offset, "{\n");
-    
-    for (int cam = 0; cam < CAMERA_COUNT; ++cam) {
-        offset += snprintf(packet_buffer + offset, buf_size - offset, "  \"H%d\": [", cam);
-		
-		uint32_t *histo_ptr = cam_array[cam].pRecieveHistoBuffer;
-        for (int i = 0; i < HISTO_SIZE_32B - 1; ++i) {
-            offset += snprintf(packet_buffer + offset, buf_size - offset, "%lu,", histo_ptr[i]);
-        }
-		uint32_t cam_frame_id = ((histo_ptr[HISTO_SIZE_32B - 1] & 0xFF000000) >> 24);
-		offset += snprintf(packet_buffer + offset, buf_size - offset, "%lu", 
-							(histo_ptr[HISTO_SIZE_32B - 1] & 0x00FFFFFF));
-
-		offset += snprintf(packet_buffer + offset, buf_size - offset,
-                           (cam < CAMERA_COUNT - 1) ? "],\n" : "]\n");
+	uint8_t count = 0;
+	for (int i = 0; i < CAMERA_COUNT ; ++i) {
+		if (event_bits_enabled & (1 << i)) {
+			count++;
+		}
+	}
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
+    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    if (HISTO_JSON_BUFFER_SIZE < total_size) {
+        return false;  // Buffer too small
     }
 
-    offset += snprintf(packet_buffer + offset, buf_size - offset,
-                       "  ,\"META\": {\n    \"frame_id\": %u\n  }\n", frame_id);
+	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	
+	// --- Header ---
+    packet_buffer[offset++] = HISTO_SOF;
+    packet_buffer[offset++] = TYPE_HISTO;
+    packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 
-    offset += snprintf(packet_buffer + offset, buf_size - offset, "}\n");
+	// --- Data ---
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
+			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
+		    packet_buffer[offset++] = HISTO_SOH;
+			packet_buffer[offset++] = cam_id;
+			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
+			offset += HISTO_SIZE_32B*4;
+			packet_buffer[offset++] = HISTO_EOH;
+	}
 
-	uint8_t status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	// --- Footer --- 
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+    packet_buffer[offset++] = crc & 0xFF;
+    packet_buffer[offset++] = (crc >> 8) & 0xFF;
+    packet_buffer[offset++] = HISTO_EOF;
+		
+	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 
-	//TODO( get prev packet completed send, handle if not completed)
-	if(status != USBD_OK)
+	//TODO( handle the case where the packet fails to send better)
+	if(tx_status != USBD_OK){
 		printf("failed to send\r\n");
+		status = false;
+	}
 
 	frame_id++;
 

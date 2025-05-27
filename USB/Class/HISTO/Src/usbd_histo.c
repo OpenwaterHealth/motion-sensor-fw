@@ -175,22 +175,24 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
       {
           uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
-          // printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
-
+          printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
       }
       else
       {
+          printf("packet complete, ZLP Sent\r\n");
           // Transfer complete
           histo_ep_data = 0;
           USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
-		  /* Send ZLP */
-		  // ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+          /* Send ZLP */
+          static uint8_t dummy_zlp[1];
+          ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, dummy_zlp, 0);  // safer for STM32 HAL
       }
   } else {
 	  /* Send ZLP */
     pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
-	  ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+    static uint8_t dummy_zlp[1];
+    ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, dummy_zlp, 0);  // safer for STM32 HAL
   }
 
   return ret;

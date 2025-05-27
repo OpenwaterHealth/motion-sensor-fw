@@ -204,10 +204,10 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           // Send ZLP to indicate completion
           USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
       }
-  }else{
-	pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
-	/* Send ZLP */
-	ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+  } else {
+      pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
+      /* Send ZLP */
+      ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
   }
 
   return ret;
