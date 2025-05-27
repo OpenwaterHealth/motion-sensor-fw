@@ -721,13 +721,7 @@ _Bool send_fake_data(void) {
 	_Bool status = true;
 	int offset = 0;
 
-	uint8_t count = 0;
-	for (int i = 0; i < CAMERA_COUNT ; ++i) {
-		if (event_bits_enabled & (1 << i)) {
-			count++;
-		}
-	}
-	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
+	uint32_t payload_size = 8*(HISTO_SIZE_32B*4+3);
     uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
