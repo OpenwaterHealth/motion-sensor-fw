@@ -447,6 +447,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    			printf("Failed capture histo for camera %d\r\n", i);
 
 	        	}
+	        	printf("C: %d F:%d L:%d\r\n", i, uartResp->id, uartResp->data_len);
 	        }
 	    }
 		break;

@@ -22,7 +22,7 @@ CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
 
-volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
+volatile uint8_t frame_buffer[2][CAMERA_COUNT * 10]; // Double buffer
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
@@ -83,8 +83,12 @@ static void init_camera(CameraDevice *cam){
 	cam->isProgrammed = false;
 }
 
+
 void init_camera_sensors() {
 	int i = 0;
+
+	scanPacketA = (ScanPacket ) { 0 };
+	scanPacketB = (ScanPacket ) { 0 };
 
 	//Configure, initialize, and set default camera
 	cam_array[0].id = 0;
@@ -99,7 +103,7 @@ void init_camera_sensors() {
 	cam_array[0].pSpi = NULL;
 	cam_array[0].pUart = &husart2;
 	cam_array[0].i2c_target = 0;
-	cam_array[0].pRecieveHistoBuffer = NULL;
+	cam_array[0].pRecieveHistoBuffer = scanPacketA.cam0_buffer;
 
 	cam_array[1].id = 1;
 	cam_array[1].cresetb_port = CRESET_2_GPIO_Port;
@@ -107,13 +111,13 @@ void init_camera_sensors() {
 	cam_array[1].gpio0_port = GPIO0_2_GPIO_Port;
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
 	cam_array[1].useUsart = false;
-	cam_array[1].useDma = true;
+	cam_array[1].useDma = false;
 	cam_array[1].pI2c = &hi2c1;
 	cam_array[1].device_address = FPGA_I2C_ADDRESS;
 	cam_array[1].pSpi = &hspi6;
 	cam_array[1].pUart = NULL;
 	cam_array[1].i2c_target = 1;
-	cam_array[1].pRecieveHistoBuffer = NULL;
+	cam_array[1].pRecieveHistoBuffer = scanPacketA.cam1_buffer;
 
 	cam_array[2].id = 2;
 	cam_array[2].cresetb_port = CRESET_3_GPIO_Port;
@@ -127,7 +131,7 @@ void init_camera_sensors() {
 	cam_array[2].pSpi = NULL;
 	cam_array[2].pUart = &husart3;
 	cam_array[2].i2c_target = 2;
-	cam_array[2].pRecieveHistoBuffer = NULL;
+	cam_array[2].pRecieveHistoBuffer = scanPacketA.cam2_buffer;
 
 	cam_array[3].id = 3;
 	cam_array[3].cresetb_port = CRESET_4_GPIO_Port;
@@ -141,7 +145,7 @@ void init_camera_sensors() {
 	cam_array[3].pSpi = NULL;
 	cam_array[3].pUart = &husart6;
 	cam_array[3].i2c_target = 3;
-	cam_array[3].pRecieveHistoBuffer = NULL;
+	cam_array[3].pRecieveHistoBuffer = scanPacketA.cam3_buffer;
 
 	cam_array[4].id = 4;
 	cam_array[4].cresetb_port = CRESET_5_GPIO_Port;
@@ -155,7 +159,7 @@ void init_camera_sensors() {
 	cam_array[4].pSpi = NULL;
 	cam_array[4].pUart = &husart1;
 	cam_array[4].i2c_target = 4;
-	cam_array[4].pRecieveHistoBuffer = NULL;
+	cam_array[4].pRecieveHistoBuffer = scanPacketA.cam4_buffer;
 
 	cam_array[5].id = 5;
 	cam_array[5].cresetb_port = CRESET_6_GPIO_Port;
@@ -169,7 +173,7 @@ void init_camera_sensors() {
 	cam_array[5].pSpi = &hspi3;
 	cam_array[5].pUart = NULL;
 	cam_array[5].i2c_target = 5;
-	cam_array[5].pRecieveHistoBuffer = NULL;
+	cam_array[5].pRecieveHistoBuffer = scanPacketA.cam5_buffer;
 
 	cam_array[6].id = 6;
 	cam_array[6].cresetb_port = CRESET_7_GPIO_Port;
@@ -183,7 +187,7 @@ void init_camera_sensors() {
 	cam_array[6].pSpi = &hspi2;
 	cam_array[6].pUart = NULL;
 	cam_array[6].i2c_target = 6;
-	cam_array[6].pRecieveHistoBuffer = NULL;
+	cam_array[6].pRecieveHistoBuffer = scanPacketA.cam6_buffer;
 
 	cam_array[7].id = 7;
 	cam_array[7].cresetb_port = CRESET_8_GPIO_Port;
@@ -197,20 +201,14 @@ void init_camera_sensors() {
 	cam_array[7].pSpi = &hspi4;
 	cam_array[7].pUart = NULL;
 	cam_array[7].i2c_target = 7;
-	cam_array[7].pRecieveHistoBuffer = NULL;
+	cam_array[7].pRecieveHistoBuffer = scanPacketA.cam7_buffer;
 
 	for(i=0; i<CAMERA_COUNT; i++){
-		cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
 		init_camera(&cam_array[i]);
 	}
 
-	cam_array[1].pRecieveHistoBuffer = (uint8_t *)spi6_buffer;
-
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
-
-	scanPacketA = (ScanPacket ) { 0 };
-	scanPacketB = (ScanPacket ) { 0 };
 	
 }
 
@@ -628,22 +626,21 @@ _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
-    if (!cam->pRecieveHistoBuffer) {
+    if (!cam->pRecieveHistoBuffer || !cam->bufferFull) {
         printf("No histogram buffer for camera %d\r\n", cam_id+1);
         return false;
     }
 
     // Copy data into the provided buffer
-    memcpy(data, cam->pRecieveHistoBuffer, HISTOGRAM_DATA_SIZE);
-    *data_len = HISTOGRAM_DATA_SIZE;
-
+    memcpy(data, cam->pRecieveHistoBuffer, cam->useUsart ? USART_PACKET_LENGTH : SPI_PACKET_LENGTH);
+    *data_len = cam->useUsart ? USART_PACKET_LENGTH : SPI_PACKET_LENGTH;
+    cam->bufferFull = false;
     return true;
 }
 
 _Bool capture_single_histogram(uint8_t cam_id)
 {
 	_Bool ret = true;
-	HAL_StatusTypeDef status = HAL_OK;
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Capture HISTO for Camera %d Failed\r\n", cam_id+1);
@@ -661,35 +658,25 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	}
 
 	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(25);
+	HAL_Delay(1);
 
-	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, HISTOGRAM_DATA_SIZE);
+	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, cam->useUsart ? USART_PACKET_LENGTH : SPI_PACKET_LENGTH);
 
 	start_data_reception(cam_id);
 
-	if(status != HAL_OK)
-	{
-		printf("failed to setup receive for Camera %d channel\r\n", cam_id+1);
-		return false;
-	}
-
 	X02C1B_stream_on(cam);
-	HAL_Delay(10);
+	HAL_Delay(2);
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-	HAL_Delay(25);
+	HAL_Delay(2);
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(25);
-//	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-//	HAL_Delay(25);
-//	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
+	HAL_Delay(2);
 
 	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
 
-	uint8_t event_bit_single = 0x01 << cam_id;
-	while(event_bits != event_bit_single) {
+	while(!cam->bufferFull) {
 	    if (HAL_GetTick() > timeout) {
-	        printf("USART receive timeout!\r\n");
+	        printf("HISTO receive timeout!\r\n");
 	        if(cam->useUsart) {
 	            HAL_DMA_Abort(cam->pUart->hdmarx); // safely abort DMA
 	            __HAL_USART_DISABLE(cam->pUart);   // disable USART
@@ -707,7 +694,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	    HAL_Delay(1);
 	}
 
-	HAL_Delay(10);
+	HAL_Delay(1);
 	X02C1B_stream_off(cam);
 	// printf("Received Frame\r\n");
 
@@ -878,7 +865,7 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 
 _Bool send_histogram_data(void) {
 	_Bool status = true;
-
+#if 0
 	UartPacket telem;
 	telem.id = 0; // arbitrarily deciding that all telem packets have id 0
 	telem.packet_type = OW_DATA;
@@ -901,8 +888,45 @@ _Bool send_histogram_data(void) {
 	}
 
 	frame_id++;
-
+#endif
 	return status;
+}
+
+
+void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart)
+{
+	if (husart->Instance == USART1) {
+        cam_array[4].bufferFull = true;
+	}else if (husart->Instance == USART2) {
+        cam_array[0].bufferFull = true;
+        // Optionally: Disable further DMA/IT reception until processed
+    }
+    else if(husart->Instance == USART3) {
+        cam_array[2].bufferFull = true;
+    }
+    else if(husart->Instance == USART6) {
+        cam_array[3].bufferFull = true;
+    }
+}
+
+void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+	if (hspi->Instance == SPI2)
+	{
+        cam_array[6].bufferFull = true;
+	}
+	else if (hspi->Instance == SPI3)
+	{
+        cam_array[5].bufferFull = true;
+	}
+	else if (hspi->Instance == SPI4)
+	{
+        cam_array[7].bufferFull = true;
+	}
+	else if (hspi->Instance == SPI6)
+	{
+        cam_array[1].bufferFull = true;
+	}
 }
 
 // Get SPI/USART status for the specified camera ID

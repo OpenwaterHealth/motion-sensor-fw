@@ -28,7 +28,8 @@ typedef struct {
 	uint8_t 		gain;
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;
-
+    size_t   receiveBufferSize;      // Size of the buffer
+    volatile bool bufferFull;        // Flag: true = data ready, false = empty
 } CameraDevice;
 
 typedef struct {
@@ -90,5 +91,9 @@ uint8_t* get_inactive_frame_buffer(void);
 void fill_frame_buffers(void);
 _Bool toggle_camera_stream(uint8_t cam_id);
 void print_active_cameras(uint8_t cameras_present);
+
+
+void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
+void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
 #endif /* INC_CAMERA_MANAGER_H_ */
