@@ -929,69 +929,66 @@ uint8_t get_camera_status(uint8_t cam_id) {
 		HAL_USART_StateTypeDef usart_state;
 		usart_state = HAL_USART_GetState(cam->pUart);
 		
-		if(usart_state == HAL_USART_STATE_RESET){
-			printf("USART state: HAL_USART_STATE_RESET\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY){
-			printf("USART state: HAL_USART_STATE_BUSY\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_TX){
-			printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_RX){
-			printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
-			printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_TIMEOUT){
-			printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_ERROR){
-			printf("USART state: HAL_USART_STATE_ERROR\r\n");
-		}
-		else{
-			printf("USART state: Unknown\r\n");
-		}
-		
-		if (HAL_USART_GetState(cam->pUart) == HAL_USART_STATE_READY) {
+		if(usart_state == HAL_USART_STATE_READY) {			
 			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			// Print the USART state for debugging
+			if(usart_state == HAL_USART_STATE_RESET){
+				printf("USART state: HAL_USART_STATE_RESET\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY){
+				printf("USART state: HAL_USART_STATE_BUSY\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_TIMEOUT){
+				printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_ERROR){
+				printf("USART state: HAL_USART_STATE_ERROR\r\n");
+			}
+			else{
+				printf("USART state: Unknown\r\n");
+			}
 		}
-
 	} else {
 		HAL_SPI_StateTypeDef spi_state;
 		spi_state = HAL_SPI_GetState(cam->pSpi);
-
-		if(spi_state == HAL_SPI_STATE_RESET){
-			printf("SPI state: HAL_SPI_STATE_RESET\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_READY){
-			printf("SPI state: HAL_SPI_STATE_READY\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY){
-			printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_TX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_RX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_ERROR){
-			printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_ABORT){
-			printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
-		}
-		else{
-			printf("SPI state: Unknown\r\n");
-		}
-				
-		if (HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY) {
+		if(spi_state == HAL_SPI_STATE_READY) {			
 			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			// Print the SPI state for debugging
+			if(spi_state == HAL_SPI_STATE_RESET){
+				printf("SPI state: HAL_SPI_STATE_RESET\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY){
+				printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ERROR){
+				printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ABORT){
+				printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
+			}
+			else{
+				printf("SPI state: Unknown\r\n");
+			}
 		}
 	}
 
