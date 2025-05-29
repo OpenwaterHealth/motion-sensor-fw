@@ -239,7 +239,7 @@ _Bool reset_camera(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Hard Reset Camera %d Started\r\n", cam_id+1);
+	// printf("Hard Reset Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -263,7 +263,7 @@ _Bool enable_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Enable FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Enable FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -280,7 +280,7 @@ _Bool disable_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Disable FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Disable FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -298,7 +298,7 @@ _Bool activate_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -324,7 +324,7 @@ _Bool verify_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -350,7 +350,7 @@ _Bool enter_sram_prog_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -376,7 +376,7 @@ _Bool exit_sram_prog_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -402,7 +402,7 @@ _Bool erase_sram_fpga(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -431,7 +431,7 @@ uint32_t read_status_fpga(uint8_t cam_id)
 		return ret_val;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -455,7 +455,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 		return ret_val;
 	}
 
-	printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Activate FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -478,7 +478,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 		return false;
 	}
 
-	printf("Program FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -514,7 +514,7 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 		return false;
 	}
 
-	printf("Program FPGA Camera %d Started\r\n", cam_id+1);
+	// printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -561,7 +561,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Configure Camera %d Registers Started\r\n", cam_id+1);
+	// printf("Configure Camera %d Registers Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -591,7 +591,7 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 		return false;
 	}
 
-	printf("Configure Camera %d Test Pattern Started\r\n", cam_id+1);
+	// printf("Configure Camera %d Test Pattern Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -624,7 +624,7 @@ _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 		return false;
 	}
 
-	printf("Get HISTO for Camera %d Registers Started\r\n", cam_id+1);
+	// printf("Get HISTO for Camera %d Registers Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -650,7 +650,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 		return false;
 	}
 
-	printf("Capture HISTO for Camera %d Registers Started\r\n", cam_id+1);
+	// printf("Capture HISTO for Camera %d Registers Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -709,7 +709,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 
 	HAL_Delay(10);
 	X02C1B_stream_off(cam);
-	printf("Received Frame\r\n");
+	// printf("Received Frame\r\n");
 
 	return ret;
 }
@@ -832,12 +832,12 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled |= (1 << cam_id);
 	cam->streaming_enabled = true;
-	printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
+	// printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("Disable C: %d\r\n",cam_id);
+	// printf("Disable C: %d\r\n",cam_id);
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
@@ -862,7 +862,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
-	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
+	// printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
 
@@ -931,9 +931,6 @@ uint8_t get_camera_status(uint8_t cam_id) {
 		
 		if(usart_state == HAL_USART_STATE_RESET){
 			printf("USART state: HAL_USART_STATE_RESET\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_READY){
-			printf("USART state: HAL_USART_STATE_READY\r\n");
 		}
 		else if(usart_state == HAL_USART_STATE_BUSY){
 			printf("USART state: HAL_USART_STATE_BUSY\r\n");
