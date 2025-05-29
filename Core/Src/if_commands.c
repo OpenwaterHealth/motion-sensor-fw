@@ -439,15 +439,20 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		// printf("Capture single histogram frame\r\n");
 		uartResp->command = OW_CAMERA_GET_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
+		uartResp->addr = cmd.addr;
+		uartResp->reserved = 0;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!get_single_histogram(i, uartResp->data, &uartResp->data_len))
 	        	{
+	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
 	    			printf("Failed capture histo for camera %d\r\n", i);
 
+	        	} else {
+	        		uartResp->reserved |= (1 << i);
 	        	}
-	        	printf("C: %d F:%d L:%d\r\n", i, uartResp->id, uartResp->data_len);
+	        	// printf("C: %d F:%d L:%d\r\n", i, uartResp->id, uartResp->data_len);
 	        }
 	    }
 		break;

@@ -79,6 +79,11 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	// Initiate transmission via USB CDC
 	CDC_Transmit_HS(txBuffer, bufferIndex);
 
+	if(pResp->command == OW_CAMERA_GET_HISTOGRAM)
+	{
+		printf("F:%d C: 0x%02X V: 0x%02X S:%d\r\n", pResp->id, pResp->addr, pResp->reserved, bufferIndex);
+	}
+
 	// Wait for the transmit complete flag with a timeout to avoid infinite loop.
 	uint32_t start_time = HAL_GetTick();
 
