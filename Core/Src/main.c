@@ -88,7 +88,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 7};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 8};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -327,51 +327,14 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t most_recent_frame = HAL_GetTick();;
-  uint32_t ticks_at_start = HAL_GetTick();
-  bool streaming = false;
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     comms_host_check_received(); // check comms
-    
-    // Send out data if all the histograms have come in
-    if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
-      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-      printf(".\r\n");
-      most_recent_frame = HAL_GetTick();
-      streaming = true;
-
-      if(!send_histogram_data()) Error_Handler();
-      event_bits = 0x00;
-    }
-    else if(fake_data_gen && fake_data_send_flag){
-      send_fake_data();
-      fake_data_send_flag = false;
- 		}
-    
-    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
-    {
-      streaming = false;
-      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
-      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
-
-      printf("No data received in 75ms\r\n");
-      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
-      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
-      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
-      printf("total_time_streaming: %f\r\n", total_time_streaming);
-
-      for (int i = 0; i < 8; i++)
-      {
-        get_camera_status(i);
-      }
-      Error_Handler();
-    }
-
-    if(streaming==false) ticks_at_start = HAL_GetTick();
+    HAL_Delay(5);
 
   }
 
@@ -1515,43 +1478,12 @@ void set_event_bit_atomic(uint32_t bit) {
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  if (hspi->Instance == SPI2)
-  {
-    set_event_bit_atomic(BIT_6);
-  }
-  else if (hspi->Instance == SPI3)
-  {
-    set_event_bit_atomic(BIT_5);
-  }
-  else if (hspi->Instance == SPI4)
-  {
-    set_event_bit_atomic(BIT_7);
-  }
-  else if (hspi->Instance == SPI6)
-  {
-    set_event_bit_atomic(BIT_1);
-  }
+  CAM_SPI_RxCpltCallback(hspi);
 }
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-  if (husart->Instance == USART1)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_4);
-  }
-  else if (husart->Instance == USART2)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_0);
-  }
-  else if (husart->Instance == USART3)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_2);
-  }
-  else if (husart->Instance == USART6)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_3);
-  }
-
+  CAM_UART_RxCpltCallback(husart);
 }
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)

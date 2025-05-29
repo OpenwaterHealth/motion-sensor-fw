@@ -81,7 +81,7 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
         printf("Camera %d Sensor configuration failed\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
+    // printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
 
 	HAL_Delay(100);
     return 0;
@@ -93,23 +93,23 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
     int ret = 0;
     switch (test_pattern) {
         case 0:
-            printf("Set X02C1B_test_gradient_bar Test Pattern\r\n");
+            // printf("Set X02C1B_test_gradient_bar Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
             break;
         case 1:
-            printf("Set X02C1B_test_solid_a Test Pattern\r\n");
+            // printf("Set X02C1B_test_solid_a Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_solid_a, ARRAY_SIZE(X02C1B_test_solid_a));
             break;
         case 2:
-            printf("Set X02C1B_test_square Test Pattern\r\n");
+            // printf("Set X02C1B_test_square Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_square, ARRAY_SIZE(X02C1B_test_square));
             break;
         case 3:
-            printf("Set X02C1B_test_gradient_cont Test Pattern\r\n");
+            // printf("Set X02C1B_test_gradient_cont Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_cont, ARRAY_SIZE(X02C1B_test_gradient_cont));
             break;
         case 4:
-            printf("Set test patternt to disable\r\n");
+            // printf("Set test patternt to disable\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_disable, ARRAY_SIZE(X02C1B_test_disable));
             break;
         default:
@@ -122,7 +122,7 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
         printf("Camera %d Sensor test pattern failed\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
+    // printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
 
 	HAL_Delay(10);
 
@@ -135,7 +135,7 @@ int X02C1B_soft_reset(CameraDevice *cam) {
         printf("Camera %d Failed to reset device\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d Reset Success\r\n", cam->id+1);
+    // printf("Camera %d Reset Success\r\n", cam->id+1);
     return 0;
 }
 
@@ -145,7 +145,7 @@ int X02C1B_stream_on(CameraDevice *cam) {
         printf("Failed to start streaming on camera %d\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d streaming started\r\n", cam->id+1);
+    // printf("Camera %d streaming started\r\n", cam->id+1);
     return 0;
 }
 
@@ -156,7 +156,7 @@ int X02C1B_stream_off(CameraDevice *cam) {
         printf("Failed to stop streaming on camera %d\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d streaming stopped\r\n", cam->id+1);
+    // printf("Camera %d streaming stopped\r\n", cam->id+1);
     return 0;
 }
 
@@ -181,7 +181,7 @@ int X02C1B_detect(CameraDevice *cam)
         return ret;
     }
 
-    printf("Camera Device %d Register Value: 0x%02X\r\n", cam->id+1, read);
+    // printf("Camera Device %d Register Value: 0x%02X\r\n", cam->id+1, read);
     return 0;
 }
 
@@ -191,7 +191,7 @@ int X02C1B_fsin_on()
 	if(status == HAL_OK)
 	{
 		HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET); //D12
-		printf("Frame Sync ON\r\n");
+		// printf("Frame Sync ON\r\n");
 	}else{
 		printf("Error enabling Frame Sync\r\n");
 		return -1;
@@ -239,7 +239,7 @@ float X02C1B_read_temp(CameraDevice *cam)
 	else
 		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);
 
-    printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
+    // printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
 
     return temperature;
 }

@@ -62,7 +62,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = cmd.data;
 		break;
 	case OW_CMD_TOGGLE_LED:
-		printf("Toggle LED\r\n");
+		// printf("Toggle LED\r\n");
 		uartResp->command = OW_CMD_TOGGLE_LED;
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
@@ -276,7 +276,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		}else{
 			uint16_t calc_crc = util_crc16((uint8_t*)(bitstream_buffer + 4), bitstream_len);
 			uint16_t crc_valid = ((uint16_t)cmd.data[0] << 8) | cmd.data[1];
-			printf("BITSTREAM Size: %ld bytes CRC: 0x%04X\r\n",bitstream_len, calc_crc);
+			// printf("BITSTREAM Size: %ld bytes CRC: 0x%04X\r\n",bitstream_len, calc_crc);
 			if(crc_valid != calc_crc) {
     			uartResp->packet_type = OW_ERROR;
     			printf("Failed crc check\r\n");
@@ -336,7 +336,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_IMU_GET_TEMP:
-		printf("OW_IMU_GET_TEMP\r\n");
+		// printf("OW_IMU_GET_TEMP\r\n");
 		uartResp->command = OW_IMU_GET_TEMP;
 		uartResp->packet_type = OW_RESP;
 		imu_temp = ICM_ReadTemperature();
@@ -355,7 +355,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		}else{
 			uartResp->data_len = sizeof(accel);
 			uartResp->data = (uint8_t *)&accel;
-	        printf("Accelerometer size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(accel), accel.x, accel.y, accel.z);
+	        // printf("Accelerometer size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(accel), accel.x, accel.y, accel.z);
 		}
 		break;
 	case OW_IMU_GET_GYRO:
@@ -370,7 +370,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		}else{
 			uartResp->data_len = sizeof(gyro);
 			uartResp->data = (uint8_t *)&gyro;
-	        printf("Gyroscope size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(gyro), gyro.x, gyro.y, gyro.z);
+	        // printf("Gyroscope size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(gyro), gyro.x, gyro.y, gyro.z);
 		}
 		break;
 	default:
@@ -387,20 +387,22 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_CAMERA_SCAN:
-		printf("Reading Camera %d ID\r\n",pCam->id+1);
+		// printf("Reading Camera %d ID\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_SCAN;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_detect(pCam)){
 			// error
+			printf("Failed Reading Camera %d ID\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
 	case OW_CAMERA_ON:
-		printf("Setting Camera %d Stream on\r\n",pCam->id+1);
+		// printf("Setting Camera %d Stream on\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_ON;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_stream_on(pCam)){
 			// error
+			printf("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -419,7 +421,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_SINGLE_HISTOGRAM:
-		printf("Capture single histogram frame\r\n");
+		// printf("Capture single histogram frame\r\n");
 		uartResp->command = OW_CAMERA_SINGLE_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -434,17 +436,23 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_GET_HISTOGRAM:
-		printf("Capture single histogram frame\r\n");
+		// printf("Capture single histogram frame\r\n");
 		uartResp->command = OW_CAMERA_GET_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
+		uartResp->addr = cmd.addr;
+		uartResp->reserved = 0;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!get_single_histogram(i, uartResp->data, &uartResp->data_len))
 	        	{
+	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
 	    			printf("Failed capture histo for camera %d\r\n", i);
 
+	        	} else {
+	        		uartResp->reserved |= (1 << i);
 	        	}
+	        	// printf("C: %d F:%d L:%d\r\n", i, uartResp->id, uartResp->data_len);
 	        }
 	    }
 		break;
@@ -469,16 +477,17 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_OFF:
-		printf("Setting Camera %d Stream off\r\n",pCam->id+1);
+		// printf("Setting Camera %d Stream off\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_OFF;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_stream_off(pCam)<0){
 			// error
+			printf("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
 	case OW_CAMERA_STATUS:
-		printf("Camera status 0x%02X\r\n", cmd.addr);
+		// printf("Camera status 0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_STATUS;
 		uartResp->packet_type = OW_RESP;
 
@@ -494,11 +503,12 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    uartResp->data_len = 8;
 		break;
 	case OW_CAMERA_RESET:
-		printf("Camera %d Sensor Reset\r\n",pCam->id+1);
+		// printf("Camera %d Sensor Reset\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_RESET;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_soft_reset(pCam)<0){
 			// error
+			printf("Failed Camera %d Sensor Reset\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -514,6 +524,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 		if(result != 0){
 			// error
+			printf("Failed Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -521,17 +532,18 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uint8_t channel = cmd.data[0];
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
-		printf("Switching to camera %d\r\n",channel+1);
+		// printf("Switching to camera %d\r\n",channel+1);
         TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel);
         set_active_camera(channel);
 		break;
 	case OW_CAMERA_READ_TEMP:
-		printf("Reading Camera %d Temp\r\n",pCam->id+1);
+		// printf("Reading Camera %d Temp\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_READ_TEMP;
 		uartResp->packet_type = OW_RESP;
 		cam_temp = X02C1B_read_temp(pCam);
 		if(cam_temp<0){
 			// error
+			printf("Failed Reading Camera %d Temp\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 	        uartResp->data_len = 0;
 	        uartResp->data = NULL; // No valid data to send
@@ -541,7 +553,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_FSIN_EXTERNAL:
-		printf("Enabling FSIN_EXT...\r\n");
+		// printf("Enabling FSIN_EXT...\r\n");
 		uartResp->command = OW_CAMERA_FSIN_EXTERNAL;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
@@ -552,6 +564,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 		if(result != 0){
 			// error
+			printf("Failed Enabling FSIN_EXT...\r\n");
 			uartResp->packet_type = OW_ERROR;
 		}
 		X02C1B_FSIN_EXT_enable();
@@ -565,6 +578,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 }
 
+#if 0
 static void JSON_ProcessCommand(UartPacket *uartResp, UartPacket cmd)
 {
 	// json parser
@@ -574,7 +588,7 @@ static void JSON_ProcessCommand(UartPacket *uartResp, UartPacket cmd)
     jsmntok_t t[16];
     jsmnerr_t ret = jsmn_parse(&parser, (char *)cmd.data, cmd.data_len, t,
 				 sizeof(t) / sizeof(t[0]), NULL);
-    printf("Found %d Tokens\r\n", ret);
+    // printf("Found %d Tokens\r\n", ret);
 	switch (cmd.command)
 	{
 	case OW_CMD_NOP:
@@ -594,6 +608,7 @@ static void JSON_ProcessCommand(UartPacket *uartResp, UartPacket cmd)
 		break;
 	}
 }
+#endif
 
 static void print_uart_packet(const UartPacket* packet) __attribute__((unused));
 static void print_uart_packet(const UartPacket* packet) {
@@ -621,7 +636,7 @@ UartPacket process_if_command(UartPacket cmd)
 	switch (cmd.packet_type)
 	{
 	case OW_JSON:
-		JSON_ProcessCommand(&uartResp, cmd);
+		// JSON_ProcessCommand(&uartResp, cmd);
 		break;
 	case OW_CMD:
 		process_basic_command(&uartResp, cmd);
