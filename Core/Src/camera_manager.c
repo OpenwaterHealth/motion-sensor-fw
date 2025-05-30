@@ -25,6 +25,8 @@ CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
 
+volatile usb_failed = false;
+
 volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
 uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
 
@@ -752,15 +754,21 @@ _Bool send_fake_data(void) {
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
-		
+	
+	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 
 	//TODO( handle the case where the packet fails to send better)
 	if(tx_status != USBD_OK){
 		printf("failed to send\r\n");
 		status = false;
+		usb_failed = true;
 	}
-
+	if(status && usb_failed){
+		printf("USB RECOVERED\r\n");
+		usb_failed = false;
+	}
 	frame_id++;
 
 	return true;

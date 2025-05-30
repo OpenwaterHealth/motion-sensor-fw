@@ -116,6 +116,9 @@ bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = true;
 bool stream_imu_data = false;
+
+uint16_t fail_count = 0;
+
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 const char *bit_rep[16] = {
@@ -360,11 +363,17 @@ int main(void)
       most_recent_frame = HAL_GetTick();
       streaming = true;
 
-      if(!send_histogram_data()) Error_Handler();
+      // if(!send_histogram_data()) Error_Handler();
+
+      if(!send_histogram_data()){
+    	  fail_count++;
+      }
 
       event_bits = 0x00;
     }
     else if(fake_data_gen && fake_data_send_flag){
+            printf(".\r\n");
+
       send_fake_data();
       fake_data_send_flag = false;
  		}
@@ -374,7 +383,7 @@ int main(void)
       streaming = false;
       uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
       float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
-
+      printf("Fail Count: %d\r\n",fail_count);
       printf("No data received in 75ms\r\n");
       printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
       printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);

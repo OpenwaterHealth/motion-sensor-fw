@@ -170,30 +170,26 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
   if(histo_ep_data==1){
       tx_histo_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE;
+      
+      uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
 
-      if (tx_histo_ptr < tx_histo_total_len)
-      {
-          uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
-          uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
-          // printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
-          ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
+      uint16_t max_packet_size =  (pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE;
+      uint16_t pkt_len = MIN(max_packet_size, remaining);
+      // printf("r: %d\r\n",  remaining / HISTO_HS_MAX_PACKET_SIZE);
+      ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
+      
+      if(pkt_len < max_packet_size){
+        histo_ep_data = 0;
       }
-      else
-      {
-          // Transfer complete
-          histo_ep_data = 0;
-          USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
-          /* Send ZLP */
-          static uint8_t dummy_zlp[1];
-          ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, dummy_zlp, 0);  // safer for STM32 HAL
-      }
+
+      //TODO(add txcompletehandler)
+      
   } else {
 	  /* Send ZLP */
     pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
     static uint8_t dummy_zlp[1];
     ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, dummy_zlp, 0);  // safer for STM32 HAL
   }
-
   return ret;
 }
 
@@ -205,6 +201,7 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_t length)
 {
 	uint8_t ret = USBD_OK;
+          	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	if(histo_ep_enabled == 1 && histo_ep_data==0)
 	{
@@ -228,7 +225,12 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 	}
 	else
 	{
-		ret = USBD_BUSY;
+    if(histo_ep_data)
+  		printf("USBD_BUSY, not finished sending prev packet\r\n");
+    else
+    	printf("USBD_BUSY, other reason\r\n");
+    
+    ret = USBD_BUSY;
 	}
   return ret;
 }
@@ -242,6 +244,8 @@ uint8_t USBD_HISTO_RegisterInterface(USBD_HandleTypeDef *pdev, uint8_t *buffer)
 
 __weak void USBD_HISTO_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
 {
+            	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
 	UNUSED(Buf);
 	UNUSED(Len);
 	UNUSED(epnum);
