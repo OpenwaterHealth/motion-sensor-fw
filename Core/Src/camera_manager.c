@@ -750,7 +750,7 @@ _Bool send_fake_data(void) {
 	}
 
 	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 0 to EOH
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
