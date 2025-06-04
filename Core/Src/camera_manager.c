@@ -724,25 +724,25 @@ _Bool send_fake_data(void) {
 	int offset = 0;
 
 	uint32_t payload_size = 8*(HISTO_SIZE_32B*4+3);
-    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
-    if (HISTO_JSON_BUFFER_SIZE < total_size) {
-        return false;  // Buffer too small
-    }
+	uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+	if (HISTO_JSON_BUFFER_SIZE < total_size) {
+		return false;  // Buffer too small
+	}
 
 	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-	
+
 	// --- Header ---
-    packet_buffer[offset++] = HISTO_SOF;
-    packet_buffer[offset++] = TYPE_HISTO;
-    packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+	packet_buffer[offset++] = HISTO_SOF;
+	packet_buffer[offset++] = TYPE_HISTO;
+	packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
 			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
-		    packet_buffer[offset++] = HISTO_SOH;
+			packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
@@ -751,10 +751,10 @@ _Bool send_fake_data(void) {
 
 	// --- Footer --- 
 	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 0 to EOH
-    packet_buffer[offset++] = crc & 0xFF;
-    packet_buffer[offset++] = (crc >> 8) & 0xFF;
-    packet_buffer[offset++] = HISTO_EOF;
-	
+	packet_buffer[offset++] = crc & 0xFF;
+	packet_buffer[offset++] = (crc >> 8) & 0xFF;
+	packet_buffer[offset++] = HISTO_EOF;
+
 	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
