@@ -31,7 +31,7 @@ volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double 
 uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
-uint8_t frame_id = 0;
+volatile uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
@@ -722,8 +722,15 @@ _Bool send_fake_data(void) {
 
 	_Bool status = true;
 	int offset = 0;
+	
 
-	uint32_t payload_size = 8*(HISTO_SIZE_32B*4+3);
+	uint8_t count = 0;
+	for (int i = 0; i < CAMERA_COUNT ; ++i) {
+		if (event_bits_enabled & (1 << i)) {
+			count++;
+		}
+	}
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
 	uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
 	if (HISTO_JSON_BUFFER_SIZE < total_size) {
 		return false;  // Buffer too small
@@ -740,15 +747,16 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 
 	// --- Data ---
-	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
+	for (uint8_t cam_id = 0; cam_id < count; ++cam_id) {
+		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
 			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
 			packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
 			packet_buffer[offset++] = HISTO_EOH;
+		}
 	}
-
 	// --- Footer --- 
 	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 0 to EOH
 	packet_buffer[offset++] = crc & 0xFF;
@@ -761,7 +769,7 @@ _Bool send_fake_data(void) {
 
 	//TODO( handle the case where the packet fails to send better)
 	if(tx_status != USBD_OK){
-		printf("failed to send\r\n");
+		printf("failed to send, fid: %d\r\n",frame_id);
 		status = false;
 		usb_failed = true;
 	}
