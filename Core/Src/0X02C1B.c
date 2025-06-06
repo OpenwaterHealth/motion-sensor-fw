@@ -85,14 +85,14 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 
     uint8_t gain = 0x00;
     switch(cam->id){
-        case 0: gain = 0x08; break;
+        case 0: gain = 0x10; break;
         case 1: gain = 0x04; break;
         case 2: gain = 0x02; break;
         case 3: gain = 0x01; break;
         case 4: gain = 0x01; break;
         case 5: gain = 0x02; break;
         case 6: gain = 0x04; break;
-        case 7: gain = 0x08; break;
+        case 7: gain = 0x10; break;
     }
 
     ret = X02C1B_write(cam->pI2c, 0x3508, gain);  // undocumented
