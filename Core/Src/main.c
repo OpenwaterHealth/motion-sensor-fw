@@ -113,11 +113,14 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = false;
-bool scanI2cAtStart = true;
+bool fake_data_gen = true;
+bool scanI2cAtStart = false;
 bool stream_imu_data = false;
 
 uint16_t fail_count = 0;
+
+volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
+static uint32_t next_temp_ms = 0;                // scheduler tick
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
@@ -291,9 +294,10 @@ int main(void)
   HAL_Delay(100);
 
   // Scan for I2C cameras
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < CAMERA_COUNT; i++)
   {
     uint8_t addresses_found[10];
+    uint8_t found;
     bool camera_found = false, fpga_found = false;
 
     TCA9548A_SelectChannel(&hi2c1, 0x70, i);
@@ -301,9 +305,9 @@ int main(void)
 
     if (scanI2cAtStart)
       printf("I2C Scanning bus %d\r\n", i + 1);
-    I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), false);
+    found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
 
-    for (int j = 0; j < sizeof(addresses_found); j++)
+    for (int j = 0; j < found; j++)
     {
       if (addresses_found[j] == 0x36)
         camera_found = true;
@@ -315,7 +319,6 @@ int main(void)
       cameras_present |= 0x01 << i;
     else
       printf("Camera %d not found\r\n", i + 1);
-    //    HAL_Delay(10);
   }
 
   if (cameras_present == 0xFF)
@@ -349,6 +352,8 @@ int main(void)
 //   if(fake_data_gen)
 //     X02C1B_fsin_on();
 
+  next_temp_ms = HAL_GetTick();
+
   while (1)
   {
     /* USER CODE END WHILE */
@@ -378,6 +383,7 @@ int main(void)
       fake_data_send_flag = false;
  		}
     
+    // Print out at end of scan or if data hasn't come in in time to detect bad cameras
     if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
     {
       streaming = false;
@@ -400,6 +406,20 @@ int main(void)
 
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
+    /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        for (uint8_t cam = 0; cam < 8; cam++)
+        {
+            if (cameras_present & (1 << cam))          // only active cams
+            {
+                cam_temp[cam] = X02C1B_read_temp(get_camera_byID(cam));               // update global array
+            }
+        }
+        printf("Getting cam temps\r\n");
+    }
   }
 
   /* USER CODE END 3 */

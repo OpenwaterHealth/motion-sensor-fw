@@ -35,6 +35,7 @@ volatile uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
+extern float cam_temp[CAMERA_COUNT];
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
  __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH];
@@ -730,7 +731,7 @@ _Bool send_fake_data(void) {
 			count++;
 		}
 	}
-	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
 	uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
 	if (HISTO_JSON_BUFFER_SIZE < total_size) {
 		return false;  // Buffer too small
@@ -749,11 +750,21 @@ _Bool send_fake_data(void) {
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < count; ++cam_id) {
 		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
-			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
+			uint32_t *histo_ptr = (uint32_t *) cam_array[cam_id].pRecieveHistoBuffer;
 			packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
+
+			uint32_t temp_bits;
+			memcpy(&temp_bits, &cam_temp[cam_id],4);
+
+			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 16) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 24) & 0xFF);
+
+
 			packet_buffer[offset++] = HISTO_EOH;
 		}
 	}

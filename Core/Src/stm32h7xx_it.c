@@ -41,7 +41,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern volatile bool fake_data_send_flag;
 extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
 
 /* USER CODE END PV */
@@ -289,7 +288,6 @@ void DMA1_Stream6_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
-  fake_data_send_flag = true;  // trigger the fake data send event
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
