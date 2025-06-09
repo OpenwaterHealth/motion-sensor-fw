@@ -263,7 +263,7 @@ float X02C1B_read_temp(CameraDevice *cam)
 	else
 		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);
 
-    printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
+//    printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
 
     return temperature;
 }

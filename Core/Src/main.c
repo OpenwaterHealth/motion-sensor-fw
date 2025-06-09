@@ -113,7 +113,7 @@ float t;
 char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
-bool fake_data_gen = true;
+bool fake_data_gen = false;
 bool scanI2cAtStart = false;
 bool stream_imu_data = false;
 
@@ -418,7 +418,6 @@ int main(void)
                 cam_temp[cam] = X02C1B_read_temp(get_camera_byID(cam));               // update global array
             }
         }
-        printf("Getting cam temps\r\n");
     }
   }
 

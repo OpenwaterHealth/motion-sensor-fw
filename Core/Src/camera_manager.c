@@ -922,7 +922,7 @@ _Bool send_histogram_data(void) {
 			count++;
 		}
 	}
-	uint32_t payload_size = count*(HISTO_SIZE_32B*4+3);
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
     uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
@@ -946,7 +946,17 @@ _Bool send_histogram_data(void) {
 			packet_buffer[offset++] = cam_id;
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
 			offset += HISTO_SIZE_32B*4;
+			
+			uint32_t temp_bits;
+			memcpy(&temp_bits, &cam_temp[cam_id],4);
+
+			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 16) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 24) & 0xFF);
+
 			packet_buffer[offset++] = HISTO_EOH;
+			
 		}
 	}
 
