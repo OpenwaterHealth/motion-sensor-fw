@@ -401,7 +401,8 @@ int main(void)
         get_camera_status(i);
       }
       if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
-    	  Error_Handler();
+    	  // Error_Handler();
+        printf("FSIN Still ON\r\n");
     }
 
     if(streaming==false) ticks_at_start = HAL_GetTick();

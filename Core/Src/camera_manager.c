@@ -27,8 +27,8 @@ static int _active_cam_idx = 0;
 
 volatile usb_failed = false;
 
-volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
-uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE];
+__ALIGN_BEGIN volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE] __ALIGN_END; // Double buffer
+__ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END; 
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 volatile uint8_t frame_id = 0;
@@ -38,7 +38,7 @@ extern bool fake_data_gen;
 extern float cam_temp[CAMERA_COUNT];
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
- __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH];
+ __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
 
 
 static void generate_fake_histogram(uint8_t *histogram_data) {
@@ -737,7 +737,7 @@ _Bool send_fake_data(void) {
 		return false;  // Buffer too small
 	}
 
-	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	// --- Header ---
 	packet_buffer[offset++] = HISTO_SOF;
@@ -774,7 +774,7 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (crc >> 8) & 0xFF;
 	packet_buffer[offset++] = HISTO_EOF;
 
-	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 
@@ -928,7 +928,7 @@ _Bool send_histogram_data(void) {
         return false;  // Buffer too small
     }
 
-	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 	
 	// --- Header ---
     packet_buffer[offset++] = HISTO_SOF;
@@ -937,6 +937,9 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+	if(total_size>32833){
+		printf("Packet too large\r\n");
+	}
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
@@ -973,7 +976,7 @@ _Bool send_histogram_data(void) {
 		printf("failed to send\r\n");
 		status = false;
 	}
-	HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){

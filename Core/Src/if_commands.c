@@ -495,6 +495,15 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			result = X02C1B_fsin_off();
+
+			//TODO(fix this garbage, this resets the usart at the finish of a frame. this should be done more gracefully))
+			for(int i = 0;i<CAMERA_COUNT; i++){
+				CameraDevice *pCam = get_camera_byID(i);
+				if(pCam->useUsart){
+					pCam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
+					pCam->pUart->Instance->CR1 |= USART_CR1_UE;
+				}
+			}
 		} else {
 			result = X02C1B_fsin_on();
 		}
