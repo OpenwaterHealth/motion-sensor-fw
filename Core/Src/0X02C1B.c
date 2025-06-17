@@ -111,23 +111,23 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
     int ret = 0;
     switch (test_pattern) {
         case 0:
-            printf("Set X02C1B_test_gradient_bar Test Pattern\r\n");
+            // printf("Set X02C1B_test_gradient_bar Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_bar, ARRAY_SIZE(X02C1B_test_gradient_bar));
             break;
         case 1:
-            printf("Set X02C1B_test_solid_a Test Pattern\r\n");
+            // printf("Set X02C1B_test_solid_a Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_solid_a, ARRAY_SIZE(X02C1B_test_solid_a));
             break;
         case 2:
-            printf("Set X02C1B_test_square Test Pattern\r\n");
+            // printf("Set X02C1B_test_square Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_square, ARRAY_SIZE(X02C1B_test_square));
             break;
         case 3:
-            printf("Set X02C1B_test_gradient_cont Test Pattern\r\n");
+            // printf("Set X02C1B_test_gradient_cont Test Pattern\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_gradient_cont, ARRAY_SIZE(X02C1B_test_gradient_cont));
             break;
         case 4:
-            printf("Set test patternt to disable\r\n");
+            // printf("Set test patternt to disable\r\n");
             ret = X02C1B_write_array(cam->pI2c, X02C1B_test_disable, ARRAY_SIZE(X02C1B_test_disable));
             break;
         default:
@@ -140,7 +140,7 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
         printf("Camera %d Sensor test pattern failed\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
+    // printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
 
 	HAL_Delay(10);
 
@@ -153,7 +153,7 @@ int X02C1B_soft_reset(CameraDevice *cam) {
         printf("Camera %d Failed to reset device\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d Reset Success\r\n", cam->id+1);
+    // printf("Camera %d Reset Success\r\n", cam->id+1);
     return 0;
 }
 
@@ -199,7 +199,7 @@ int X02C1B_detect(CameraDevice *cam)
         return ret;
     }
 
-    printf("Camera Device %d Register Value: 0x%02X\r\n", cam->id+1, read);
+    // printf("Camera Device %d Register Value: 0x%02X\r\n", cam->id+1, read);
     return 0;
 }
 

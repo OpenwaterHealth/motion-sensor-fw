@@ -23,10 +23,12 @@ typedef struct {
 	USART_HandleTypeDef * pUart;
 	uint16_t 		i2c_target;
 	bool 			streaming_enabled;
+	bool 			isProgrammed;
+	bool 			isConfigured;
 	uint8_t 		gain;
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;
-
+    size_t   receiveBufferSize;      // Size of the buffer
 } CameraDevice;
 
 #define CAMERA_COUNT	8
@@ -58,7 +60,7 @@ _Bool verify_fpga(uint8_t cam_id);
 _Bool enter_sram_prog_fpga(uint8_t cam_id);
 _Bool exit_sram_prog_fpga(uint8_t cam_id);
 _Bool erase_sram_fpga(uint8_t cam_id);
-_Bool program_fpga(uint8_t cam_id);
+_Bool program_fpga(uint8_t cam_id, _Bool force_update);
 _Bool configure_camera_sensor(uint8_t cam_id);
 _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern);
 _Bool capture_single_histogram(uint8_t cam_id);
@@ -69,7 +71,7 @@ _Bool send_fake_data(void);
 _Bool send_histogram_data(void);
 _Bool enable_camera_stream(uint8_t cam_id);
 _Bool disable_camera_stream(uint8_t cam_id);
-_Bool get_camera_status(uint8_t cam_id);
+uint8_t get_camera_status(uint8_t cam_id);
 
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
@@ -77,12 +79,17 @@ void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);
 
 uint32_t read_status_fpga(uint8_t cam_id);
 uint32_t read_usercode_fpga(uint8_t cam_id);
-_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len);
+_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update);
 
 void switch_frame_buffer(void);
 uint8_t* get_active_frame_buffer(void);
 uint8_t* get_inactive_frame_buffer(void);
 void fill_frame_buffers(void);
 _Bool toggle_camera_stream(uint8_t cam_id);
+void print_active_cameras(uint8_t cameras_present);
+
+
+void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
+void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
 #endif /* INC_CAMERA_MANAGER_H_ */

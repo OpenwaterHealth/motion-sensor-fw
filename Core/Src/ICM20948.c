@@ -144,7 +144,7 @@ uint8_t ICM_Init(void)
     ICM_SelectBank(ICM20948_USER_BANK_0);
 
     HAL_Delay(50);
-    printf("ICM20948 initialization complete.\r\n");
+    // printf("ICM20948 initialization complete.\r\n");
 
     return HAL_OK;
 
