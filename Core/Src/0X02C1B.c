@@ -83,24 +83,6 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
     }
     // printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
 
-    uint8_t gain = 0x00;
-    switch(cam->id){
-        case 0: gain = 0x10; break;
-        case 1: gain = 0x04; break;
-        case 2: gain = 0x02; break;
-        case 3: gain = 0x01; break;
-        case 4: gain = 0x01; break;
-        case 5: gain = 0x02; break;
-        case 6: gain = 0x04; break;
-        case 7: gain = 0x10; break;
-    }
-
-    ret = X02C1B_write(cam->pI2c, 0x3508, gain);  // undocumented
-	if (ret < 0) {
-		printf("Camera %d Failed to stop streaming\r\n", cam->id+1);
-		return ret;
-	}
-
 	HAL_Delay(100);
     return 0;
 }
@@ -236,7 +218,7 @@ int X02C1B_fsin_off()
 
 float X02C1B_read_temp(CameraDevice *cam)
 {
-    // Read temperature bytes
+	// Read temperature bytes
     uint8_t upper_byte;
     int ret = X02C1B_read(cam->pI2c, X02C1B_TEMP_UPPER, &upper_byte);
     if (ret < 0) {
@@ -255,10 +237,11 @@ float X02C1B_read_temp(CameraDevice *cam)
     if(bytes < 0xC000)  //temperature is positive
     	temperature = upper_byte + (0.001f * lower_byte);
 	else
-		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);  
+		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);
+
     // printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
-  
-  return temperature;
+
+    return temperature;
 }
 
 int X02C1B_set_gain(CameraDevice *cam)

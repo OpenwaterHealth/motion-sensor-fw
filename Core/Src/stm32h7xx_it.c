@@ -41,8 +41,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
-
+extern volatile bool fake_data_send_flag;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,6 +55,7 @@ extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
 extern I2C_HandleTypeDef hi2c1;
 extern DMA_HandleTypeDef hdma_spi2_rx;
 extern DMA_HandleTypeDef hdma_spi3_rx;
@@ -68,7 +68,6 @@ extern SPI_HandleTypeDef hspi6;
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim8;
 extern TIM_HandleTypeDef htim12;
-extern TIM_HandleTypeDef htim14;
 extern DMA_HandleTypeDef hdma_uart4_rx;
 extern DMA_HandleTypeDef hdma_uart4_tx;
 extern DMA_HandleTypeDef hdma_usart1_rx;
@@ -288,6 +287,7 @@ void DMA1_Stream6_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
+  fake_data_send_flag = true;  // trigger the fake data send event
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
@@ -395,21 +395,6 @@ void TIM8_BRK_TIM12_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles TIM8 trigger and commutation interrupts and TIM14 global interrupt.
-  */
-void TIM8_TRG_COM_TIM14_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM8_TRG_COM_TIM14_IRQn 0 */
-
-  /* USER CODE END TIM8_TRG_COM_TIM14_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim8);
-  HAL_TIM_IRQHandler(&htim14);
-  /* USER CODE BEGIN TIM8_TRG_COM_TIM14_IRQn 1 */
-
-  /* USER CODE END TIM8_TRG_COM_TIM14_IRQn 1 */
-}
-
-/**
   * @brief This function handles DMA1 stream7 global interrupt.
   */
 void DMA1_Stream7_IRQHandler(void)
@@ -485,8 +470,9 @@ void USART6_IRQHandler(void)
 void OTG_HS_EP1_OUT_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 0 */
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+
   /* USER CODE END OTG_HS_EP1_OUT_IRQn 0 */
+  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
   /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 1 */
 
   /* USER CODE END OTG_HS_EP1_OUT_IRQn 1 */
@@ -498,8 +484,9 @@ void OTG_HS_EP1_OUT_IRQHandler(void)
 void OTG_HS_EP1_IN_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 0 */
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+
   /* USER CODE END OTG_HS_EP1_IN_IRQn 0 */
+  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
   /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 1 */
 
   /* USER CODE END OTG_HS_EP1_IN_IRQn 1 */
@@ -511,8 +498,9 @@ void OTG_HS_EP1_IN_IRQHandler(void)
 void OTG_HS_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_HS_IRQn 0 */
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
+
   /* USER CODE END OTG_HS_IRQn 0 */
+  HAL_PCD_IRQHandler(&hpcd_USB_OTG_HS);
   /* USER CODE BEGIN OTG_HS_IRQn 1 */
 
   /* USER CODE END OTG_HS_IRQn 1 */

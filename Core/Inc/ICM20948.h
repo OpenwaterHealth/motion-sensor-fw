@@ -141,7 +141,6 @@ float ICM_ReadTemperature(void);
 uint8_t ICM_ReadAccel(ICM_Axis3D *accel);
 uint8_t ICM_ReadGyro(ICM_Axis3D *gyro);
 uint8_t ICM_ReadMag(ICM_Axis3D *mag);
-uint8_t ICM_GetAllRawData(ICM_Axis3D *accel, float * pTemp, ICM_Axis3D *gyro, ICM_Axis3D *mag);
 void ICM_DumpRegisters(void);
 
 #endif /* ICM20948_H_ */

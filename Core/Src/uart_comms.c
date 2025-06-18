@@ -5,14 +5,12 @@
  *      Author: GeorgeVigelette
  */
 
+#include "if_commands.h"
 #include "main.h"
 #include "uart_comms.h"
-#include "if_commands.h"
-#include "usbd_comms.h"
 #include "utils.h"
-
 #include <string.h>
-
+#include "usbd_cdc_if.h"
 
 // Private variables
 extern uint8_t rxBuffer[COMMAND_MAX_SIZE];
@@ -24,9 +22,7 @@ volatile uint8_t rx_flag = 0;
 volatile uint8_t tx_flag = 0;
 const uint32_t zero_val = 0;
 
-extern USBD_HandleTypeDef hUsbDeviceHS;
-
-#define TX_TIMEOUT 500
+#define TX_TIMEOUT 5
 
 void ClearBuffer_DMA(void)
 {
@@ -81,12 +77,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_END_BYTE;
 
 	// Initiate transmission via USB CDC
-	USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
-
-	if(pResp->command == OW_CAMERA_GET_HISTOGRAM)
-	{
-		printf("F:%d C: 0x%02X V: 0x%02X S:%d\r\n", pResp->id, pResp->addr, pResp->reserved, bufferIndex);
-	}
+	CDC_Transmit_HS(txBuffer, bufferIndex);
 
 	if(pResp->command == OW_CAMERA_GET_HISTOGRAM)
 	{
@@ -111,12 +102,13 @@ void comms_host_start(void) {
 	memset(rxBuffer, 0, sizeof(rxBuffer));
 	ptrReceive = 0;
 
-	USBD_COMMS_FlushRxBuffer();
+	CDC_FlushRxBuffer_HS();
 
 	rx_flag = 0;
 	tx_flag = 0;
 
-	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
+	CDC_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
+
 }
 
 // This is the FreeRTOS task
@@ -215,16 +207,14 @@ NextDataPacket:
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;
-	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
+	CDC_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
 }
 
-
 // Callback functions
-void USBD_COMMS_RxCpltCallback(uint16_t len) {
+void CDC_handle_RxCpltCallback(uint16_t len) {
 	rx_flag = 1;
 }
 
-void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
+void CDC_handle_TxCpltCallback() {
 	tx_flag = 1;
 }
-
