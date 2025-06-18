@@ -236,12 +236,6 @@ int X02C1B_fsin_off()
 
 float X02C1B_read_temp(CameraDevice *cam)
 {
-	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
-	{
-		printf("failed to select Camera %d channel\r\n", cam->id + 1);
-		return -1.0f;
-	}
-
     // Read temperature bytes
     uint8_t upper_byte;
     int ret = X02C1B_read(cam->pI2c, X02C1B_TEMP_UPPER, &upper_byte);

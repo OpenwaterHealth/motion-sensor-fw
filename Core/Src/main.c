@@ -92,7 +92,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 8};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 9};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -418,7 +418,13 @@ int main(void)
         {
             if (cameras_present & (1 << cam))          // only active cams
             {
-                cam_temp[cam] = X02C1B_read_temp(get_camera_byID(cam));               // update global array
+              CameraDevice *pCam = get_camera_byID(cam);
+              if (pCam == NULL) continue; // skip if camera not initialized
+              if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK) {
+                // error 
+              } else {
+                cam_temp[cam] = X02C1B_read_temp(pCam);               // update global array
+              }
             }
         }
     }

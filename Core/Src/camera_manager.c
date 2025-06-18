@@ -973,7 +973,7 @@ _Bool send_histogram_data(void) {
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
 		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
-			uint32_t *histo_ptr = cam_array[cam_id].pRecieveHistoBuffer;
+			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
 			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
