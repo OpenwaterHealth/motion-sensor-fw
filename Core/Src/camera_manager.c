@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
 #define HISTO_JSON_BUFFER_SIZE 34000
@@ -25,7 +26,7 @@ CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
 
-volatile usb_failed = false;
+volatile bool usb_failed = false;
 
 __ALIGN_BEGIN volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE] __ALIGN_END; // Double buffer
 __ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END; 
