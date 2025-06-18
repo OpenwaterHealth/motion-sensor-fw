@@ -29,27 +29,23 @@ typedef struct {
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;
     size_t   receiveBufferSize;      // Size of the buffer
-    volatile bool bufferFull;        // Flag: true = data ready, false = empty
 } CameraDevice;
-
-typedef struct {
-	uint8_t cam0_buffer[USART_PACKET_LENGTH];
-	uint8_t cam1_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam2_buffer[USART_PACKET_LENGTH];
-	uint8_t cam3_buffer[USART_PACKET_LENGTH];
-	uint8_t cam4_buffer[USART_PACKET_LENGTH];
-	uint8_t cam5_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam6_buffer[SPI_PACKET_LENGTH];
-	uint8_t cam7_buffer[SPI_PACKET_LENGTH];
-
-} ScanPacket;
 
 #define CAMERA_COUNT	8
 #define HISTOGRAM_DATA_SIZE	4100
 #define WIDTH 1920
 #define HEIGHT 1280
 #define HISTOGRAM_BINS 1024
-#define HISTO_TEST_PATTERN 1
+#define HISTO_TEST_PATTERN 3
+
+#define HISTO_SOF  0xAA
+#define HISTO_SOH  0xFF
+#define HISTO_EOH  0xEE
+#define HISTO_EOF  0xDD
+#define TYPE_HISTO 0x00
+#define HISTO_HEADER_SIZE 6
+#define HISTO_TRAILER_SIZE 3
+
 
 void init_camera_sensors(void);
 CameraDevice* get_active_cam(void);

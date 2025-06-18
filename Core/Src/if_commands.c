@@ -87,7 +87,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 				}
 	        }
 	    }
-		if(status !=0xFF)
+		if(status != cmd.addr) // if the status bits are not true for all the cameras addressed, error
 		{
 			uartResp->packet_type = OW_ERROR;
 			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
@@ -518,6 +518,15 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			result = X02C1B_fsin_off();
+
+			//TODO(fix this garbage, this resets the usart at the finish of a frame. this should be done more gracefully))
+			for(int i = 0;i<CAMERA_COUNT; i++){
+				CameraDevice *pCam = get_camera_byID(i);
+				if(pCam->useUsart){
+					pCam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
+					pCam->pUart->Instance->CR1 |= USART_CR1_UE;
+				}
+			}
 		} else {
 			result = X02C1B_fsin_on();
 		}
@@ -540,16 +549,25 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		// printf("Reading Camera %d Temp\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_READ_TEMP;
 		uartResp->packet_type = OW_RESP;
-		cam_temp = X02C1B_read_temp(pCam);
-		if(cam_temp<0){
-			// error
-			printf("Failed Reading Camera %d Temp\r\n",pCam->id+1);
+
+		if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK)
+		{
+			printf("failed to select Camera %d channel\r\n", pCam->id + 1);
 			uartResp->packet_type = OW_ERROR;
 	        uartResp->data_len = 0;
 	        uartResp->data = NULL; // No valid data to send
-		}else{
-	        uartResp->data_len = sizeof(cam_temp);
-	        uartResp->data = (uint8_t *)&cam_temp; // Point to the static temp variable
+		} else {
+			cam_temp = X02C1B_read_temp(pCam);
+			if(cam_temp<0){
+				// error
+				printf("Failed Reading Camera %d Temp\r\n",pCam->id+1);
+				uartResp->packet_type = OW_ERROR;
+				uartResp->data_len = 0;
+				uartResp->data = NULL; // No valid data to send
+			}else{
+				uartResp->data_len = sizeof(cam_temp);
+				uartResp->data = (uint8_t *)&cam_temp; // Point to the static temp variable
+			}
 		}
 		break;
 	case OW_CAMERA_FSIN_EXTERNAL:

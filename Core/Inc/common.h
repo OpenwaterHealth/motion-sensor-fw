@@ -21,6 +21,8 @@
 
 #define verbose_on true
 
+#define CAM_TEMP_INTERVAL_MS   1000u          // 1 Hz
+
 typedef enum {
 	OW_START_BYTE = 0xAA,
 	OW_END_BYTE = 0xDD,
