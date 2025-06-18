@@ -28,7 +28,8 @@ typedef struct {
 	uint8_t 		gain;
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;
-    size_t   receiveBufferSize;      // Size of the buffer
+  size_t   receiveBufferSize;      // Size of the buffer
+  volatile bool bufferFull;        // Flag: true = data ready, false = empty
 } CameraDevice;
 
 #define CAMERA_COUNT	8

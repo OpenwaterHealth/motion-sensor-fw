@@ -361,6 +361,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    
   	comms_host_check_received(); // check comms
     
     // Send out data if all the histograms have come in
@@ -408,6 +409,7 @@ int main(void)
     }
 
     if(streaming==false) ticks_at_start = HAL_GetTick();
+
 
     /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
     if (HAL_GetTick() >= next_temp_ms)
@@ -1602,43 +1604,12 @@ void set_event_bit_atomic(uint32_t bit) {
 // Interrupt handler for SPI reception
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  if (hspi->Instance == SPI2)
-  {
-    set_event_bit_atomic(BIT_6);
-  }
-  else if (hspi->Instance == SPI3)
-  {
-    set_event_bit_atomic(BIT_5);
-  }
-  else if (hspi->Instance == SPI4)
-  {
-    set_event_bit_atomic(BIT_7);
-  }
-  else if (hspi->Instance == SPI6)
-  {
-    set_event_bit_atomic(BIT_1);
-  }
+  CAM_SPI_RxCpltCallback(hspi);
 }
 
 void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 {
-  if (husart->Instance == USART1)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_4);
-  }
-  else if (husart->Instance == USART2)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_0);
-  }
-  else if (husart->Instance == USART3)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_2);
-  }
-  else if (husart->Instance == USART6)
-  { // Check if the interrupt is for USART2
-    set_event_bit_atomic(BIT_3);
-  }
-
+  CAM_UART_RxCpltCallback(husart);
 }
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)

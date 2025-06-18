@@ -81,7 +81,7 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
         printf("Camera %d Sensor configuration failed\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
+    // printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
 
     uint8_t gain = 0x00;
     switch(cam->id){
@@ -209,7 +209,7 @@ int X02C1B_fsin_on()
 	if(status == HAL_OK)
 	{
 		HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET); //D12
-		printf("Frame Sync ON\r\n");
+		// printf("Frame Sync ON\r\n");
 	}else{
 		printf("Error enabling Frame Sync\r\n");
 		return -1;
@@ -255,11 +255,10 @@ float X02C1B_read_temp(CameraDevice *cam)
     if(bytes < 0xC000)  //temperature is positive
     	temperature = upper_byte + (0.001f * lower_byte);
 	else
-		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);
-
-//    printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
-
-    return temperature;
+		temperature = (0xC0 - upper_byte) + (0.001f * lower_byte);  
+    // printf("Camera %d Temperature: %f degC (0x%X)\r\n",cam->id+1,temperature,bytes);
+  
+  return temperature;
 }
 
 int X02C1B_set_gain(CameraDevice *cam)
