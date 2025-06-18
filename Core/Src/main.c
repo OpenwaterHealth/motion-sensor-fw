@@ -21,14 +21,17 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "uart_comms.h"
 #include "0X02C1B.h"
 #include "usb_device.h"
-#include "usbd_cdc_if.h"
+#include "uart_comms.h"
+#include "usbd_histo.h"
+#include "usbd_imu.h"
+#include "usbd_comms.h"
 #include "logging.h"
 #include "utils.h"
 #include "i2c_master.h"
 #include "ICM20948.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -72,6 +75,7 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim12;
+TIM_HandleTypeDef htim14;
 
 UART_HandleTypeDef huart4;
 USART_HandleTypeDef husart1;
@@ -88,15 +92,12 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 8};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 9};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
 uint32_t bitstream_len;
 __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]; // 160KB buffer
-
-ScanPacket scanPacketA;
-ScanPacket scanPacketB;
 
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
@@ -105,10 +106,23 @@ volatile bool fake_data_send_flag = false;
 
 uint8_t cameras_present = 0x00;
 
+ICM_Axis3D a;
+ICM_Axis3D m;
+ICM_Axis3D g;
+float t;
+char usb_buf[128];
 // Debug flags
 bool uart_stream = false;
 bool fake_data_gen = false;
-bool scanI2cAtStart = true;
+bool scanI2cAtStart = false;
+bool stream_imu_data = false;
+
+uint16_t fail_count = 0;
+
+volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
+static uint32_t next_temp_ms = 0;                // scheduler tick
+
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
 const char *bit_rep[16] = {
     [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
@@ -142,6 +156,7 @@ static void MX_TIM4_Init(void);
 static void MX_USART1_Init(void);
 static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
+static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -221,6 +236,7 @@ int main(void)
   MX_USART1_Init();
   MX_USART2_Init();
   MX_USART3_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
@@ -278,9 +294,10 @@ int main(void)
   HAL_Delay(100);
 
   // Scan for I2C cameras
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < CAMERA_COUNT; i++)
   {
     uint8_t addresses_found[10];
+    uint8_t found;
     bool camera_found = false, fpga_found = false;
 
     TCA9548A_SelectChannel(&hi2c1, 0x70, i);
@@ -288,9 +305,9 @@ int main(void)
 
     if (scanI2cAtStart)
       printf("I2C Scanning bus %d\r\n", i + 1);
-    I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), false);
+    found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
 
-    for (int j = 0; j < sizeof(addresses_found); j++)
+    for (int j = 0; j < found; j++)
     {
       if (addresses_found[j] == 0x36)
         camera_found = true;
@@ -302,7 +319,6 @@ int main(void)
       cameras_present |= 0x01 << i;
     else
       printf("Camera %d not found\r\n", i + 1);
-    //    HAL_Delay(10);
   }
 
   if (cameras_present == 0xFF)
@@ -315,9 +331,9 @@ int main(void)
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 
-  HAL_Delay(500);
+  HAL_Delay(250);
   MX_USB_DEVICE_Init();
-  HAL_Delay(500);
+  HAL_Delay(1000);
   //GPIO_SetHiZ(GPIOA, GPIO_PIN_2);
 
   comms_host_start();
@@ -327,15 +343,93 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t most_recent_frame = HAL_GetTick();
+  uint32_t ticks_at_start = HAL_GetTick();
+  bool streaming = false;
+
+  if(stream_imu_data) {
+    HAL_Delay(1000);
+    HAL_TIM_Base_Start_IT(&htim14);
+  }
+//   if(fake_data_gen)
+//     X02C1B_fsin_on();
+
+  next_temp_ms = HAL_GetTick();
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    comms_host_check_received(); // check comms
-    HAL_Delay(5);
+    
+  	comms_host_check_received(); // check comms
+    
+    // Send out data if all the histograms have come in
+    if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
+      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
+      printf(".\r\n");
+      most_recent_frame = HAL_GetTick();
+      streaming = true;
 
+      // if(!send_histogram_data()) Error_Handler();
+
+      if(!send_histogram_data()){
+    	  fail_count++;
+      }
+
+      event_bits = 0x00;
+    }
+    else if(fake_data_gen && fake_data_send_flag){
+            printf(".\r\n");
+
+      send_fake_data();
+      fake_data_send_flag = false;
+ 		}
+    
+    // Print out at end of scan or if data hasn't come in in time to detect bad cameras
+    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
+    {
+      streaming = false;
+      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
+      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
+      printf("Fail Count: %d\r\n",fail_count);
+      printf("No data received in 75ms\r\n");
+      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
+      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
+      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
+      printf("total_time_streaming: %f\r\n", total_time_streaming);
+
+      for (int i = 0; i < 8; i++)
+      {
+        get_camera_status(i);
+      }
+      if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
+    	  // Error_Handler();
+        printf("FSIN Still ON\r\n");
+    }
+
+    if(streaming==false) ticks_at_start = HAL_GetTick();
+
+
+    /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        for (uint8_t cam = 0; cam < 8; cam++)
+        {
+            if (cameras_present & (1 << cam))          // only active cams
+            {
+              CameraDevice *pCam = get_camera_byID(cam);
+              if (pCam == NULL) continue; // skip if camera not initialized
+              if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK) {
+                // error 
+              } else {
+                cam_temp[cam] = X02C1B_read_temp(pCam);               // update global array
+              }
+            }
+        }
+    }
   }
 
   /* USER CODE END 3 */
@@ -799,9 +893,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 1000;
+  htim4.Init.Prescaler = 999;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 5999;
+  htim4.Init.Period = 5997;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
@@ -819,7 +913,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 3000;
+  sConfigOC.Pulse = 2998;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
@@ -827,6 +921,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 3000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
@@ -928,6 +1023,37 @@ static void MX_TIM12_Init(void)
   /* USER CODE BEGIN TIM12_Init 2 */
 
   /* USER CODE END TIM12_Init 2 */
+
+}
+
+/**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 240-1;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 50000-1;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
 
 }
 
@@ -1537,7 +1663,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM12)
   {
-    CDC_Idle_Timer_Handler();
+	  USBD_COMMS_Idle_Timer_Handler();
   }
 
   /* USER CODE END Callback 0 */
@@ -1546,7 +1672,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if (htim->Instance == TIM14)
+  {
+	  // call imu
+	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
+		  printf("IMU Read Error\r\n");
+	  }else{
+		  memset(usb_buf,0,128);
+		  int len = snprintf(
+		      usb_buf, sizeof(usb_buf),
+		      "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+		      g.x, g.y, g.z,
+		      m.x, m.y, m.z,
+		      a.x, a.y, a.z,
+			  (int)t, (int)((t - (int)t) * 100.0f)
+		  );
+		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
+    }
+  }
   /* USER CODE END Callback 1 */
 }
 

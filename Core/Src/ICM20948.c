@@ -232,6 +232,40 @@ uint8_t ICM_ReadMag(ICM_Axis3D *mag)
     return HAL_OK;
 }
 
+uint8_t ICM_GetAllRawData(ICM_Axis3D *accel, float * pTemp, ICM_Axis3D *gyro, ICM_Axis3D *mag)
+{
+    uint8_t rawData[21];
+    int16_t temp_raw = 0;
+
+    ICM_SelectBank(ICM20948_USER_BANK_0);
+
+    if (ICM_readBytes(ICM20948_ACCEL_XOUT_H, rawData, 21) != HAL_OK)
+        return HAL_ERROR;
+
+    accel->x = (int16_t)((rawData[0] << 8) | rawData[1]);
+    accel->y = (int16_t)((rawData[2] << 8) | rawData[3]);
+    accel->z = (int16_t)((rawData[4] << 8) | rawData[5]);
+
+    gyro->x = (int16_t)((rawData[6] << 8) | rawData[7]);
+    gyro->y = (int16_t)((rawData[8] << 8) | rawData[9]);
+    gyro->z = (int16_t)((rawData[10] << 8) | rawData[11]);
+
+    temp_raw = ((int16_t)rawData[12] << 8) | rawData[13];
+    *pTemp = ((float)temp_raw / 333.87f) + 21.0f;  // per datasheet Page 14
+
+    mag->x = (int16_t)((rawData[15] << 8) | rawData[14]);
+    mag->y = (int16_t)((rawData[17] << 8) | rawData[16]);
+    mag->z = (int16_t)((rawData[19] << 8) | rawData[18]);
+
+    if ((rawData[20] & 0x8) != 0)
+    {
+      printf("ICM OVERFLOW.\r\n");
+      return HAL_ERROR;
+    }
+
+    return HAL_OK;
+}
+
 void ICM_DumpRegisters(void)
 {
     uint8_t val;
