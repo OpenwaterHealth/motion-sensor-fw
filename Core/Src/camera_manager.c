@@ -649,7 +649,7 @@ _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
 	// get camera event bits
-	if (!cam->pRecieveHistoBuffer || !(event_bits_enabled & (1 << cam_id))) {
+	if (!cam->pRecieveHistoBuffer || !(event_bits & (1 << cam_id))) {
         printf("No histogram buffer for camera %d\r\n", cam_id+1);
         return false;
     }
