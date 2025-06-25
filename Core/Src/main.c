@@ -259,13 +259,13 @@ int main(void)
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
 
   HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);  //enable Framesync output
-  X02C1B_FSIN_EXT_enable();
+  // X02C1B_FSIN_EXT_enable();
 
   // test i2c
   PrintI2CSpeed(&hi2c1);
   // I2C_scan(&hi2c1, NULL, 0, true);
   HAL_Delay(100);
-  X02C1B_FSIN_EXT_disable();
+  // X02C1B_FSIN_EXT_disable();
 
   if (ICM_WHOAMI() == ICM20948_EXPECTED_ID)
   {
