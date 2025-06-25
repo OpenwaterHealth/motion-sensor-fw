@@ -258,7 +258,7 @@ int main(void)
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
 
-  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET);  //disable Framesync output
+  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);  //enable Framesync output
   X02C1B_FSIN_EXT_enable();
 
   // test i2c
@@ -1418,7 +1418,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin */
   GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin;

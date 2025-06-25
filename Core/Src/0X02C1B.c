@@ -208,7 +208,6 @@ int X02C1B_fsin_on()
 	HAL_StatusTypeDef status = HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 	if(status == HAL_OK)
 	{
-		HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET); //D12
 		printf("Frame Sync ON\r\n");
 	}else{
 		printf("Error enabling Frame Sync\r\n");
@@ -225,7 +224,6 @@ int X02C1B_fsin_off()
         HAL_Delay(1); // wait until the frame sync is done to keep a partial cycle from spitting out
     }
     status = HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
-    HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET); //D12
 	if(status != HAL_OK)
 	{
 		printf("Error disabling Frame Sync\r\n");
@@ -284,11 +282,12 @@ int X02C1B_FSIN_EXT_enable()
  
     /* Configure the FSIN pin (the internal frame sync generator) to be high impedance*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = FSIN_EN_Pin;
+    GPIO_InitStruct.Pin = FSIN_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;     // Set to input mode
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Speed is irrelevant for input mode
-    HAL_GPIO_Init(FSIN_EN_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
+    ext_fsin_enabled = true;
     return HAL_OK;
 }
 
@@ -297,14 +296,14 @@ int X02C1B_FSIN_EXT_disable()
 	if(!ext_fsin_enabled) return HAL_OK;
     /*Configure GPIO pin : FSIN_EN_Pin */
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = FSIN_EN_Pin;
+    GPIO_InitStruct.Pin = FSIN_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(FSIN_EN_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
-
+    ext_fsin_enabled = false;
     return HAL_OK;
 }
