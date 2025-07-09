@@ -822,34 +822,73 @@ _Bool send_fake_data(void) {
 	return true;
 }
 
-_Bool start_data_reception(uint8_t cam_id){
-	HAL_StatusTypeDef status;
-	CameraDevice cam = cam_array[cam_id];
+_Bool start_data_reception(uint8_t cam_id) {
+    HAL_StatusTypeDef status;
+    CameraDevice *cam = get_camera_byID(cam_id);
 
-	if (cam.useUsart) {
-		if (cam.useDma) {
-			status = HAL_USART_Receive_DMA(cam.pUart,
-					cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
-		} else {
-			status = HAL_USART_Receive_IT(cam.pUart,
-					cam.pRecieveHistoBuffer, USART_PACKET_LENGTH);
-		}
-	} else {
-		if (cam.useDma) {
-			status = HAL_SPI_Receive_DMA(cam.pSpi,
-					cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-		} else {
-			status = HAL_SPI_Receive_IT(cam.pSpi,
-					cam.pRecieveHistoBuffer, SPI_PACKET_LENGTH);
-		}
-	}
-	if (status != HAL_OK) {
-		printf("failed to setup receive for Camera %d channel\r\n", cam_id+1);
-		abort_data_reception(cam_id);
-		return false;
-	}
-	return true;
+    // Defensive cleanup before enabling reception
+    if (cam->useUsart) {
+        if (cam->useDma) {
+        	// Attempt clean abort
+        	HAL_StatusTypeDef abortStatus = HAL_USART_Abort(cam->pUart);
+
+        	// If abort failed or state is stuck, force reset
+        	if (abortStatus != HAL_OK || cam->pUart->State != HAL_USART_STATE_READY) {
+        	    cam->pUart->State = HAL_USART_STATE_READY;
+
+        	    if (cam->pUart->hdmarx) {
+        	        __HAL_DMA_DISABLE(cam->pUart->hdmarx);
+        	        cam->pUart->hdmarx->State = HAL_DMA_STATE_READY;
+        	    }
+
+        	    // Optionally clear USART flags if needed (depends on chip/series)
+        	    __HAL_USART_CLEAR_OREFLAG(cam->pUart);
+        	    __HAL_USART_CLEAR_FEFLAG(cam->pUart);
+        	    __HAL_USART_CLEAR_PEFLAG(cam->pUart);
+        	}
+
+            if (cam->pUart->hdmarx) {
+                __HAL_DMA_DISABLE(cam->pUart->hdmarx);
+                __HAL_DMA_CLEAR_FLAG(cam->pUart->hdmarx, DMA_FLAG_TCIF0_4 | DMA_FLAG_HTIF0_4 | DMA_FLAG_TEIF0_4);
+                cam->pUart->hdmarx->State = HAL_DMA_STATE_READY;
+            }
+
+            // Now start the new transfer
+            status = HAL_USART_Receive_DMA(cam->pUart, cam->pRecieveHistoBuffer, USART_PACKET_LENGTH);
+        } else {
+            HAL_USART_Abort_IT(cam->pUart);
+            while (cam->pUart->State != HAL_UART_STATE_READY) {}
+
+            status = HAL_USART_Receive_IT(cam->pUart, cam->pRecieveHistoBuffer, USART_PACKET_LENGTH);
+        }
+    } else {
+        if (cam->useDma) {
+            HAL_SPI_Abort(cam->pSpi);
+            while (cam->pSpi->State != HAL_SPI_STATE_READY) {}
+
+            if (cam->pSpi->hdmarx) {
+                __HAL_DMA_DISABLE(cam->pSpi->hdmarx);
+                __HAL_DMA_CLEAR_FLAG(cam->pSpi->hdmarx, DMA_FLAG_TCIF0_4 | DMA_FLAG_HTIF0_4 | DMA_FLAG_TEIF0_4);
+                cam->pSpi->hdmarx->State = HAL_DMA_STATE_READY;
+            }
+
+            status = HAL_SPI_Receive_DMA(cam->pSpi, cam->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+        } else {
+            HAL_SPI_Abort_IT(cam->pSpi);
+            while (cam->pSpi->State != HAL_SPI_STATE_READY) {}
+
+            status = HAL_SPI_Receive_IT(cam->pSpi, cam->pRecieveHistoBuffer, SPI_PACKET_LENGTH);
+        }
+    }
+
+    if (status != HAL_OK) {
+        printf("failed to setup receive for Camera %d channel\r\n", cam_id + 1);
+        return false;
+    }
+
+    return true;
 }
+
 
 _Bool abort_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
@@ -881,11 +920,10 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	}
 	CameraDevice *cam = get_camera_byID(cam_id);
 
-	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
-		{
-			printf("failed to select Camera %d channel\r\n", cam_id+1);
-			return false;
-		}
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+		printf("failed to select Camera %d channel\r\n", cam_id+1);
+		return false;
+	}
 
 	bool data_recp_status= start_data_reception(cam_id);
 	bool stream_on_status= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
