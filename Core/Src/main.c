@@ -366,7 +366,7 @@ int main(void)
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
       // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-      printf(".\r\n");
+//      printf(".\r\n");
       most_recent_frame = HAL_GetTick();
       streaming = true;
 

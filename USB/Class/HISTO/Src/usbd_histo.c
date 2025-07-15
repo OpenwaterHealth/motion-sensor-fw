@@ -225,10 +225,10 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 	}
 	else
 	{
-    if(histo_ep_data)
-  		printf("USBD_BUSY, not finished sending prev packet\r\n");
-    else
-    	printf("USBD_BUSY, other reason\r\n");
+    // if(histo_ep_data)
+  	// 	printf("USBD_BUSY, not finished sending prev packet\r\n");
+    // else
+    // 	printf("USBD_BUSY, other reason\r\n");
     
     ret = USBD_BUSY;
 	}

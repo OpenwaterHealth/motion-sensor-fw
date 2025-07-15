@@ -1037,11 +1037,20 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = HISTO_EOF;
 		
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	uint8_t timeout_tries = 0;
 
 	//TODO( handle the case where the packet fails to send better)
-	if(tx_status != USBD_OK){
-		printf("failed to send\r\n");
-		status = false;
+	while(tx_status != USBD_OK){
+		printf("-\r\n");
+		HAL_Delay(1);
+		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+		timeout_tries++;
+		if(timeout_tries > 2){
+			printf("F\r\n");
+			status = false;
+			usb_failed = true;
+			break;
+		}
 	}
 	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
