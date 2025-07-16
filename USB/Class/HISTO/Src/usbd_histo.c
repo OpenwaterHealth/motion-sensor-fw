@@ -168,6 +168,8 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, HISTO_InstID);
 #endif /* USE_USBD_COMPOSITE */
 
+  USBD_LL_FlushEP(pdev, IMUInEpAdd);
+
   if(histo_ep_data==1){
       tx_histo_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE;
       

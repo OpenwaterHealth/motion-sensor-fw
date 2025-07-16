@@ -218,7 +218,7 @@ static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 }
 
 /**
-  * @brief  USBD_IMU_Init
+  * @brief  USBD_IMU_DeInit
   *         DeInitialize the IMU layer
   * @param  pdev: device instance
   * @param  cfgidx: Configuration index
@@ -292,6 +292,8 @@ static uint8_t USBD_IMU_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
 	  IMUInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, IMU_InstID);
 #endif /* USE_USBD_COMPOSITE */
+
+  USBD_LL_FlushEP(pdev, IMUInEpAdd);
 
   if(imu_ep_data==1)
   {
