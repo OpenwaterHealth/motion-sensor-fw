@@ -11,6 +11,7 @@
 #include "usbd_comms.h"
 #include "utils.h"
 
+#include <stdio.h>
 #include <string.h>
 
 
@@ -194,7 +195,7 @@ void comms_host_check_received(void) {
 		resp.packet_type = OW_ERROR;
 		goto NextDataPacket;
 	}
-
+	
 	resp = process_if_command(cmd);
 	// printf("CMD Packet:\r\n");
 	// print_uart_packet(&cmd);
@@ -202,6 +203,7 @@ void comms_host_check_received(void) {
 NextDataPacket:
 	comms_interface_send(&resp);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
+	fflush(stdout);
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;

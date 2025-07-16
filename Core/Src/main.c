@@ -108,6 +108,7 @@ volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the came
 volatile bool fake_data_send_flag = false;
 
 uint8_t cameras_present = 0x00;
+extern uint32_t frame_counter;
 
 ICM_Axis3D a;
 ICM_Axis3D m;
@@ -959,7 +960,7 @@ static void MX_TIM12_Init(void)
   htim12.Instance = TIM12;
   htim12.Init.Prescaler = 24000-1;
   htim12.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim12.Init.Period = 250-1;
+  htim12.Init.Period = 80-1;
   htim12.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim12.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim12) != HAL_OK)
@@ -1001,7 +1002,7 @@ static void MX_TIM14_Init(void)
   htim14.Instance = TIM14;
   htim14.Init.Prescaler = 240-1;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim14.Init.Period = 50000-1;
+  htim14.Init.Period = 2000-1;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
@@ -1662,6 +1663,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM14)
   {
+	  frame_counter++;
 	  // call imu
 	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
 		  printf("IMU Read Error\r\n");
@@ -1669,7 +1671,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  memset(usb_buf,0,128);
 		  int len = snprintf(
 		      usb_buf, sizeof(usb_buf),
-		      "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+		      "{\"F\":%ld,\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+			  frame_counter,
 		      g.x, g.y, g.z,
 		      m.x, m.y, m.z,
 		      a.x, a.y, a.z,
@@ -1719,8 +1722,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

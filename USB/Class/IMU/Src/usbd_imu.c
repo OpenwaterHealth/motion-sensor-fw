@@ -42,7 +42,8 @@
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
-
+// Add this global variable
+volatile uint32_t frame_counter = 0;
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
   * @{
   */
@@ -187,6 +188,9 @@ static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
   UNUSED(cfgidx);
 
+  // Reset frame counter on each initialization
+  frame_counter = 0;
+
 #ifdef USE_USBD_COMPOSITE
   /* Get the Endpoints addresses allocated for this class instance */
   IMUInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
@@ -218,7 +222,7 @@ static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 }
 
 /**
-  * @brief  USBD_IMU_Init
+  * @brief  USBD_IMU_DeInit
   *         DeInitialize the IMU layer
   * @param  pdev: device instance
   * @param  cfgidx: Configuration index
@@ -292,6 +296,8 @@ static uint8_t USBD_IMU_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
 	  IMUInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, IMU_InstID);
 #endif /* USE_USBD_COMPOSITE */
+
+  USBD_LL_FlushEP(pdev, IMUInEpAdd);
 
   if(imu_ep_data==1)
   {
@@ -370,6 +376,7 @@ __weak void USBD_IMU_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
 	UNUSED(Len);
 	UNUSED(epnum);
 }
+
 
 #ifndef USE_USBD_COMPOSITE
 /**

@@ -61,7 +61,6 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = cmd.data;
 		break;
 	case OW_CMD_TOGGLE_LED:
-		printf("Toggle LED\r\n");
 		uartResp->command = OW_CMD_TOGGLE_LED;
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
