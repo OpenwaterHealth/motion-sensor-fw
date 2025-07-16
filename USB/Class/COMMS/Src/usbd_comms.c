@@ -240,7 +240,6 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
       read_to_idle_enabled = 0;
       uint16_t captured_len = rxIndex;
       rxIndex = 0;
-      uint8_t* callback_buf = pUserRxBuff;
       pUserRxBuff = NULL;
 
       __set_PRIMASK(primask);  // Restore interrupts before callback
@@ -263,7 +262,6 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
   {
     /* Buffer overflow */
     read_to_idle_enabled = 0;
-    uint8_t* callback_buf = pUserRxBuff;
     pUserRxBuff = NULL;
     rxIndex = 0;
 
