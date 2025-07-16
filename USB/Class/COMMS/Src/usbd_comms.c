@@ -185,6 +185,8 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
 #endif /* USE_USBD_COMPOSITE */
 
+  USBD_LL_FlushEP(pdev, IMUInEpAdd);
+
   if(comms_ep_data==1){
       tx_comms_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
 
@@ -204,10 +206,10 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           // Send ZLP to indicate completion
           USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
       }
-  } else {
-      pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
-      /* Send ZLP */
-      ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+  }else{
+	pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
+	/* Send ZLP */
+	ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
   }
 
   return ret;
@@ -215,30 +217,72 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
+  uint32_t primask = __get_PRIMASK();  // Store interrupt state
+  __disable_irq();  // Begin critical section
+
 #ifdef USE_USBD_COMPOSITE
   COMMSOutEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_OUT, USBD_EP_TYPE_BULK, COMMS_InstID);
 #endif
 
   uint32_t rx_len = USBD_LL_GetRxDataSize(pdev, COMMSOutEpAdd);
-  uint32_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
+  uint32_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH) ?
+                         COMMS_HS_MAX_PACKET_SIZE : COMMS_FS_MAX_PACKET_SIZE;
 
-  if(pUserRxBuff){
-	  uint8_t* pUserRx = pUserRxBuff + rxIndex;
-	  memcpy(pUserRx, pRxCommsBuff, rx_len);
-	  rxIndex += rx_len;
-  }
-
-  if(read_to_idle_enabled == 1)
+  /* Safe buffer handling */
+  if(pUserRxBuff && (rxIndex + rx_len <= rxMaxSize))
   {
-	  // Restart timer when data is received
-	  HAL_TIM_Base_Stop_IT(&htim12);
-	  __HAL_TIM_SET_COUNTER(&htim12, 0); // Reset the timer counter
+    memcpy(pUserRxBuff + rxIndex, pRxCommsBuff, rx_len);
+    rxIndex += rx_len;
 
-	  HAL_TIM_Base_Start_IT(&htim12);
+    /* Handle immediate completion for short packets */
+    if(read_to_idle_enabled && (rx_len < packet_size))
+    {
+      read_to_idle_enabled = 0;
+      uint16_t captured_len = rxIndex;
+      rxIndex = 0;
+      uint8_t* callback_buf = pUserRxBuff;
+      pUserRxBuff = NULL;
+
+      __set_PRIMASK(primask);  // Restore interrupts before callback
+      USBD_COMMS_RxCpltCallback(captured_len);
+      __disable_irq();  // Re-enter critical section
+    }
+    else if(read_to_idle_enabled)
+    {
+      /* Restart idle timer */
+      htim12.Instance->CNT = 0;
+      htim12.Instance->CR1 |= TIM_CR1_CEN;
+    }
+  }
+  else if(!pUserRxBuff)
+  {
+    /* No active buffer - discard data */
+    rxIndex = 0;
+  }
+  else
+  {
+    /* Buffer overflow */
+    read_to_idle_enabled = 0;
+    uint8_t* callback_buf = pUserRxBuff;
+    pUserRxBuff = NULL;
+    rxIndex = 0;
+
+    __set_PRIMASK(primask);  // Restore interrupts before callback
+    USBD_COMMS_RxCpltCallback(0xFFFF);  // Error code
+    __disable_irq();  // Re-enter critical section
   }
 
-  // Re-arm reception
-  USBD_LL_PrepareReceive(pdev, COMMS_OUT_EP, pRxCommsBuff, packet_size);
+  /* Re-arm reception with error recovery */
+  USBD_StatusTypeDef status;
+  do {
+    status = USBD_LL_PrepareReceive(pdev, COMMS_OUT_EP, pRxCommsBuff, packet_size);
+    if(status != USBD_OK) {
+      USBD_LL_FlushEP(pdev, COMMS_OUT_EP);
+      for(volatile uint32_t i = 0; i < 1000; i++);  // Short delay
+    }
+  } while(status != USBD_OK);
+
+  __set_PRIMASK(primask);  // End critical section
   return USBD_OK;
 }
 
@@ -288,18 +332,27 @@ uint8_t USBD_COMMS_Transmit(USBD_HandleTypeDef *pdev, uint8_t* Buf, uint16_t Len
 
 void USBD_COMMS_Idle_Timer_Handler()
 {
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
+  if(read_to_idle_enabled)
+  {
 	read_to_idle_enabled = 0;
-	HAL_TIM_Base_Stop_IT(&htim12);
-
-	if(pUserRxBuff){
-		USBD_COMMS_RxCpltCallback(rxIndex);
-	}else{
-		printf("RX EMPTY\r\n");
-		USBD_COMMS_RxCpltCallback(0);
-	}
-
+	uint16_t captured_len = rxIndex;
+	uint8_t* callback_buf = pUserRxBuff;
 	rxIndex = 0;
 	pUserRxBuff = NULL;
+
+	htim12.Instance->CR1 &= ~TIM_CR1_CEN;  // Stop timer
+
+	__set_PRIMASK(primask);  // Restore interrupts before callback
+	if(callback_buf) {
+	  USBD_COMMS_RxCpltCallback(captured_len);
+	}
+	return;
+  }
+
+  __set_PRIMASK(primask);
 }
 
 void USBD_COMMS_FlushRxBuffer()
@@ -309,10 +362,26 @@ void USBD_COMMS_FlushRxBuffer()
 
 void USBD_COMMS_ReceiveToIdle(uint8_t* Buf, uint16_t max_size)
 {
-	rxIndex = 0;
-	rxMaxSize = max_size;
-	pUserRxBuff = Buf;
-	read_to_idle_enabled = 1;
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
+  /* Ensure previous transfer is complete */
+  while(comms_ep_data) {
+	__set_PRIMASK(primask);
+	HAL_Delay(1);
+	__disable_irq();
+  }
+
+  rxIndex = 0;
+  rxMaxSize = max_size;
+  pUserRxBuff = Buf;
+  read_to_idle_enabled = 1;
+
+  /* Configure and start idle timer */
+  htim12.Instance->CNT = 0;
+  htim12.Instance->CR1 |= TIM_CR1_CEN;
+
+  __set_PRIMASK(primask);
 }
 
 uint8_t USBD_COMMS_RegisterRxCallback(void (*cb)(uint8_t *buf, uint16_t len)) {
@@ -325,6 +394,29 @@ uint8_t USBD_COMMS_RegisterInterface(USBD_HandleTypeDef *pdev, uint8_t *buffer)
   UNUSED(pdev);
   UNUSED(buffer);
   return (uint8_t)USBD_OK;
+}
+
+extern USBD_HandleTypeDef hUsbDeviceHS;
+
+void USBD_COMMS_RecoverFromError(void)
+{
+  __disable_irq();
+  USBD_LL_FlushEP(&hUsbDeviceHS, COMMS_IN_EP);
+  USBD_LL_FlushEP(&hUsbDeviceHS, COMMS_OUT_EP);
+
+  tx_comms_ptr = 0;
+  tx_comms_total_len = 0;
+  comms_ep_data = 0;
+  rxIndex = 0;
+  pUserRxBuff = NULL;
+  read_to_idle_enabled = 0;
+
+  // Reinitialize endpoints
+  USBD_LL_OpenEP(&hUsbDeviceHS, COMMS_IN_EP,
+                USBD_EP_TYPE_BULK, COMMS_FS_MAX_PACKET_SIZE);
+  USBD_LL_PrepareReceive(&hUsbDeviceHS, COMMS_OUT_EP,
+                        pRxCommsBuff, COMMS_FS_MAX_PACKET_SIZE);
+  __enable_irq();
 }
 
 __weak void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
