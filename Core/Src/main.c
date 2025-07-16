@@ -92,7 +92,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 0, 6};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 2, 0};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -108,7 +108,7 @@ volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the came
 volatile bool fake_data_send_flag = false;
 
 uint8_t cameras_present = 0x00;
-extern uint32_t frame_counter;
+extern uint32_t imu_frame_counter;
 
 ICM_Axis3D a;
 ICM_Axis3D m;
@@ -342,9 +342,6 @@ int main(void)
   uint32_t most_recent_frame = HAL_GetTick();;
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
-
-  //HAL_Delay(1000);
-  //HAL_TIM_Base_Start_IT(&htim14);
 
   while (1)
   {
@@ -1663,7 +1660,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM14)
   {
-	  frame_counter++;
+	  imu_frame_counter++;
 	  // call imu
 	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
 		  printf("IMU Read Error\r\n");
@@ -1672,7 +1669,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  int len = snprintf(
 		      usb_buf, sizeof(usb_buf),
 		      "{\"F\":%ld,\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
-			  frame_counter,
+			  imu_frame_counter,
 		      g.x, g.y, g.z,
 		      m.x, m.y, m.z,
 		      a.x, a.y, a.z,

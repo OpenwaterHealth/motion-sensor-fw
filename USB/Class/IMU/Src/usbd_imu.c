@@ -42,8 +42,8 @@
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
-// Add this global variable
-volatile uint32_t frame_counter = 0;
+
+
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
   * @{
   */
@@ -187,9 +187,6 @@ static uint16_t tx_imu_ptr = 0;
 static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
   UNUSED(cfgidx);
-
-  // Reset frame counter on each initialization
-  frame_counter = 0;
 
 #ifdef USE_USBD_COMPOSITE
   /* Get the Endpoints addresses allocated for this class instance */
