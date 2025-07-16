@@ -24,6 +24,7 @@ static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
 static ICM_Axis3D gyro;
+extern uint32_t imu_frame_counter;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 {
@@ -371,6 +372,29 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->data_len = sizeof(gyro);
 			uartResp->data = (uint8_t *)&gyro;
 	        // printf("Gyroscope size: %d data: X=%d, Y=%d, Z=%d\r\n", sizeof(gyro), gyro.x, gyro.y, gyro.z);
+		}
+		break;
+	case OW_IMU_ON:
+		uartResp->command = OW_IMU_ON;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+	    imu_frame_counter = 0;
+		if(HAL_TIM_Base_Start_IT(&IMU_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn on IMU data\r\n");
+		}
+		break;
+	case OW_IMU_OFF:
+		uartResp->command = OW_IMU_OFF;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+		if(HAL_TIM_Base_Stop_IT(&IMU_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn off IMU data\r\n");
 		}
 		break;
 	default:
