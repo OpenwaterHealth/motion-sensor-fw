@@ -1,40 +1,59 @@
-/*
- * histo_fake.c
- *
- *  Created on: Jul 17, 2025
- *      Author: gvigelet
- */
-
-
 #include "histo_fake.h"
 #include "usbd_histo.h"
-#include <stdlib.h>
 #include <string.h>
 
-static uint32_t frame_id = 0;
-static uint8_t histo_frame_buffer[HISTO_FRAME_SIZE_BYTES];
+typedef struct {
+    uint8_t frame_buffer[HISTO_FRAME_MAX_BYTES];
+    uint32_t frame_size_bytes;
+    uint32_t camera_count;
+    uint32_t frame_id;
+} HistoFakeContext;
 
-void HistoFake_Init(void)
+static HistoFakeContext histo_ctx;
+
+void HistoFake_Init(uint32_t camera_count)
 {
-    memset(histo_frame_buffer, 0, sizeof(histo_frame_buffer));
-    frame_id = 0;
+    if (camera_count > HISTO_CAMERA_MAX_COUNT)
+        camera_count = HISTO_CAMERA_MAX_COUNT;
+
+    histo_ctx.camera_count = camera_count;
+    histo_ctx.frame_id = 0;
+    histo_ctx.frame_size_bytes = 8 + camera_count * 4104;  // SOF + per-cam + EOF
+    memset(histo_ctx.frame_buffer, 0, HISTO_FRAME_MAX_BYTES);
+}
+
+void HistoFake_Deinit(void)
+{
+    memset(histo_ctx.frame_buffer, 0, HISTO_FRAME_MAX_BYTES);
+    histo_ctx.frame_id = 0;
+    histo_ctx.camera_count = 0;
+    histo_ctx.frame_size_bytes = 0;
 }
 
 void HistoFake_GenerateAndSend(USBD_HandleTypeDef *pdev)
 {
-    uint32_t *p32 = (uint32_t *)histo_frame_buffer;
+    uint32_t *p32 = (uint32_t *)histo_ctx.frame_buffer;
+    uint32_t offset = 0;
 
-    p32[0] = HISTO_SOF_MARKER;
-    p32[1] = frame_id++;
+    histo_ctx.frame_id++;
+    p32[offset++] = HISTO_SOF_MARKER;
 
-    for (uint32_t i = 0; i < HISTO_BIN_COUNT; i++)
+    for (uint32_t cam = 0; cam < histo_ctx.camera_count; cam++)
     {
-        // Fake histogram data: simple moving ramp to simulate dynamic scene
-        p32[2 + i] = (i + frame_id) % 1024;
+        // Per-camera unique frame ID
+        p32[offset++] = histo_ctx.frame_id;
+
+        // Histogram data (fake ramp with variation per camera)
+        for (uint32_t i = 0; i < HISTO_BIN_COUNT; i++)
+        {
+            p32[offset++] = (i + histo_ctx.frame_id + cam) % 1024;
+        }
+
+        // Per-camera metadata (camera ID)
+        p32[offset++] = cam;
     }
 
-    p32[2 + HISTO_BIN_COUNT] = HISTO_META_DATA;
-    p32[3 + HISTO_BIN_COUNT] = HISTO_EOF_MARKER;
+    p32[offset++] = HISTO_EOF_MARKER;
 
-    USBD_HISTO_SetTxBuffer(pdev, histo_frame_buffer, HISTO_FRAME_SIZE_BYTES);
+    USBD_HISTO_SetTxBuffer(pdev, histo_ctx.frame_buffer, histo_ctx.frame_size_bytes);
 }

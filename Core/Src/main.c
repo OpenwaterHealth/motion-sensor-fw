@@ -286,6 +286,12 @@ int main(void)
     printf("IMU NOT detected\r\n\n");
   }
 
+  // Enable DWT Cycle Counter
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+
   HAL_Delay(10);
 
   HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_SET);
