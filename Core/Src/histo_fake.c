@@ -1,5 +1,6 @@
 #include "histo_fake.h"
 #include "usbd_histo.h"
+#include "utils.h"
 #include <string.h>
 
 typedef struct {
@@ -48,7 +49,7 @@ void HistoFake_GenerateAndSend(USBD_HandleTypeDef *pdev)
         {
             p32[offset++] = (i + histo_ctx.frame_id + cam) % 1024;
         }
-
+        // uint16_t crc = util_hw_crc16(buf, size);
         // Per-camera metadata (camera ID)
         p32[offset++] = cam;
     }

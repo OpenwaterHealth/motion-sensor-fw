@@ -25,6 +25,7 @@ volatile float imu_temp = 0;
 static ICM_Axis3D accel;
 static ICM_Axis3D gyro;
 volatile uint32_t imu_frame_counter = 0;
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 {
@@ -104,6 +105,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 
 	    // Initialize fake histogram generator
 	    HistoFake_Init(cmd.addr);
+	    HistoFake_GenerateAndSend(&hUsbDeviceHS);
 
 		if(HAL_TIM_Base_Start_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
 		{
