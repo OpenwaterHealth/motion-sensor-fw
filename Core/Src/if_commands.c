@@ -94,6 +94,29 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		}
 		else uartResp->packet_type = OW_ACK;
 		break;
+	case OW_CMD_HISTO_ON:
+		uartResp->command = OW_CMD_HISTO_ON;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+	    imu_frame_counter = 0;
+		if(HAL_TIM_Base_Start_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn on FAKE HISTO data\r\n");
+		}
+		break;
+	case OW_CMD_HISTO_OFF:
+		uartResp->command = OW_CMD_HISTO_OFF;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+		if(HAL_TIM_Base_Stop_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn off FAKE HISTO data\r\n");
+		}
+		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
