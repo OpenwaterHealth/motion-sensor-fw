@@ -41,17 +41,21 @@ void HistoFake_GenerateAndSend(USBD_HandleTypeDef *pdev)
 
     for (uint32_t cam = 0; cam < histo_ctx.camera_count; cam++)
     {
-        // Per-camera unique frame ID
+        // Frame ID
         p32[offset++] = histo_ctx.frame_id;
 
-        // Histogram data (fake ramp with variation per camera)
+        uint32_t *histogram_start = &p32[offset];
         for (uint32_t i = 0; i < HISTO_BIN_COUNT; i++)
         {
             p32[offset++] = (i + histo_ctx.frame_id + cam) % 1024;
         }
-        // uint16_t crc = util_hw_crc16(buf, size);
-        // Per-camera metadata (camera ID)
-        p32[offset++] = cam;
+
+        // Compute CRC over histogram data only (4096 bytes)
+        uint16_t crc = util_crc16((uint8_t *)histogram_start, HISTO_BIN_COUNT * sizeof(uint32_t));
+
+        // Pack CRC and cam_id into meta
+        uint32_t meta = ((uint32_t)crc << 16) | (cam & 0xFFFF);
+        p32[offset++] = meta;
     }
 
     p32[offset++] = HISTO_EOF_MARKER;

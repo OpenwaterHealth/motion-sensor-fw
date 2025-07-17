@@ -12,7 +12,7 @@
 #define HISTO_BIN_COUNT          1024     // 1024 bins, 32-bit each
 
 // Maximum cameras supported
-#define HISTO_CAMERA_MAX_COUNT   16
+#define HISTO_CAMERA_MAX_COUNT   8
 
 // Per camera block (Frame ID + Histogram + Camera ID)
 #define HISTO_CAMERA_BLOCK_BYTES     (4 + (HISTO_BIN_COUNT * 4) + 4)   // 4 + 4096 + 4 = 4104 bytes
