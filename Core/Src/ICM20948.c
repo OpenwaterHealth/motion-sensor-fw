@@ -37,6 +37,7 @@ static inline HAL_StatusTypeDef ICM_readBytes(uint8_t reg, uint8_t *pData, uint1
 static HAL_StatusTypeDef ICM_WriteBytes(uint8_t reg, uint8_t *pData, uint16_t size)
 {
     HAL_StatusTypeDef result = HAL_OK;
+    int retries = 10;
     uint8_t buffer[16];
 
     if (size > sizeof(buffer) - 1) return HAL_ERROR; // prevent buffer overflow
@@ -44,7 +45,11 @@ static HAL_StatusTypeDef ICM_WriteBytes(uint8_t reg, uint8_t *pData, uint16_t si
     buffer[0] = reg;
     memcpy(&buffer[1], pData, size);
 
-    result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, buffer, size + 1, 100);
+    for (int attempt = 0; attempt < retries; attempt++)
+    {
+    	result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, buffer, size + 1, 100);
+        if (result != HAL_BUSY) break;
+    }
     return result;
 }
 
