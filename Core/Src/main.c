@@ -105,8 +105,6 @@ volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the came
 volatile bool fake_data_send_flag = false;
 volatile uint32_t imu_frame_counter = 0;
 
-uint8_t cameras_present = 0x00;
-
 ICM_Axis3D a;
 ICM_Axis3D m;
 ICM_Axis3D g;
@@ -118,9 +116,6 @@ bool fake_data_gen = false;
 bool scanI2cAtStart = false;
 
 uint16_t fail_count = 0;
-
-volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
-static uint32_t next_temp_ms = 0;                // scheduler tick
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
@@ -292,43 +287,10 @@ int main(void)
 
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
-  init_camera_sensors();
+  init_camera_sensors(); // init structures and camera configs
   HAL_Delay(100);
 
-  // Scan for I2C cameras
-  for (int i = 0; i < CAMERA_COUNT; i++)
-  {
-    uint8_t addresses_found[10];
-    uint8_t found;
-    bool camera_found = false, fpga_found = false;
-
-    TCA9548A_SelectChannel(&hi2c1, 0x70, i);
-    HAL_Delay(10);
-
-    if (scanI2cAtStart)
-      printf("I2C Scanning bus %d\r\n", i + 1);
-    found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
-
-    for (int j = 0; j < found; j++)
-    {
-      if (addresses_found[j] == 0x36)
-        camera_found = true;
-      else if (addresses_found[j] == 0x40)
-        fpga_found = true;
-    }
-
-    if (camera_found && fpga_found)
-      cameras_present |= 0x01 << i;
-    else
-      printf("Camera %d not found\r\n", i + 1);
-  }
-
-  if (cameras_present == 0xFF)
-  {
-    printf("All cameras found\r\n");
-  }else{
-	  print_active_cameras(cameras_present);
-  }
+  scan_camera_sensors(scanI2cAtStart);
 
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
@@ -351,8 +313,6 @@ int main(void)
 
 //   if(fake_data_gen)
 //     X02C1B_fsin_on();
-
-  next_temp_ms = HAL_GetTick();
 
   while (1)
   {
@@ -408,24 +368,7 @@ int main(void)
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
     /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-    if (HAL_GetTick() >= next_temp_ms)
-    {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
-
-        for (uint8_t cam = 0; cam < 8; cam++)
-        {
-            if (cameras_present & (1 << cam))          // only active cams
-            {
-              CameraDevice *pCam = get_camera_byID(cam);
-              if (pCam == NULL) continue; // skip if camera not initialized
-              if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK) {
-                // error 
-              } else {
-                cam_temp[cam] = X02C1B_read_temp(pCam);               // update global array
-              }
-            }
-        }
-    }
+    PollCameraTemperatures();
   }
 
   /* USER CODE END 3 */

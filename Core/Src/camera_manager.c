@@ -19,12 +19,22 @@
 #include <string.h>
 #include <stdbool.h>
 
+#define CAM_TEMP_TOTAL_CAMS   8
+#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
+#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
+
+volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
+static uint32_t next_temp_ms = 0;
+static uint8_t  next_cam_idx = 0;
+
 #define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
 #define HISTO_JSON_BUFFER_SIZE 34000
 #define HISTO_SIZE_32B 1024
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
+
+static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
 
@@ -36,7 +46,6 @@ volatile uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
-extern float cam_temp[CAMERA_COUNT];
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
@@ -231,6 +240,43 @@ void init_camera_sensors() {
 	event_bits_enabled = 0x00;
 
 	fill_frame_buffers();
+}
+
+void scan_camera_sensors(bool scanI2cAtStart){
+  // Scan for I2C cameras
+  for (int i = 0; i < CAMERA_COUNT; i++)
+  {
+	uint8_t addresses_found[10];
+	uint8_t found;
+	bool camera_found = false, fpga_found = false;
+
+	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
+	HAL_Delay(10);
+
+	if (scanI2cAtStart)
+	  printf("I2C Scanning bus %d\r\n", i + 1);
+	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
+
+	for (int j = 0; j < found; j++)
+	{
+	  if (addresses_found[j] == 0x36)
+		camera_found = true;
+	  else if (addresses_found[j] == 0x40)
+		fpga_found = true;
+	}
+
+	if (camera_found && fpga_found)
+	  cameras_present |= 0x01 << i;
+	else
+	  printf("Camera %d not found\r\n", i + 1);
+  }
+
+  if (cameras_present == 0xFF)
+  {
+	printf("All cameras found\r\n");
+  }else{
+	  print_active_cameras(cameras_present);
+  }
 }
 
 CameraDevice* get_active_cam(void) {
@@ -786,7 +832,7 @@ _Bool send_fake_data(void) {
 			offset += HISTO_SIZE_32B*4;
 
 			uint32_t temp_bits;
-			memcpy(&temp_bits, &cam_temp[cam_id],4);
+			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
 
 			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
 			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
@@ -1018,7 +1064,7 @@ _Bool send_histogram_data(void) {
 			offset += HISTO_SIZE_32B*4;
 			
 			uint32_t temp_bits;
-			memcpy(&temp_bits, &cam_temp[cam_id],4);
+			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
 
 			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
 			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
@@ -1064,6 +1110,36 @@ _Bool send_histogram_data(void) {
 	return status;
 }
 
+void PollCameraTemperatures(void)
+{
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        // Skip to next active camera
+        for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
+        {
+            uint8_t cam = next_cam_idx;
+            next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
+
+            if (cameras_present & (1 << cam))
+            {
+                CameraDevice *pCam = get_camera_byID(cam);
+                if (pCam != NULL)
+                {
+                    cam_temp[cam] = X02C1B_read_temp(pCam);
+                    break;  // One camera per 100ms interval
+                }
+            }
+        }
+
+        // If we wrapped back to camera 0, add the idle pause
+        if (next_cam_idx == 0)
+        {
+            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
+        }
+    }
+}
 
 // Get SPI/USART status for the specified camera ID
 // Returns a bitfield where each bit indicates a specific status:
