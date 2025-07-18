@@ -63,7 +63,9 @@ typedef enum {
 	OW_CMD_I2C_BROADCAST = 0x06,
 	OW_CMD_NOP = 0x0E,
 	OW_CMD_RESET = 0x0F,
-	OW_TOGGLE_CAMERA_STREAM = 0x07
+	OW_TOGGLE_CAMERA_STREAM = 0x07,
+	OW_CMD_HISTO_ON = 0x08,
+	OW_CMD_HISTO_OFF = 0x09
 } UstxGlobalCommands;
 
 typedef enum {

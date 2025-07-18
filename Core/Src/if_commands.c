@@ -13,6 +13,7 @@
 #include "i2c_protocol.h"
 #include "ICM20948.h"
 #include "0X02C1B.h"
+#include "histo_fake.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +25,8 @@ static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
 static ICM_Axis3D gyro;
-extern uint32_t imu_frame_counter;
+volatile uint32_t imu_frame_counter = 0;
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 {
@@ -95,6 +97,40 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 
 		}
 		else uartResp->packet_type = OW_ACK;
+		break;
+	case OW_CMD_HISTO_ON:
+		uartResp->command = OW_CMD_HISTO_ON;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->addr = cmd.addr;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+
+	    // Initialize fake histogram generator
+	    HistoFake_Init(cmd.addr);
+	    HistoFake_GenerateAndSend(&hUsbDeviceHS);
+
+		if(HAL_TIM_Base_Start_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn on FAKE HISTO data\r\n");
+		}
+	    printf("Histo ON\r\n");
+		break;
+	case OW_CMD_HISTO_OFF:
+		uartResp->command = OW_CMD_HISTO_OFF;
+		uartResp->packet_type = OW_RESP;
+	    uartResp->data_len = 0;
+	    uartResp->data = NULL;
+
+		if(HAL_TIM_Base_Stop_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to turn off FAKE HISTO data\r\n");
+		}
+
+	    // De-initialize fake histogram generator
+	    HistoFake_Deinit();
+	    printf("Histo OFF\r\n");
 		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
