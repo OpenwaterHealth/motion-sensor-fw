@@ -30,7 +30,9 @@
 #include "logging.h"
 #include "utils.h"
 #include "i2c_master.h"
+#include "histo_fake.h"
 #include "ICM20948.h"
+#include "camera_manager.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -76,6 +78,7 @@ TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim12;
 TIM_HandleTypeDef htim14;
+TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart4;
 USART_HandleTypeDef husart1;
@@ -103,7 +106,7 @@ volatile uint8_t event_bits = 0x00;         // holds the event bits to be flippe
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
 volatile bool fake_data_send_flag = false;
-volatile uint32_t imu_frame_counter = 0;
+extern uint32_t imu_frame_counter;
 
 ICM_Axis3D a;
 ICM_Axis3D m;
@@ -152,6 +155,7 @@ static void MX_USART1_Init(void);
 static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -232,6 +236,7 @@ int main(void)
   MX_USART2_Init();
   MX_USART3_Init();
   MX_TIM14_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
@@ -256,13 +261,12 @@ int main(void)
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
 
   HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);  //enable Framesync output
-  // X02C1B_FSIN_EXT_enable();
 
   // test i2c
   PrintI2CSpeed(&hi2c1);
   // I2C_scan(&hi2c1, NULL, 0, true);
   HAL_Delay(100);
-  // X02C1B_FSIN_EXT_disable();
+  X02C1B_FSIN_EXT_disable();
 
   if (ICM_WHOAMI() == ICM20948_EXPECTED_ID)
   {
@@ -310,9 +314,6 @@ int main(void)
   uint32_t most_recent_frame = HAL_GetTick();
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
-
-//   if(fake_data_gen)
-//     X02C1B_fsin_on();
 
   while (1)
   {
@@ -996,6 +997,38 @@ static void MX_TIM14_Init(void)
 }
 
 /**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 240-1;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 25000-1;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
+
+}
+
+/**
   * @brief UART4 Initialization Function
   * @param None
   * @retval None
@@ -1641,6 +1674,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM16){
+	  HistoFake_GenerateAndSend(&hUsbDeviceHS);
+  }
+
   if (htim->Instance == TIM14)
   {
 	  imu_frame_counter++;

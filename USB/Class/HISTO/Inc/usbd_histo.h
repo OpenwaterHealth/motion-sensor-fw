@@ -20,7 +20,7 @@ extern "C" {
 
 #define HISTO_FS_MAX_PACKET_SIZE         64U    /* Full-speed USB */
 #define HISTO_HS_MAX_PACKET_SIZE         512U   /* High-speed USB */
-#define HISTO_USB_FIFO_MAX_SIZE 		 36864U
+#define USB_HISTO_MAX_SIZE 		 		 36864U
 extern USBD_ClassTypeDef USBD_HISTO;
 #define USBD_HISTO_CLASS &USBD_HISTO
 
