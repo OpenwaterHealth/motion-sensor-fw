@@ -184,7 +184,7 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
 	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
 #endif /* USE_USBD_COMPOSITE */
-
+  USBD_LL_FlushEP(pdev, COMMSInEpAdd);
   if(comms_ep_data==1){
       tx_comms_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
 

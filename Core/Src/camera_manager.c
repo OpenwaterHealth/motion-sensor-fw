@@ -16,11 +16,22 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
+
+#define CAM_TEMP_INTERVAL_MS   1000u
+#define CAM_TEMP_TOTAL_CAMS   8
+#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
+#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
+
+volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
+static uint32_t next_temp_ms = 0;
+static uint8_t  next_cam_idx = 0;
 
 #define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
+static uint8_t cameras_present = 0x00;
 
 volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE]; // Double buffer
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
@@ -463,7 +474,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 	return ret_val;
 }
 
-_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len)
+_Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
@@ -474,6 +485,13 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(!force_update)
+	{
+		if(cam->isProgrammed) return true;
+	} else {
+		cam->isProgrammed = false; // set programmed to false and Program FPGA
+	}
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
@@ -490,7 +508,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	return true;
 }
 
-_Bool program_fpga(uint8_t cam_id)
+_Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
@@ -502,6 +520,13 @@ _Bool program_fpga(uint8_t cam_id)
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
+	if(!force_update)
+	{
+		if(cam->isProgrammed) return true;
+	} else {
+		cam->isProgrammed = false; // set isProgrammed to false and program FPGA
+	}
+
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
 		printf("failed to select Camera %d channel\r\n", cam_id+1);
@@ -511,7 +536,12 @@ _Bool program_fpga(uint8_t cam_id)
 	if(fpga_configure(cam->pI2c, cam->device_address, cam->cresetb_port, cam->cresetb_pin) == 1)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
+
+		cam->isProgrammed = false;
 		return false;
+	} else {
+		printf("Program FPGA Camera %d Success\r\n", cam_id+1);
+		cam->isProgrammed = true;
 	}
 
 	// If the selected camera is one that uses USART, 
@@ -547,7 +577,10 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	if(X02C1B_configure_sensor(cam) == 1)
 	{
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
+		cam->isConfigured = false;
 		return false;
+	}else{
+		cam->isConfigured = true;
 	}
 
 	return true;
@@ -564,6 +597,12 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 	printf("Configure Camera %d Test Pattern Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(!cam->isConfigured)
+	{
+		printf("Camera %d Register Update Failed it is not configured\r\n", cam_id+1);
+		return false;
+	}
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
@@ -625,7 +664,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	}
 
 	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(25);
+	HAL_Delay(1);
 
 	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, HISTOGRAM_DATA_SIZE);
 
@@ -638,12 +677,12 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	}
 
 	X02C1B_stream_on(cam);
-	HAL_Delay(10);
+	HAL_Delay(3);
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-	HAL_Delay(25);
+	HAL_Delay(2);
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(25);
+	HAL_Delay(2);
 //	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
 //	HAL_Delay(25);
 //	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
@@ -653,7 +692,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	uint8_t event_bit_single = 0x01 << cam_id;
 	while(event_bits != event_bit_single) {
 	    if (HAL_GetTick() > timeout) {
-	        printf("USART receive timeout!\r\n");
+	        printf("HISTO receive timeout!\r\n");
 	        if(cam->useUsart) {
 	            HAL_DMA_Abort(cam->pUart->hdmarx); // safely abort DMA
 	            __HAL_USART_DISABLE(cam->pUart);   // disable USART
@@ -671,7 +710,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	    HAL_Delay(1);
 	}
 
-	HAL_Delay(10);
+	HAL_Delay(1);
 	X02C1B_stream_off(cam);
 	printf("Received Frame\r\n");
 
@@ -869,8 +908,50 @@ _Bool send_histogram_data(void) {
 	return status;
 }
 
-//Get SPI/usart status for the camera
-_Bool get_camera_status(uint8_t cam_id) {
+void PollCameraTemperatures(void)
+{
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        // Skip to next active camera
+        for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
+        {
+            uint8_t cam = next_cam_idx;
+            next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
+
+            if (cameras_present & (1 << cam))
+            {
+                CameraDevice *pCam = get_camera_byID(cam);
+                if (pCam != NULL)
+                {
+                    cam_temp[cam] = X02C1B_read_temp(pCam);
+                    break;  // One camera per 100ms interval
+                }
+            }
+        }
+
+        // If we wrapped back to camera 0, add the idle pause
+        if (next_cam_idx == 0)
+        {
+            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
+        }
+    }
+}
+
+// Get SPI/USART status for the specified camera ID
+// Returns a bitfield where each bit indicates a specific status:
+//
+// Bit 0: SPI or USART state is READY
+// Bit 1: Camera firmware is programmed
+// Bit 2: Camera is configured
+// Bit 7: Streaming is enabled
+//
+// Bits 3–6: Reserved (unused)
+//
+uint8_t get_camera_status(uint8_t cam_id) {
+	uint8_t status_flags = 0x00;
+
 	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
 		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
 		return false;
@@ -881,65 +962,79 @@ _Bool get_camera_status(uint8_t cam_id) {
 		HAL_USART_StateTypeDef usart_state;
 		usart_state = HAL_USART_GetState(cam->pUart);
 		
-		if(usart_state == HAL_USART_STATE_RESET){
-			printf("USART state: HAL_USART_STATE_RESET\r\n");
+		if(usart_state == HAL_USART_STATE_READY) {
+			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			if(usart_state == HAL_USART_STATE_RESET){
+				printf("USART state: HAL_USART_STATE_RESET\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY){
+				printf("USART state: HAL_USART_STATE_BUSY\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_TIMEOUT){
+				printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_ERROR){
+				printf("USART state: HAL_USART_STATE_ERROR\r\n");
+			}
+			else{
+				printf("USART state: Unknown\r\n");
+			}
 		}
-		else if(usart_state == HAL_USART_STATE_READY){
-			printf("USART state: HAL_USART_STATE_READY\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY){
-			printf("USART state: HAL_USART_STATE_BUSY\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_TX){
-			printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_RX){
-			printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
-			printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_TIMEOUT){
-			printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
-		}
-		else if(usart_state == HAL_USART_STATE_ERROR){
-			printf("USART state: HAL_USART_STATE_ERROR\r\n");
-		}
-		else{
-			printf("USART state: Unknown\r\n");
-		}
-		return HAL_USART_GetState(cam->pUart) == HAL_USART_STATE_READY;
 	} else {
 		HAL_SPI_StateTypeDef spi_state;
 		spi_state = HAL_SPI_GetState(cam->pSpi);
-
-		if(spi_state == HAL_SPI_STATE_RESET){
-			printf("SPI state: HAL_SPI_STATE_RESET\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_READY){
-			printf("SPI state: HAL_SPI_STATE_READY\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY){
-			printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_TX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_RX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
-			printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_ERROR){
-			printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
-		}
-		else if(spi_state == HAL_SPI_STATE_ABORT){
-			printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
-		}
-		else{
-			printf("SPI state: Unknown\r\n");
+		if(spi_state == HAL_SPI_STATE_READY) {
+			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			if(spi_state == HAL_SPI_STATE_RESET){
+				printf("SPI state: HAL_SPI_STATE_RESET\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY){
+				printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ERROR){
+				printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ABORT){
+				printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
+			}
+			else{
+				printf("SPI state: Unknown\r\n");
+			}
 		}
 		return HAL_SPI_GetState(cam->pSpi) == HAL_SPI_STATE_READY;
 	}
+
+	if(cam->isProgrammed) {
+		status_flags |= (1 << 1);  // Set bit 1
+	}
+
+	if(cam->isConfigured) {
+		status_flags |= (1 << 2);  // Set bit 2
+	}
+
+	if(cam->streaming_enabled) {
+		status_flags |= (1 << 7);  // Set bit 7
+	}
+
+	return status_flags;
 }

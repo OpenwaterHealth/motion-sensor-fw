@@ -246,8 +246,11 @@ int fpga_program_sram(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, bool rom_bit
     if(rom_bitstream)
     {
     	write_buf[0] = 0x7A; write_buf[1] = 0x00; write_buf[2] = 0x00; write_buf[3] = 0x00;
-    	xi2c_write_long(hi2c, DevAddress, write_buf, 4, (uint8_t *)bitstream_buffer, bitstream_len);
-    }
+    	if(xi2c_write_long(hi2c, DevAddress, write_buf, 4, (uint8_t *)bitstream_buffer, bitstream_len) != HAL_OK)
+		{
+			return 1; // program sram failed
+		}
+	}
     else
     {
     	return 1;

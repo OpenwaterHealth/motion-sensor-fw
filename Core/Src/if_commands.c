@@ -20,6 +20,7 @@
 
 extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
+static uint8_t camera_status[8] = {0};
 static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
@@ -273,9 +274,9 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	        	_Bool func_ret = false;
 
 	        	if(cmd.reserved == 1) {
-	        		func_ret = program_fpga(i);
+	        		func_ret = program_fpga(i, false);
 	        	} else {
-	        		func_ret = program_sram_fpga(i, true, 0, 0);
+	        		func_ret = program_sram_fpga(i, true, 0, 0, false);
 	        	}
 	    		if(!func_ret)
 	    		{
@@ -449,6 +450,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_detect(pCam)){
 			// error
+			printf("Failed Reading Camera %d ID\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -458,6 +460,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_stream_on(pCam)){
 			// error
+			printf("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -494,13 +497,18 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		printf("Capture single histogram frame\r\n");
 		uartResp->command = OW_CAMERA_GET_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
+		uartResp->addr = cmd.addr;
+		uartResp->reserved = 0;
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!get_single_histogram(i, uartResp->data, &uartResp->data_len))
 	        	{
+	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
 	    			printf("Failed capture histo for camera %d\r\n", i);
 
+	        	} else {
+	        		uartResp->reserved |= (1 << i);
 	        	}
 	        }
 	    }
@@ -531,6 +539,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_stream_off(pCam)<0){
 			// error
+			printf("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -538,6 +547,16 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		printf("Camera %d status not implemented\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_STATUS;
 		uartResp->packet_type = OW_RESP;
+
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	// update camera status requested
+	        	camera_status[i] = get_camera_status(i);
+	        }
+	    }
+
+	    uartResp->data = camera_status;
+	    uartResp->data_len = 8;
 		break;
 	case OW_CAMERA_RESET:
 		printf("Camera %d Sensor Reset\r\n",pCam->id+1);
@@ -545,6 +564,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_soft_reset(pCam)<0){
 			// error
+			printf("Failed Camera %d Sensor Reset\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -560,6 +580,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 		if(result != 0){
 			// error
+			printf("Failed Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
@@ -598,6 +619,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 		if(result != 0){
 			// error
+			printf("Failed Enabling FSIN_EXT...\r\n");
 			uartResp->packet_type = OW_ERROR;
 		}
 		X02C1B_FSIN_EXT_enable();
