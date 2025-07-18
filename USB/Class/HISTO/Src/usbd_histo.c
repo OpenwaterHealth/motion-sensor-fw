@@ -167,7 +167,7 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
 	HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, HISTO_InstID);
 #endif /* USE_USBD_COMPOSITE */
-  USBD_LL_FlushEP(pdev, HISTOInEpAdd);
+
   if(histo_ep_data==1){
       tx_histo_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE;
 
@@ -184,7 +184,7 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           histo_ep_data = 0;
           USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
 		  /* Send ZLP */
-		  ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+		  // ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
       }
   }else{
 	pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
