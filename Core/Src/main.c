@@ -116,7 +116,6 @@ char usb_buf[128];
 bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = false;
-bool stream_imu_data = false;
 
 uint16_t fail_count = 0;
 
@@ -241,6 +240,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
+  DWT_Init();
+
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
 
@@ -348,10 +349,6 @@ int main(void)
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
 
-  if(stream_imu_data) {
-    HAL_Delay(1000);
-    HAL_TIM_Base_Start_IT(&htim14);
-  }
 //   if(fake_data_gen)
 //     X02C1B_fsin_on();
 

@@ -82,6 +82,22 @@ void print_hex_buf(const char *label, uint8_t *buf, size_t len) {
     printf("\r\n");
 }
 
+void DWT_Init(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+void delay_us(uint32_t us)
+{
+    uint32_t cycles_per_us = SystemCoreClock / 1000000;
+    uint32_t start = DWT->CYCCNT;
+    uint32_t delay_cycles = us * cycles_per_us;
+
+    while ((DWT->CYCCNT - start) < delay_cycles);
+}
+
 void GPIO_SetHiZ(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
