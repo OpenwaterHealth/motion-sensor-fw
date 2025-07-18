@@ -365,7 +365,7 @@ int main(void)
     }
 
     if(streaming==false) ticks_at_start = HAL_GetTick();
-    //PollCameraTemperatures();
+    PollCameraTemperatures();
 
   }
 
