@@ -17,7 +17,7 @@ volatile uint8_t current_bank = 0;
 static inline HAL_StatusTypeDef ICM_readBytes(uint8_t reg, uint8_t *pData, uint16_t size)
 {
     HAL_StatusTypeDef result;
-    int retries = 10;
+    int retries = 3;
 
     for (int attempt = 0; attempt < retries; attempt++)
     {
@@ -37,7 +37,7 @@ static inline HAL_StatusTypeDef ICM_readBytes(uint8_t reg, uint8_t *pData, uint1
 static HAL_StatusTypeDef ICM_WriteBytes(uint8_t reg, uint8_t *pData, uint16_t size)
 {
     HAL_StatusTypeDef result = HAL_OK;
-    int retries = 10;
+    int retries = 3;
     uint8_t buffer[16];
 
     if (size > sizeof(buffer) - 1) return HAL_ERROR; // prevent buffer overflow
