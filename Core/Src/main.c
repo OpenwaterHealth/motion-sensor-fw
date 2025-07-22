@@ -325,7 +325,6 @@ int main(void)
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
       // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-      printf(".\r\n");
       most_recent_frame = HAL_GetTick();
       streaming = true;
 
@@ -338,8 +337,6 @@ int main(void)
       event_bits = 0x00;
     }
     else if(fake_data_gen && fake_data_send_flag){
-            printf(".\r\n");
-
       send_fake_data();
       fake_data_send_flag = false;
  		}
