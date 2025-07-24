@@ -76,7 +76,6 @@ DMA_HandleTypeDef hdma_spi6_rx;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
-TIM_HandleTypeDef htim12;
 TIM_HandleTypeDef htim14;
 TIM_HandleTypeDef htim16;
 
@@ -149,7 +148,6 @@ static void MX_TIM2_Init(void);
 static void MX_UART4_Init(void);
 static void MX_USART6_Init(void);
 static void MX_TIM8_Init(void);
-static void MX_TIM12_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART1_Init(void);
 static void MX_USART2_Init(void);
@@ -230,7 +228,6 @@ int main(void)
   MX_UART4_Init();
   MX_USART6_Init();
   MX_TIM8_Init();
-  MX_TIM12_Init();
   MX_TIM4_Init();
   MX_USART1_Init();
   MX_USART2_Init();
@@ -917,51 +914,6 @@ static void MX_TIM8_Init(void)
   /* USER CODE BEGIN TIM8_Init 2 */
 
   /* USER CODE END TIM8_Init 2 */
-
-}
-
-/**
-  * @brief TIM12 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM12_Init(void)
-{
-
-  /* USER CODE BEGIN TIM12_Init 0 */
-
-  /* USER CODE END TIM12_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM12_Init 1 */
-
-  /* USER CODE END TIM12_Init 1 */
-  htim12.Instance = TIM12;
-  htim12.Init.Prescaler = 24000-1;
-  htim12.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim12.Init.Period = 80-1;
-  htim12.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim12.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim12) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim12, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim12, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM12_Init 2 */
-
-  /* USER CODE END TIM12_Init 2 */
 
 }
 
@@ -1663,10 +1615,6 @@ void MPU_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-  if (htim->Instance == TIM12)
-  {
-	  USBD_COMMS_Idle_Timer_Handler();
-  }
 
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM17)
