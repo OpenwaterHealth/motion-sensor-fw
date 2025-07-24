@@ -760,6 +760,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 
 	X02C1B_stream_on(cam);
 	HAL_Delay(2);
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
 	HAL_Delay(2);
@@ -791,6 +792,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	HAL_Delay(1);
 	X02C1B_stream_off(cam);
 	// printf("Received Frame\r\n");
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 
 	return ret;
 }
