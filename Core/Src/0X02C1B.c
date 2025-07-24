@@ -205,6 +205,14 @@ int X02C1B_detect(CameraDevice *cam)
 
 int X02C1B_fsin_on()
 {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = FSIN_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+    HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
+
 	HAL_StatusTypeDef status = HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 	if(status == HAL_OK)
 	{
@@ -218,12 +226,8 @@ int X02C1B_fsin_on()
 }
 int X02C1B_fsin_off()
 {
-	HAL_StatusTypeDef status;
-    while (HAL_GPIO_ReadPin(FSIN_GPIO_Port, FSIN_Pin) == GPIO_PIN_SET)
-    {
-        HAL_Delay(1); // wait until the frame sync is done to keep a partial cycle from spitting out
-    }
-    status = HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
+    GPIO_SetOutput(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET); // disable fsin output
+    HAL_StatusTypeDef status = HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_2);
 	if(status != HAL_OK)
 	{
 		printf("Error disabling Frame Sync\r\n");

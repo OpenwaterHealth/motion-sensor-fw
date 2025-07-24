@@ -264,6 +264,7 @@ int main(void)
   // I2C_scan(&hi2c1, NULL, 0, true);
   HAL_Delay(100);
   X02C1B_FSIN_EXT_disable();
+  GPIO_SetOutput(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET); // disable fsin output
 
   if (ICM_WHOAMI() == ICM20948_EXPECTED_ID)
   {
