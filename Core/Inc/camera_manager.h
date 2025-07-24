@@ -15,6 +15,8 @@ typedef struct {
 	uint16_t  		cresetb_pin;
 	GPIO_TypeDef *	gpio0_port;
 	uint16_t  		gpio0_pin;
+	GPIO_TypeDef *	gpio1_port;
+	uint16_t  		gpio1_pin;
 	I2C_HandleTypeDef * pI2c;
 	uint8_t  		device_address;
 	bool 			useUsart; // use usart over spi

@@ -107,6 +107,15 @@ static void init_camera(CameraDevice *cam){
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Set the speed
 	HAL_GPIO_Init(cam->gpio0_port, &GPIO_InitStruct);
 
+	// Reconfigure GPIO1 Pin
+	HAL_GPIO_DeInit(cam->gpio1_port, cam->gpio1_pin);
+    GPIO_InitStruct.Pin = cam->gpio1_pin;            // PA9 = USART1_TX
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;  // Push-pull output
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(cam->gpio1_port, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET);  // Set GPIO1 low
+
 	cam->streaming_enabled = false;
 	cam->isConfigured = false;
 	cam->isProgrammed = false;
@@ -122,6 +131,8 @@ void init_camera_sensors() {
 	cam_array[0].cresetb_pin = CRESET_1_Pin;
 	cam_array[0].gpio0_port = GPIO0_1_GPIO_Port;
 	cam_array[0].gpio0_pin = GPIO0_1_Pin;
+	cam_array[0].gpio1_port = GPIOA;
+	cam_array[0].gpio1_pin = GPIO_PIN_2;
 	cam_array[0].useUsart = true;
 	cam_array[0].useDma = true;
 	cam_array[0].pI2c = &hi2c1;
@@ -136,6 +147,8 @@ void init_camera_sensors() {
 	cam_array[1].cresetb_pin = CRESET_2_Pin;
 	cam_array[1].gpio0_port = GPIO0_2_GPIO_Port;
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
+	cam_array[1].gpio1_port = GPIOA;
+	cam_array[1].gpio1_pin = GPIO_PIN_6;
 	cam_array[1].useUsart = false;
 	cam_array[1].useDma = true;
 	cam_array[1].pI2c = &hi2c1;
@@ -150,6 +163,8 @@ void init_camera_sensors() {
 	cam_array[2].cresetb_pin = CRESET_3_Pin;
 	cam_array[2].gpio0_port = GPIO0_3_GPIO_Port;
 	cam_array[2].gpio0_pin = GPIO0_3_Pin;
+	cam_array[2].gpio1_port = GPIOD;
+	cam_array[2].gpio1_pin = GPIO_PIN_8;
 	cam_array[2].useUsart = true;
 	cam_array[2].useDma = true;
 	cam_array[2].pI2c = &hi2c1;
@@ -164,6 +179,8 @@ void init_camera_sensors() {
 	cam_array[3].cresetb_pin = CRESET_4_Pin;
 	cam_array[3].gpio0_port = GPIO0_4_GPIO_Port;
 	cam_array[3].gpio0_pin = GPIO0_4_Pin;
+	cam_array[3].gpio1_port = GPIOC;
+	cam_array[3].gpio1_pin = GPIO_PIN_6;
 	cam_array[3].useUsart = true;
 	cam_array[3].useDma = true;
 	cam_array[3].pI2c = &hi2c1;
@@ -178,6 +195,8 @@ void init_camera_sensors() {
 	cam_array[4].cresetb_pin = CRESET_5_Pin;
 	cam_array[4].gpio0_port = GPIO0_5_GPIO_Port;
 	cam_array[4].gpio0_pin = GPIO0_5_Pin;
+	cam_array[4].gpio1_port = GPIOA;
+	cam_array[4].gpio1_pin = GPIO_PIN_9;
 	cam_array[4].useUsart = true;
 	cam_array[4].useDma = true;
 	cam_array[4].pI2c = &hi2c1;
@@ -192,6 +211,8 @@ void init_camera_sensors() {
 	cam_array[5].cresetb_pin = CRESET_6_Pin;
 	cam_array[5].gpio0_port = GPIO0_6_GPIO_Port;
 	cam_array[5].gpio0_pin = GPIO0_6_Pin;
+	cam_array[5].gpio1_port = GPIOC;
+	cam_array[5].gpio1_pin = GPIO_PIN_11;
 	cam_array[5].useUsart = false;
 	cam_array[5].useDma = true;
 	cam_array[5].pI2c = &hi2c1;
@@ -206,6 +227,8 @@ void init_camera_sensors() {
 	cam_array[6].cresetb_pin = CRESET_7_Pin;
 	cam_array[6].gpio0_port = GPIO0_7_GPIO_Port;
 	cam_array[6].gpio0_pin = GPIO0_7_Pin;
+	cam_array[6].gpio1_port = GPIOB;
+	cam_array[6].gpio1_pin = GPIO_PIN_14;
 	cam_array[6].useUsart = false;
 	cam_array[6].useDma = true;
 	cam_array[6].pI2c = &hi2c1;
@@ -220,6 +243,8 @@ void init_camera_sensors() {
 	cam_array[7].cresetb_pin = CRESET_8_Pin;
 	cam_array[7].gpio0_port = GPIO0_8_GPIO_Port;
 	cam_array[7].gpio0_pin = GPIO0_8_Pin;
+	cam_array[7].gpio1_port = GPIOE;
+	cam_array[7].gpio1_pin = GPIO_PIN_5;
 	cam_array[7].useUsart = false;
 	cam_array[7].useDma = true;
 	cam_array[7].pI2c = &hi2c1;
@@ -944,6 +969,8 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled |= (1 << cam_id);
 	cam->streaming_enabled = true;
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
+
 	printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
@@ -974,6 +1001,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 //	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
