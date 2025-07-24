@@ -6,6 +6,7 @@
  */
 #include "0X02C1B.h"
 #include "X02C1B_Sensor_Config.h"
+#include "utils.h"
 #include <stdio.h>
 
 volatile _Bool ext_fsin_enabled = false;

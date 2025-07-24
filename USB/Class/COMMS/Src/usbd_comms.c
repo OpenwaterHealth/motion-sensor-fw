@@ -197,7 +197,7 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           uint16_t remaining = tx_comms_total_len - tx_comms_ptr;
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, remaining);
 
-  		  printf("Cont TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
+  		  //printf("Cont TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
           ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
       }
       else
