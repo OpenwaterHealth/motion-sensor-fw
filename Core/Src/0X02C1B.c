@@ -285,13 +285,16 @@ int X02C1B_FSIN_EXT_enable()
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET);
  
-    /* Configure the FSIN pin (the internal frame sync generator) to be high impedance*/
+    /* Configure the FSIN pin (the internal frame sync generator) to an input to rx the frame sync*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = FSIN_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;     // Set to input mode
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;     // Set to input mode, falling edge trigger
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Speed is irrelevant for input mode
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
+
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+    
     ext_fsin_enabled = true;
     return HAL_OK;
 }

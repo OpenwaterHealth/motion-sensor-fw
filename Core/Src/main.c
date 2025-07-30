@@ -1570,9 +1570,18 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM4)
   {
-    if (!send_data_flag) send_data_flag = true; // trigger the send event
+    send_data_flag = true; // trigger the send event
   }
 }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{     
+    if (GPIO_Pin == GPIO_PIN_13)
+    {
+      send_data_flag = true; // trigger the send event
+    }
+}
+
 /* USER CODE END 4 */
 
  /* MPU Configuration */
