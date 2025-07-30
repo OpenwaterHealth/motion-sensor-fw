@@ -34,6 +34,8 @@ CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
 
+uint16_t counter = 0;
+
 static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
@@ -1023,7 +1025,7 @@ _Bool send_histogram_data(void) {
 
 	uint8_t count = 0;
 	for (int i = 0; i < CAMERA_COUNT ; ++i) {
-		if (event_bits_enabled & (1 << i)) {
+		if (event_bits & (1 << i)) {
 			count++;
 		}
 	}
@@ -1048,7 +1050,7 @@ _Bool send_histogram_data(void) {
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
-		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
+		if((event_bits & (0x01 << cam_id)) != 0) {
 			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
@@ -1077,6 +1079,8 @@ _Bool send_histogram_data(void) {
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 	uint8_t timeout_tries = 0;
 
+     printf("%d\r\n",counter);
+     counter++;
 	//TODO( handle the case where the packet fails to send better)
 	while(tx_status != USBD_OK){
 		printf("-\r\n");
@@ -1094,7 +1098,7 @@ _Bool send_histogram_data(void) {
 
 	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){
-		if((event_bits_enabled & (0x01 << i)) != 0)
+		if((event_bits & (0x01 << i)) != 0)
 			start_data_reception(i);
 	}
 	frame_id++;
