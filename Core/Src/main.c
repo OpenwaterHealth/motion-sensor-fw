@@ -30,7 +30,9 @@
 #include "logging.h"
 #include "utils.h"
 #include "i2c_master.h"
+#include "histo_fake.h"
 #include "ICM20948.h"
+#include "camera_manager.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -74,8 +76,8 @@ DMA_HandleTypeDef hdma_spi6_rx;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
-TIM_HandleTypeDef htim12;
 TIM_HandleTypeDef htim14;
+TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart4;
 USART_HandleTypeDef husart1;
@@ -92,7 +94,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 1, 0};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 2, 0};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -103,8 +105,7 @@ volatile uint8_t event_bits = 0x00;         // holds the event bits to be flippe
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
 volatile bool fake_data_send_flag = false;
-
-uint8_t cameras_present = 0x00;
+extern uint32_t imu_frame_counter;
 
 ICM_Axis3D a;
 ICM_Axis3D m;
@@ -115,12 +116,8 @@ char usb_buf[128];
 bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = false;
-bool stream_imu_data = false;
 
 uint16_t fail_count = 0;
-
-volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
-static uint32_t next_temp_ms = 0;                // scheduler tick
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
@@ -151,12 +148,12 @@ static void MX_TIM2_Init(void);
 static void MX_UART4_Init(void);
 static void MX_USART6_Init(void);
 static void MX_TIM8_Init(void);
-static void MX_TIM12_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART1_Init(void);
 static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -231,14 +228,16 @@ int main(void)
   MX_UART4_Init();
   MX_USART6_Init();
   MX_TIM8_Init();
-  MX_TIM12_Init();
   MX_TIM4_Init();
   MX_USART1_Init();
   MX_USART2_Init();
   MX_USART3_Init();
   MX_TIM14_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
+
+  DWT_Init();
 
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
@@ -259,13 +258,13 @@ int main(void)
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
 
   HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_RESET);  //enable Framesync output
-  // X02C1B_FSIN_EXT_enable();
 
   // test i2c
   PrintI2CSpeed(&hi2c1);
   // I2C_scan(&hi2c1, NULL, 0, true);
   HAL_Delay(100);
-  // X02C1B_FSIN_EXT_disable();
+  X02C1B_FSIN_EXT_disable();
+  GPIO_SetOutput(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET); // disable fsin output
 
   if (ICM_WHOAMI() == ICM20948_EXPECTED_ID)
   {
@@ -290,43 +289,10 @@ int main(void)
 
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
-  init_camera_sensors();
+  init_camera_sensors(); // init structures and camera configs
   HAL_Delay(100);
 
-  // Scan for I2C cameras
-  for (int i = 0; i < CAMERA_COUNT; i++)
-  {
-    uint8_t addresses_found[10];
-    uint8_t found;
-    bool camera_found = false, fpga_found = false;
-
-    TCA9548A_SelectChannel(&hi2c1, 0x70, i);
-    HAL_Delay(10);
-
-    if (scanI2cAtStart)
-      printf("I2C Scanning bus %d\r\n", i + 1);
-    found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
-
-    for (int j = 0; j < found; j++)
-    {
-      if (addresses_found[j] == 0x36)
-        camera_found = true;
-      else if (addresses_found[j] == 0x40)
-        fpga_found = true;
-    }
-
-    if (camera_found && fpga_found)
-      cameras_present |= 0x01 << i;
-    else
-      printf("Camera %d not found\r\n", i + 1);
-  }
-
-  if (cameras_present == 0xFF)
-  {
-    printf("All cameras found\r\n");
-  }else{
-	  print_active_cameras(cameras_present);
-  }
+  scan_camera_sensors(scanI2cAtStart);
 
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
@@ -347,15 +313,6 @@ int main(void)
   uint32_t ticks_at_start = HAL_GetTick();
   bool streaming = false;
 
-  if(stream_imu_data) {
-    HAL_Delay(1000);
-    HAL_TIM_Base_Start_IT(&htim14);
-  }
-//   if(fake_data_gen)
-//     X02C1B_fsin_on();
-
-  next_temp_ms = HAL_GetTick();
-
   while (1)
   {
     /* USER CODE END WHILE */
@@ -366,7 +323,7 @@ int main(void)
     // Send out data if all the histograms have come in
     if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
       // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-      printf(".\r\n");
+//      printf(".\r\n");
       most_recent_frame = HAL_GetTick();
       streaming = true;
 
@@ -410,24 +367,7 @@ int main(void)
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
     /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-    if (HAL_GetTick() >= next_temp_ms)
-    {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
-
-        for (uint8_t cam = 0; cam < 8; cam++)
-        {
-            if (cameras_present & (1 << cam))          // only active cams
-            {
-              CameraDevice *pCam = get_camera_byID(cam);
-              if (pCam == NULL) continue; // skip if camera not initialized
-              if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK) {
-                // error 
-              } else {
-                cam_temp[cam] = X02C1B_read_temp(pCam);               // update global array
-              }
-            }
-        }
-    }
+    PollCameraTemperatures();
   }
 
   /* USER CODE END 3 */
@@ -891,9 +831,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 999;
+  htim4.Init.Prescaler = 1000;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 5997;
+  htim4.Init.Period = 5999;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
@@ -911,7 +851,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 2998;
+  sConfigOC.Pulse = 3000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
@@ -919,7 +859,6 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 3000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
@@ -980,51 +919,6 @@ static void MX_TIM8_Init(void)
 }
 
 /**
-  * @brief TIM12 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM12_Init(void)
-{
-
-  /* USER CODE BEGIN TIM12_Init 0 */
-
-  /* USER CODE END TIM12_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM12_Init 1 */
-
-  /* USER CODE END TIM12_Init 1 */
-  htim12.Instance = TIM12;
-  htim12.Init.Prescaler = 24000-1;
-  htim12.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim12.Init.Period = 250-1;
-  htim12.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim12.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim12) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim12, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim12, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM12_Init 2 */
-
-  /* USER CODE END TIM12_Init 2 */
-
-}
-
-/**
   * @brief TIM14 Initialization Function
   * @param None
   * @retval None
@@ -1042,7 +936,7 @@ static void MX_TIM14_Init(void)
   htim14.Instance = TIM14;
   htim14.Init.Prescaler = 240-1;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim14.Init.Period = 50000-1;
+  htim14.Init.Period = 5000-1;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
@@ -1052,6 +946,38 @@ static void MX_TIM14_Init(void)
   /* USER CODE BEGIN TIM14_Init 2 */
 
   /* USER CODE END TIM14_Init 2 */
+
+}
+
+/**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 240-1;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 25000-1;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
 
 }
 
@@ -1690,10 +1616,6 @@ void MPU_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-  if (htim->Instance == TIM12)
-  {
-	  USBD_COMMS_Idle_Timer_Handler();
-  }
 
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM17)
@@ -1701,8 +1623,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM16){
+	  HistoFake_GenerateAndSend(&hUsbDeviceHS);
+  }
+
   if (htim->Instance == TIM14)
   {
+	  imu_frame_counter++;
 	  // call imu
 	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
 		  printf("IMU Read Error\r\n");
@@ -1710,14 +1637,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  memset(usb_buf,0,128);
 		  int len = snprintf(
 		      usb_buf, sizeof(usb_buf),
-		      "{\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+		      "{\"F\":%ld,\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+			  imu_frame_counter,
 		      g.x, g.y, g.z,
 		      m.x, m.y, m.z,
 		      a.x, a.y, a.z,
 			  (int)t, (int)((t - (int)t) * 100.0f)
 		  );
 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
-    }
+	  }
   }
   /* USER CODE END Callback 1 */
 }

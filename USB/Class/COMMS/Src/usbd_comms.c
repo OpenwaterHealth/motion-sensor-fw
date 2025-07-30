@@ -78,13 +78,13 @@ __IO uint8_t comms_ep_data = 0;
 static uint8_t COMMSInEpAdd = COMMS_IN_EP;
 static uint8_t COMMSOutEpAdd = COMMS_OUT_EP;
 
-static uint8_t *pUserRxBuff = NULL;
-static uint8_t *pRxCommsBuff = NULL;
 static uint16_t rxIndex = 0;
-static uint16_t rxMaxSize = 0;
 
 static void (*CommsRxCallback)(uint8_t *buf, uint16_t len) = NULL;
 static uint8_t read_to_idle_enabled = 0;
+
+static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE];
+static uint8_t current_rx_buf_index = 0;
 
 /* Private functions */
 static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
@@ -123,9 +123,11 @@ static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     pdev->ep_in[COMMSInEpAdd & 0xFU].bInterval = 0;
     pdev->ep_in[COMMSInEpAdd & 0xFU].is_used = 1U;
 
-    pRxCommsBuff = (uint8_t*)malloc(packet_size*2);
+    memset((uint32_t*)rx_buffers, 0, (USB_COMMS_MAX_SIZE * USB_RX_BUFFER_COUNT)/4);
+    current_rx_buf_index = 0;
+    uint8_t *next_buffer = rx_buffers[current_rx_buf_index];
     rxIndex = 0;
-    (void)USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, pRxCommsBuff, packet_size);
+    (void)USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, next_buffer, packet_size);
     return (uint8_t)USBD_OK;
 }
 
@@ -185,6 +187,8 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
 #endif /* USE_USBD_COMPOSITE */
 
+  USBD_LL_FlushEP(pdev, COMMSInEpAdd);
+
   if(comms_ep_data==1){
       tx_comms_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
 
@@ -193,7 +197,7 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           uint16_t remaining = tx_comms_total_len - tx_comms_ptr;
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, remaining);
 
-  		  printf("Cont TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
+  		  //printf("Cont TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
           ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
       }
       else
@@ -204,10 +208,10 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           // Send ZLP to indicate completion
           USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
       }
-  } else {
-      pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
-      /* Send ZLP */
-      ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+  }else{
+	pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
+	/* Send ZLP */
+	ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
   }
 
   return ret;
@@ -215,31 +219,46 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
+  USBD_StatusTypeDef status;
 #ifdef USE_USBD_COMPOSITE
   COMMSOutEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_OUT, USBD_EP_TYPE_BULK, COMMS_InstID);
 #endif
 
+  uint8_t *buf = rx_buffers[current_rx_buf_index];
+  uint8_t *next_buffer = buf; //set to current buffer unless we switch it
   uint32_t rx_len = USBD_LL_GetRxDataSize(pdev, COMMSOutEpAdd);
-  uint32_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
+  uint32_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH) ?
+                         COMMS_HS_MAX_PACKET_SIZE : COMMS_FS_MAX_PACKET_SIZE;
 
-  if(pUserRxBuff){
-	  uint8_t* pUserRx = pUserRxBuff + rxIndex;
-	  memcpy(pUserRx, pRxCommsBuff, rx_len);
-	  rxIndex += rx_len;
-  }
-
-  if(read_to_idle_enabled == 1)
+  /* Safe buffer handling */
+  if(rxIndex + rx_len <= USB_COMMS_MAX_SIZE)
   {
-	  // Restart timer when data is received
-	  HAL_TIM_Base_Stop_IT(&htim12);
-	  __HAL_TIM_SET_COUNTER(&htim12, 0); // Reset the timer counter
+    rxIndex += rx_len;
 
-	  HAL_TIM_Base_Start_IT(&htim12);
+    /* Handle immediate completion for short packets */
+    if(rx_len < packet_size)
+    {
+      uint16_t captured_len = rxIndex;
+      rxIndex = 0;
+
+      USBD_COMMS_RxCpltCallback(buf, captured_len, COMMSOutEpAdd);
+      current_rx_buf_index ^= 1; // switch buffer
+
+      next_buffer = rx_buffers[current_rx_buf_index];
+      memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
+    }
+  }
+  else
+  {
+    /* Buffer overflow */
+    rxIndex = 0;
+    current_rx_buf_index ^= 1; // switch buffer
+    next_buffer = rx_buffers[current_rx_buf_index];
+    memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
   }
 
-  // Re-arm reception
-  USBD_LL_PrepareReceive(pdev, COMMS_OUT_EP, pRxCommsBuff, packet_size);
-  return USBD_OK;
+  status = USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, next_buffer, packet_size);
+  return status;
 }
 
 uint8_t USBD_COMMS_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t len, uint8_t ep_idx)
@@ -286,33 +305,9 @@ uint8_t USBD_COMMS_Transmit(USBD_HandleTypeDef *pdev, uint8_t* Buf, uint16_t Len
 	return (uint8_t)USBD_OK;
 }
 
-void USBD_COMMS_Idle_Timer_Handler()
-{
-	read_to_idle_enabled = 0;
-	HAL_TIM_Base_Stop_IT(&htim12);
-
-	if(pUserRxBuff){
-		USBD_COMMS_RxCpltCallback(rxIndex);
-	}else{
-		printf("RX EMPTY\r\n");
-		USBD_COMMS_RxCpltCallback(0);
-	}
-
-	rxIndex = 0;
-	pUserRxBuff = NULL;
-}
-
 void USBD_COMMS_FlushRxBuffer()
 {
 
-}
-
-void USBD_COMMS_ReceiveToIdle(uint8_t* Buf, uint16_t max_size)
-{
-	rxIndex = 0;
-	rxMaxSize = max_size;
-	pUserRxBuff = Buf;
-	read_to_idle_enabled = 1;
 }
 
 uint8_t USBD_COMMS_RegisterRxCallback(void (*cb)(uint8_t *buf, uint16_t len)) {
@@ -327,6 +322,30 @@ uint8_t USBD_COMMS_RegisterInterface(USBD_HandleTypeDef *pdev, uint8_t *buffer)
   return (uint8_t)USBD_OK;
 }
 
+extern USBD_HandleTypeDef hUsbDeviceHS;
+
+void USBD_COMMS_RecoverFromError(void)
+{
+  __disable_irq();
+  USBD_LL_FlushEP(&hUsbDeviceHS, COMMS_IN_EP);
+  USBD_LL_FlushEP(&hUsbDeviceHS, COMMS_OUT_EP);
+
+  tx_comms_ptr = 0;
+  tx_comms_total_len = 0;
+  comms_ep_data = 0;
+  rxIndex = 0;
+  read_to_idle_enabled = 0;
+
+  // Reinitialize endpoints
+  USBD_LL_OpenEP(&hUsbDeviceHS, COMMS_IN_EP,
+                USBD_EP_TYPE_BULK, COMMS_FS_MAX_PACKET_SIZE);
+  uint8_t *next_buffer = rx_buffers[current_rx_buf_index];
+  memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
+  USBD_LL_PrepareReceive(&hUsbDeviceHS, COMMS_OUT_EP,
+		  next_buffer, COMMS_FS_MAX_PACKET_SIZE);
+  __enable_irq();
+}
+
 __weak void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
 {
 	UNUSED(Buf);
@@ -334,7 +353,9 @@ __weak void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
 	UNUSED(epnum);
 }
 
-__weak void USBD_COMMS_RxCpltCallback(uint16_t Len)
+__weak void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum)
 {
+	UNUSED(Buf);
 	UNUSED(Len);
+	UNUSED(epnum);
 }

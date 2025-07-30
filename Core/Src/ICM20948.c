@@ -7,29 +7,37 @@
 
 #include "main.h"
 #include "ICM20948.h"
+#include "utils.h"
 
 #include <string.h>
 #include <stdio.h>
 
-static HAL_StatusTypeDef ICM_readBytes(uint8_t reg, uint8_t *pData, uint16_t size)
+volatile uint8_t current_bank = 0;
+
+static inline HAL_StatusTypeDef ICM_readBytes(uint8_t reg, uint8_t *pData, uint16_t size)
 {
-	HAL_StatusTypeDef result = HAL_OK;
+    HAL_StatusTypeDef result;
+    int retries = 3;
 
-    // Send the register address to read from
-    result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, &reg, 1, 100);
-    if (result != HAL_OK)
+    for (int attempt = 0; attempt < retries; attempt++)
     {
-        return result;  // Return if there's an error transmitting the register address
+        result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, &reg, 1, 100);
+        if (result != HAL_BUSY) break;
     }
+    if (result != HAL_OK) return result;
 
-    // Read bytes
-    result = HAL_I2C_Master_Receive(&ICM_I2C, ICM20948_ADDR << 1, pData, size, 50*size);
+    for (int attempt = 0; attempt < retries; attempt++)
+    {
+        result = HAL_I2C_Master_Receive(&ICM_I2C, ICM20948_ADDR << 1, pData, size, 100);
+        if (result != HAL_BUSY) break;
+    }
     return result;
 }
 
 static HAL_StatusTypeDef ICM_WriteBytes(uint8_t reg, uint8_t *pData, uint16_t size)
 {
     HAL_StatusTypeDef result = HAL_OK;
+    int retries = 3;
     uint8_t buffer[16];
 
     if (size > sizeof(buffer) - 1) return HAL_ERROR; // prevent buffer overflow
@@ -37,15 +45,28 @@ static HAL_StatusTypeDef ICM_WriteBytes(uint8_t reg, uint8_t *pData, uint16_t si
     buffer[0] = reg;
     memcpy(&buffer[1], pData, size);
 
-    result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, buffer, size + 1, 100);
+    for (int attempt = 0; attempt < retries; attempt++)
+    {
+    	result = HAL_I2C_Master_Transmit(&ICM_I2C, ICM20948_ADDR << 1, buffer, size + 1, 100);
+        if (result != HAL_BUSY) break;
+    }
     return result;
 }
 
 
-static void ICM_SelectBank(uint8_t bank)
+static inline void ICM_SelectBank(uint8_t bank)
 {
+	if (current_bank == bank) return;
     uint8_t val = bank;
-    HAL_I2C_Mem_Write(&ICM_I2C, ICM20948_ADDR << 1, ICM20948_REG_BANK_SEL, I2C_MEMADD_SIZE_8BIT, &val, 1, 100);
+    if (HAL_I2C_Mem_Write(&ICM_I2C, ICM20948_ADDR << 1, ICM20948_REG_BANK_SEL, I2C_MEMADD_SIZE_8BIT, &val, 1, 5) == HAL_OK)
+    {
+    	current_bank = bank;
+    }
+    else
+    {
+    	printf("SelectBank Err\r\n");
+    }
+
 }
 
 uint8_t ICM_WHOAMI(void) {
@@ -61,7 +82,7 @@ uint8_t ICM_Init(void)
 {
     HAL_StatusTypeDef status;
     uint8_t whoami = 0;
-
+    current_bank = 0xFF;
     // 1. Read WHO_AM_I
     ICM_SelectBank(ICM20948_USER_BANK_0);
     status = ICM_readBytes(ICM20948_WHO_AM_I_REG, &whoami, 1);
@@ -237,11 +258,14 @@ uint8_t ICM_GetAllRawData(ICM_Axis3D *accel, float * pTemp, ICM_Axis3D *gyro, IC
     uint8_t rawData[21];
     int16_t temp_raw = 0;
 
+    // 1.41362 ms
     ICM_SelectBank(ICM20948_USER_BANK_0);
 
     if (ICM_readBytes(ICM20948_ACCEL_XOUT_H, rawData, 21) != HAL_OK)
         return HAL_ERROR;
+    //
 
+    
     accel->x = (int16_t)((rawData[0] << 8) | rawData[1]);
     accel->y = (int16_t)((rawData[2] << 8) | rawData[3]);
     accel->z = (int16_t)((rawData[4] << 8) | rawData[5]);

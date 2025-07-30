@@ -8,13 +8,15 @@
 #ifndef INC_CAMERA_MANAGER_H_
 #define INC_CAMERA_MANAGER_H_
 #include "main.h"
-
+#include <stdbool.h>
 typedef struct {
 	uint16_t id;
 	GPIO_TypeDef * 	cresetb_port;
 	uint16_t  		cresetb_pin;
 	GPIO_TypeDef *	gpio0_port;
 	uint16_t  		gpio0_pin;
+	GPIO_TypeDef *	gpio1_port;
+	uint16_t  		gpio1_pin;
 	I2C_HandleTypeDef * pI2c;
 	uint8_t  		device_address;
 	bool 			useUsart; // use usart over spi
@@ -91,5 +93,8 @@ void print_active_cameras(uint8_t cameras_present);
 
 void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
 void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
+
+void PollCameraTemperatures(void);
+void scan_camera_sensors(bool scanI2cAtStart);
 
 #endif /* INC_CAMERA_MANAGER_H_ */

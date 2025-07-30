@@ -123,11 +123,15 @@ extern USART_HandleTypeDef husart3;
 extern USART_HandleTypeDef husart6;
 
 extern TIM_HandleTypeDef htim12;
+extern TIM_HandleTypeDef htim14;
 extern TIM_HandleTypeDef htim8;
 extern CRC_HandleTypeDef   hcrc;
 extern UART_HandleTypeDef huart4;
 extern TIM_HandleTypeDef htim4;
+extern TIM_HandleTypeDef htim16;
 
+#define HISTO_FAKE_TIMER htim16
+#define IMU_TIMER htim14
 #define DEBUG_UART huart4
 
 #define ICM_I2C hi2c1

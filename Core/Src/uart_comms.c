@@ -111,7 +111,6 @@ void comms_host_start(void) {
 	rx_flag = 0;
 	tx_flag = 0;
 
-	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
 }
 
 // This is the FreeRTOS task
@@ -210,12 +209,12 @@ NextDataPacket:
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;
-	USBD_COMMS_ReceiveToIdle(rxBuffer, COMMAND_MAX_SIZE);
 }
 
 
 // Callback functions
-void USBD_COMMS_RxCpltCallback(uint16_t len) {
+void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
+	memcpy(rxBuffer, Buf, Len);
 	rx_flag = 1;
 }
 

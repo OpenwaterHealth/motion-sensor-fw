@@ -19,12 +19,22 @@
 #include <string.h>
 #include <stdbool.h>
 
+#define CAM_TEMP_TOTAL_CAMS   8
+#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
+#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
+
+volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
+static uint32_t next_temp_ms = 0;
+static uint8_t  next_cam_idx = 0;
+
 #define FPGA_I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
 #define HISTO_JSON_BUFFER_SIZE 34000
 #define HISTO_SIZE_32B 1024
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
+
+static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
 
@@ -36,7 +46,6 @@ volatile uint8_t frame_id = 0;
 extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
-extern float cam_temp[CAMERA_COUNT];
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
@@ -98,6 +107,15 @@ static void init_camera(CameraDevice *cam){
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Set the speed
 	HAL_GPIO_Init(cam->gpio0_port, &GPIO_InitStruct);
 
+	// Reconfigure GPIO1 Pin
+	HAL_GPIO_DeInit(cam->gpio1_port, cam->gpio1_pin);
+    GPIO_InitStruct.Pin = cam->gpio1_pin;            // PA9 = USART1_TX
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;  // Push-pull output
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(cam->gpio1_port, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET);  // Set GPIO1 low
+
 	cam->streaming_enabled = false;
 	cam->isConfigured = false;
 	cam->isProgrammed = false;
@@ -113,6 +131,8 @@ void init_camera_sensors() {
 	cam_array[0].cresetb_pin = CRESET_1_Pin;
 	cam_array[0].gpio0_port = GPIO0_1_GPIO_Port;
 	cam_array[0].gpio0_pin = GPIO0_1_Pin;
+	cam_array[0].gpio1_port = GPIOA;
+	cam_array[0].gpio1_pin = GPIO_PIN_2;
 	cam_array[0].useUsart = true;
 	cam_array[0].useDma = true;
 	cam_array[0].pI2c = &hi2c1;
@@ -127,6 +147,8 @@ void init_camera_sensors() {
 	cam_array[1].cresetb_pin = CRESET_2_Pin;
 	cam_array[1].gpio0_port = GPIO0_2_GPIO_Port;
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
+	cam_array[1].gpio1_port = GPIOA;
+	cam_array[1].gpio1_pin = GPIO_PIN_6;
 	cam_array[1].useUsart = false;
 	cam_array[1].useDma = true;
 	cam_array[1].pI2c = &hi2c1;
@@ -141,6 +163,8 @@ void init_camera_sensors() {
 	cam_array[2].cresetb_pin = CRESET_3_Pin;
 	cam_array[2].gpio0_port = GPIO0_3_GPIO_Port;
 	cam_array[2].gpio0_pin = GPIO0_3_Pin;
+	cam_array[2].gpio1_port = GPIOD;
+	cam_array[2].gpio1_pin = GPIO_PIN_8;
 	cam_array[2].useUsart = true;
 	cam_array[2].useDma = true;
 	cam_array[2].pI2c = &hi2c1;
@@ -155,6 +179,8 @@ void init_camera_sensors() {
 	cam_array[3].cresetb_pin = CRESET_4_Pin;
 	cam_array[3].gpio0_port = GPIO0_4_GPIO_Port;
 	cam_array[3].gpio0_pin = GPIO0_4_Pin;
+	cam_array[3].gpio1_port = GPIOC;
+	cam_array[3].gpio1_pin = GPIO_PIN_6;
 	cam_array[3].useUsart = true;
 	cam_array[3].useDma = true;
 	cam_array[3].pI2c = &hi2c1;
@@ -169,6 +195,8 @@ void init_camera_sensors() {
 	cam_array[4].cresetb_pin = CRESET_5_Pin;
 	cam_array[4].gpio0_port = GPIO0_5_GPIO_Port;
 	cam_array[4].gpio0_pin = GPIO0_5_Pin;
+	cam_array[4].gpio1_port = GPIOA;
+	cam_array[4].gpio1_pin = GPIO_PIN_9;
 	cam_array[4].useUsart = true;
 	cam_array[4].useDma = true;
 	cam_array[4].pI2c = &hi2c1;
@@ -183,6 +211,8 @@ void init_camera_sensors() {
 	cam_array[5].cresetb_pin = CRESET_6_Pin;
 	cam_array[5].gpio0_port = GPIO0_6_GPIO_Port;
 	cam_array[5].gpio0_pin = GPIO0_6_Pin;
+	cam_array[5].gpio1_port = GPIOC;
+	cam_array[5].gpio1_pin = GPIO_PIN_11;
 	cam_array[5].useUsart = false;
 	cam_array[5].useDma = true;
 	cam_array[5].pI2c = &hi2c1;
@@ -197,6 +227,8 @@ void init_camera_sensors() {
 	cam_array[6].cresetb_pin = CRESET_7_Pin;
 	cam_array[6].gpio0_port = GPIO0_7_GPIO_Port;
 	cam_array[6].gpio0_pin = GPIO0_7_Pin;
+	cam_array[6].gpio1_port = GPIOB;
+	cam_array[6].gpio1_pin = GPIO_PIN_14;
 	cam_array[6].useUsart = false;
 	cam_array[6].useDma = true;
 	cam_array[6].pI2c = &hi2c1;
@@ -211,6 +243,8 @@ void init_camera_sensors() {
 	cam_array[7].cresetb_pin = CRESET_8_Pin;
 	cam_array[7].gpio0_port = GPIO0_8_GPIO_Port;
 	cam_array[7].gpio0_pin = GPIO0_8_Pin;
+	cam_array[7].gpio1_port = GPIOE;
+	cam_array[7].gpio1_pin = GPIO_PIN_5;
 	cam_array[7].useUsart = false;
 	cam_array[7].useDma = true;
 	cam_array[7].pI2c = &hi2c1;
@@ -231,6 +265,43 @@ void init_camera_sensors() {
 	event_bits_enabled = 0x00;
 
 	fill_frame_buffers();
+}
+
+void scan_camera_sensors(bool scanI2cAtStart){
+  // Scan for I2C cameras
+  for (int i = 0; i < CAMERA_COUNT; i++)
+  {
+	uint8_t addresses_found[10];
+	uint8_t found;
+	bool camera_found = false, fpga_found = false;
+
+	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
+	HAL_Delay(10);
+
+	if (scanI2cAtStart)
+	  printf("I2C Scanning bus %d\r\n", i + 1);
+	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
+
+	for (int j = 0; j < found; j++)
+	{
+	  if (addresses_found[j] == 0x36)
+		camera_found = true;
+	  else if (addresses_found[j] == 0x40)
+		fpga_found = true;
+	}
+
+	if (camera_found && fpga_found)
+	  cameras_present |= 0x01 << i;
+	else
+	  printf("Camera %d not found\r\n", i + 1);
+  }
+
+  if (cameras_present == 0xFF)
+  {
+	printf("All cameras found\r\n");
+  }else{
+	  print_active_cameras(cameras_present);
+  }
 }
 
 CameraDevice* get_active_cam(void) {
@@ -689,6 +760,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 
 	X02C1B_stream_on(cam);
 	HAL_Delay(2);
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
 	HAL_Delay(2);
@@ -720,6 +792,7 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	HAL_Delay(1);
 	X02C1B_stream_off(cam);
 	// printf("Received Frame\r\n");
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 
 	return ret;
 }
@@ -786,7 +859,7 @@ _Bool send_fake_data(void) {
 			offset += HISTO_SIZE_32B*4;
 
 			uint32_t temp_bits;
-			memcpy(&temp_bits, &cam_temp[cam_id],4);
+			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
 
 			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
 			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
@@ -898,6 +971,8 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled |= (1 << cam_id);
 	cam->streaming_enabled = true;
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
+
 	printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
@@ -928,6 +1003,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
+	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 //	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
 }
@@ -980,7 +1056,7 @@ _Bool send_histogram_data(void) {
 			offset += HISTO_SIZE_32B*4;
 			
 			uint32_t temp_bits;
-			memcpy(&temp_bits, &cam_temp[cam_id],4);
+			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
 
 			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
 			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
@@ -999,11 +1075,20 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = HISTO_EOF;
 		
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	uint8_t timeout_tries = 0;
 
 	//TODO( handle the case where the packet fails to send better)
-	if(tx_status != USBD_OK){
-		printf("failed to send\r\n");
-		status = false;
+	while(tx_status != USBD_OK){
+		printf("-\r\n");
+		HAL_Delay(1);
+		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+		timeout_tries++;
+		if(timeout_tries > 2){
+			printf("F\r\n");
+			status = false;
+			usb_failed = true;
+			break;
+		}
 	}
 	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
@@ -1017,6 +1102,36 @@ _Bool send_histogram_data(void) {
 	return status;
 }
 
+void PollCameraTemperatures(void)
+{
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        // Skip to next active camera
+        for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
+        {
+            uint8_t cam = next_cam_idx;
+            next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
+
+            if (cameras_present & (1 << cam))
+            {
+                CameraDevice *pCam = get_camera_byID(cam);
+                if (pCam != NULL)
+                {
+                    cam_temp[cam] = X02C1B_read_temp(pCam);
+                    break;  // One camera per 100ms interval
+                }
+            }
+        }
+
+        // If we wrapped back to camera 0, add the idle pause
+        if (next_cam_idx == 0)
+        {
+            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
+        }
+    }
+}
 
 // Get SPI/USART status for the specified camera ID
 // Returns a bitfield where each bit indicates a specific status:
