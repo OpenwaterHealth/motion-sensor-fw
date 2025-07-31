@@ -33,9 +33,6 @@ static uint8_t  next_cam_idx = 0;
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
-
-uint16_t counter = 0;
-
 static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
@@ -1075,13 +1072,10 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
-		
+	
+	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 	uint8_t timeout_tries = 0;
-
-     printf("%d\r\n",counter);
-     counter++;
-	//TODO( handle the case where the packet fails to send better)
 	while(tx_status != USBD_OK){
 		printf("-\r\n");
 		HAL_Delay(1);

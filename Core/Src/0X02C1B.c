@@ -292,6 +292,7 @@ int X02C1B_FSIN_EXT_enable()
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 
+    /* Configure NVIC for receiving interrupts */
     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
     
@@ -309,6 +310,9 @@ int X02C1B_FSIN_EXT_disable()
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
+
+    /* Disable the EXTI line 13 interrupt */
+    HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
 
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
