@@ -288,7 +288,7 @@ int X02C1B_FSIN_EXT_enable()
     /* Configure the FSIN pin (the internal frame sync generator) to an input to rx the frame sync*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = FSIN_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;     // Set to input mode, falling edge trigger
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;     // Set to input mode, falling edge trigger
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 

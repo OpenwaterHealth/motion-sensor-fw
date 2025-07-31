@@ -898,6 +898,19 @@ _Bool start_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 
+    // Check if the device is BUSY
+    if (cam.useUsart) {
+        if (cam.pUart->State == HAL_USART_STATE_BUSY_RX ||
+            cam.pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
+            return false;  // Device is busy, don't start another reception
+        }
+    } else {
+        if (cam.pSpi->State == HAL_SPI_STATE_BUSY_RX ||
+            cam.pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+            return false;  // Device is busy, don't start another reception
+        }
+    }
+
 	if (cam.useUsart) {
 		if (cam.useDma) {
 			status = HAL_USART_Receive_DMA(cam.pUart,
