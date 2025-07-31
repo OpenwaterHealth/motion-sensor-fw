@@ -965,14 +965,18 @@ _Bool enable_camera_stream(uint8_t cam_id){
 		return true;
 	}
 
-	if(!configure_camera_sensor(cam_id))
-	{
-		return false;
+	CameraDevice *cam = get_camera_byID(cam_id);
+
+	if(!cam->isConfigured) {
+		if(configure_camera_sensor(cam_id))
+		{
+			cam->isConfigured = true;
+		}else{
+			return false;
+		}
 	}
 
 	delay_us(200);
-
-	CameraDevice *cam = get_camera_byID(cam_id);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 		{
