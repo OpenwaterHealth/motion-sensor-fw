@@ -77,6 +77,7 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim14;
+TIM_HandleTypeDef htim15;
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart4;
@@ -153,6 +154,7 @@ static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_TIM15_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -233,6 +235,7 @@ int main(void)
   MX_USART3_Init();
   MX_TIM14_Init();
   MX_TIM16_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
@@ -949,6 +952,52 @@ static void MX_TIM14_Init(void)
 }
 
 /**
+  * @brief TIM15 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 2400-1;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 65535;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
+
+}
+
+/**
   * @brief TIM16 Initialization Function
   * @param None
   * @retval None
@@ -1654,6 +1703,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  );
 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
 	  }
+  }
+
+  if (htim->Instance == TIM15) {
+	  HAL_TIM_Base_Stop_IT(htim);
+ 	  MX_USB_DEVICE_DeInit();
+ 	  delay_us(1000000);
+	  // Reset the board
+	  NVIC_SystemReset();
   }
   /* USER CODE END Callback 1 */
 }

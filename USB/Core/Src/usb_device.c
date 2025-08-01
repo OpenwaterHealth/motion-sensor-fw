@@ -120,6 +120,38 @@ void MX_USB_DEVICE_Init(void)
   /* USER CODE END USB_DEVICE_Init_PostTreatment */
 }
 
+
+void MX_USB_DEVICE_DeInit(void)
+{
+  /* USER CODE BEGIN USB_DEVICE_DeInit_PreTreatment */
+  /* Optional: Notify classes or app layers about USB shutdown */
+  /* USER CODE END USB_DEVICE_DeInit_PreTreatment */
+
+  /* Stop the USB Device Library */
+  if (USBD_Stop(&hUsbDeviceHS) != USBD_OK)
+  {
+    Error_Handler();
+  }
+
+  /* DeInit the USB Device Library */
+  if (USBD_DeInit(&hUsbDeviceHS) != USBD_OK)
+  {
+    Error_Handler();
+  }
+
+  /* Disable USB HS peripheral clock */
+  __HAL_RCC_USB_OTG_HS_CLK_DISABLE();
+
+  /* Disable VBUS sensing if used */
+  HAL_PWREx_DisableUSBVoltageDetector();
+
+  /* USER CODE BEGIN USB_DEVICE_DeInit_PostTreatment */
+  /* Optionally reset pins to default state (DM/DP) */
+  HAL_GPIO_DeInit(GPIOB, GPIO_PIN_14 | GPIO_PIN_15); // Example: USB HS DM/DP pins
+  /* USER CODE END USB_DEVICE_DeInit_PostTreatment */
+}
+
+
 /**
   * @}
   */

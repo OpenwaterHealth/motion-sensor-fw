@@ -68,6 +68,7 @@ extern SPI_HandleTypeDef hspi6;
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim8;
 extern TIM_HandleTypeDef htim14;
+extern TIM_HandleTypeDef htim15;
 extern TIM_HandleTypeDef htim16;
 extern DMA_HandleTypeDef hdma_uart4_rx;
 extern DMA_HandleTypeDef hdma_uart4_tx;
@@ -543,6 +544,20 @@ void SPI6_IRQHandler(void)
   /* USER CODE BEGIN SPI6_IRQn 1 */
 
   /* USER CODE END SPI6_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM15 global interrupt.
+  */
+void TIM15_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM15_IRQn 0 */
+
+  /* USER CODE END TIM15_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim15);
+  /* USER CODE BEGIN TIM15_IRQn 1 */
+
+  /* USER CODE END TIM15_IRQn 1 */
 }
 
 /**
