@@ -33,7 +33,6 @@ static uint8_t  next_cam_idx = 0;
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
-
 static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
@@ -899,6 +898,19 @@ _Bool start_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 
+    // Check if the device is BUSY
+    if (cam.useUsart) {
+        if (cam.pUart->State == HAL_USART_STATE_BUSY_RX ||
+            cam.pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
+            return false;  // Device is busy, don't start another reception
+        }
+    } else {
+        if (cam.pSpi->State == HAL_SPI_STATE_BUSY_RX ||
+            cam.pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+            return false;  // Device is busy, don't start another reception
+        }
+    }
+
 	if (cam.useUsart) {
 		if (cam.useDma) {
 			status = HAL_USART_Receive_DMA(cam.pUart,
@@ -952,7 +964,19 @@ _Bool enable_camera_stream(uint8_t cam_id){
 		printf("Camera %d already enabled\r\n", cam_id+1);
 		return true;
 	}
+
 	CameraDevice *cam = get_camera_byID(cam_id);
+
+	if(!cam->isConfigured) {
+		if(configure_camera_sensor(cam_id))
+		{
+			cam->isConfigured = true;
+		}else{
+			return false;
+		}
+	}
+
+	delay_us(200);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 		{
@@ -961,6 +985,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 		}
 
 	bool data_recp_status= start_data_reception(cam_id);
+
 	bool stream_on_status= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
 
 	status |= data_recp_status | stream_on_status;
@@ -996,6 +1021,10 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	status |= abort_data_reception(cam_id);
 	status |= (X02C1B_stream_off(cam) < 0); // returns -1 if failed
 
+	delay_us(200);
+
+	status |= (X02C1B_soft_reset(cam) < 0); 
+
 	if(!status)
 	{
 		printf("Failed to stop camera %d stream\r\n", cam_id+1);
@@ -1003,6 +1032,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled &= ~(1 << cam_id);
 	cam->streaming_enabled = false;
+	cam->isConfigured = false;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 //	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
@@ -1023,7 +1053,7 @@ _Bool send_histogram_data(void) {
 
 	uint8_t count = 0;
 	for (int i = 0; i < CAMERA_COUNT ; ++i) {
-		if (event_bits_enabled & (1 << i)) {
+		if (event_bits & (1 << i)) {
 			count++;
 		}
 	}
@@ -1048,7 +1078,7 @@ _Bool send_histogram_data(void) {
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
-		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
+		if((event_bits & (0x01 << cam_id)) != 0) {
 			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
@@ -1073,11 +1103,10 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
-		
+	
+	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
 	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 	uint8_t timeout_tries = 0;
-
-	//TODO( handle the case where the packet fails to send better)
 	while(tx_status != USBD_OK){
 		printf("-\r\n");
 		HAL_Delay(1);
@@ -1094,7 +1123,7 @@ _Bool send_histogram_data(void) {
 
 	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){
-		if((event_bits_enabled & (0x01 << i)) != 0)
+		if((event_bits & (0x01 << i)) != 0)
 			start_data_reception(i);
 	}
 	frame_id++;

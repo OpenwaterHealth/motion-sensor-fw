@@ -94,7 +94,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 2, 0};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 3, 0};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -104,7 +104,7 @@ __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
-volatile bool fake_data_send_flag = false;
+volatile bool send_data_flag = false;
 extern uint32_t imu_frame_counter;
 
 ICM_Axis3D a;
@@ -127,7 +127,6 @@ const char *bit_rep[16] = {
     [ 8] = "1000", [ 9] = "1001", [10] = "1010", [11] = "1011",
     [12] = "1100", [13] = "1101", [14] = "1110", [15] = "1111",
 };
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -321,9 +320,9 @@ int main(void)
   	comms_host_check_received(); // check comms
     
     // Send out data if all the histograms have come in
-    if(event_bits == event_bits_enabled  && event_bits_enabled > 0) {
+    if(!fake_data_gen && send_data_flag  && event_bits_enabled > 0) {
       // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-//      printf(".\r\n");
+     
       most_recent_frame = HAL_GetTick();
       streaming = true;
 
@@ -332,14 +331,14 @@ int main(void)
       if(!send_histogram_data()){
     	  fail_count++;
       }
-
+      send_data_flag = false;
       event_bits = 0x00;
     }
-    else if(fake_data_gen && fake_data_send_flag){
+    else if(fake_data_gen && send_data_flag){
             printf(".\r\n");
 
       send_fake_data();
-      fake_data_send_flag = false;
+      send_data_flag = false;
  		}
     
     // Print out at end of scan or if data hasn't come in in time to detect bad cameras
@@ -1571,9 +1570,18 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM4)
   {
-    if (fake_data_gen) fake_data_send_flag = true; // trigger the send event
+    send_data_flag = true; // trigger the send event
   }
 }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{     
+    if (GPIO_Pin == GPIO_PIN_13)
+    {
+      send_data_flag = true; // trigger the send event
+    }
+}
+
 /* USER CODE END 4 */
 
  /* MPU Configuration */
