@@ -2,12 +2,10 @@
 This repository contains the firmware for the Motion Sensor Module.
 
 # Driver Install
-Installing the Latest WinUSB Driver for COMMS_HISTO_IMU(HS)
-
-This device is a USB composite device with three interfaces:
+This device is a USB composite device with three interfaces and we are required to install the Latest WinUSB Driver for COMMS_HISTO_IMU(HS)
 
 ## Driver Utility
-For the Python libraries to communicate with the sensor module from user-space, each interface must be bound to the Microsoft WinUSB driver provided by Windows 10/11 (latest in-box version).
+For the Host machine to communicate with the sensor module from user-space, each interface must be bound to the Microsoft WinUSB driver provided by Windows 10/11 (latest in-box version).
 
 [Download Zadig](https://zadig.akeo.ie/)
 
