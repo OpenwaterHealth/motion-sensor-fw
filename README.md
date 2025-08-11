@@ -6,12 +6,8 @@ Installing the Latest WinUSB Driver for COMMS_HISTO_IMU(HS)
 
 This device is a USB composite device with three interfaces:
 
-Interface 0 → USB\VID_0483&PID_5A5A&MI_00
-Interface 1 → USB\VID_0483&PID_5A5A&MI_01
-Interface 2 → USB\VID_0483&PID_5A5A&MI_02
-
 ## Driver Utility
-To communicate with it from user-space, each interface must be bound to the Microsoft WinUSB driver provided by Windows 10/11 (latest in-box version).
+For the Python libraries to communicate with the sensor module from user-space, each interface must be bound to the Microsoft WinUSB driver provided by Windows 10/11 (latest in-box version).
 
 [Download Zadig](https://zadig.akeo.ie/)
 
