@@ -19,8 +19,8 @@ Select COMMS_HISTO_IMU(HS) (Interface 0)
 
 Click Install Driver after a little bit you will see success and the driver associated
 
-![Installing](docs\installing.png)
-![success](docs\success.png)
+![Installing](docs/installing.png)
+![success](docs/success.png)
 
 After successful install you will see that the interface is now associated with WinUSB
 
