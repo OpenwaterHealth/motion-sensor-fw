@@ -11,6 +11,8 @@ For the Host machine to communicate with the sensor module from user-space, each
 
 ### Associate drivers for COMMS_HISTO_IMU
 
+Connect the Console with Sensor Module(s) attached to your computer.
+
 Run Zadig and select the first interface (two will be listed only need to select one)
 
 Select COMMS_HISTO_IMU(HS) (Interface 0)
