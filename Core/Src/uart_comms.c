@@ -13,6 +13,9 @@
 
 #include <string.h>
 
+#include <stdio.h>
+#include <inttypes.h>
+#include <string.h>
 
 // Private variables
 extern uint8_t rxBuffer[COMMAND_MAX_SIZE];
@@ -27,6 +30,37 @@ const uint32_t zero_val = 0;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 #define TX_TIMEOUT 500
+
+__attribute__((unused))
+static void print_uart_packet(const UartPacket *pkt)
+{
+    if (!pkt) {
+        printf("UartPacket: NULL\r\n");
+        return;
+    }
+
+    printf("UartPacket {\r\n");
+    printf("  id           : 0x%04" PRIX16 " (%" PRIu16 ")\r\n", pkt->id, pkt->id);
+    printf("  packet_type  : 0x%02X (%u)\r\n", pkt->packet_type, pkt->packet_type);
+    printf("  command      : 0x%02X (%u)\r\n", pkt->command, pkt->command);
+    printf("  addr         : 0x%02X (%u)\r\n", pkt->addr, pkt->addr);
+    printf("  reserved     : 0x%02X\r\n", pkt->reserved);
+    printf("  data_len     : %" PRIu16 "\r\n", pkt->data_len);
+
+    // print data bytes if available
+    if (pkt->data && pkt->data_len > 0) {
+        printf("  data         : ");
+        for (uint16_t i = 0; i < pkt->data_len; i++) {
+            printf("%02X ", pkt->data[i]);
+        }
+        printf("\r\n");
+    } else {
+        printf("  data         : <none>\r\n");
+    }
+
+    printf("  crc          : 0x%04" PRIX16 " (%" PRIu16 ")\r\n", pkt->crc, pkt->crc);
+    printf("}\r\n");
+}
 
 void ClearBuffer_DMA(void)
 {
@@ -52,7 +86,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_START_BYTE;
 	txBuffer[bufferIndex++] = pResp->id >> 8;
 	txBuffer[bufferIndex++] = pResp->id & 0xFF;
-	txBuffer[bufferIndex++] = OW_RESP;
+	txBuffer[bufferIndex++] = pResp->packet_type;
 	txBuffer[bufferIndex++] = pResp->command;
 	txBuffer[bufferIndex++] = pResp->addr;
 	txBuffer[bufferIndex++] = pResp->reserved;
@@ -199,9 +233,12 @@ void comms_host_check_received(void) {
 		goto NextDataPacket;
 	}
 
-	resp = process_if_command(cmd);
-	// printf("CMD Packet:\r\n");
+	// printf("COMMAND Packet:\r\n");
 	// print_uart_packet(&cmd);
+	resp = process_if_command(cmd);
+	// printf("RESPONSE Packet:\r\n");
+	// print_uart_packet(&resp);
+	// printf("\r\n\r\n");
 
 NextDataPacket:
 	comms_interface_send(&resp);

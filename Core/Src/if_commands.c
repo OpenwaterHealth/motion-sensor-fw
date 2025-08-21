@@ -14,8 +14,8 @@
 #include "ICM20948.h"
 #include "0X02C1B.h"
 #include "histo_fake.h"
-
 #include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 
 extern uint8_t FIRMWARE_VERSION_DATA[3];
@@ -702,31 +702,34 @@ static void print_uart_packet(const UartPacket* packet) {
     printf("\r\n");
 }
 
+static UartPacket uartReturn;
 UartPacket process_if_command(UartPacket cmd)
 {
-	UartPacket uartResp;
 	I2C_TX_Packet i2c_packet;
 	CameraDevice* pCam = get_active_cam();
-	uartResp.id = cmd.id;
-	uartResp.packet_type = OW_RESP;
-	uartResp.data_len = 0;
-	uartResp.data = 0;
+	uartReturn.id = cmd.id;
+	uartReturn.packet_type = OW_RESP;
+	uartReturn.addr = cmd.addr;
+	uartReturn.reserved = cmd.reserved;
+	uartReturn.packet_type = OW_RESP;
+	uartReturn.data_len = 0;
+	uartReturn.data = 0;
 	switch (cmd.packet_type)
 	{
 	case OW_JSON:
 		// JSON_ProcessCommand(&uartResp, cmd);
 		break;
 	case OW_CMD:
-		process_basic_command(&uartResp, cmd);
+		process_basic_command(&uartReturn, cmd);
 		break;
 	case OW_FPGA:
-		process_fpga_commands(&uartResp, cmd);
+		process_fpga_commands(&uartReturn, cmd);
 		break;
 	case OW_CAMERA:
-		process_camera_commands(&uartResp, cmd);
+		process_camera_commands(&uartReturn, cmd);
 		break;
 	case OW_IMU:
-		process_imu_commands(&uartResp, cmd);
+		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
 
@@ -742,12 +745,12 @@ UartPacket process_if_command(UartPacket cmd)
 
 		break;
 	default:
-		uartResp.data_len = 0;
-		uartResp.packet_type = OW_UNKNOWN;
+		uartReturn.data_len = 0;
+		uartReturn.packet_type = OW_UNKNOWN;
 		// uartResp.data = (uint8_t*)&cmd.tag;
 		break;
 	}
 
-	return uartResp;
+	return uartReturn;
 
 }
