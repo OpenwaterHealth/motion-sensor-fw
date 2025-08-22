@@ -63,6 +63,56 @@ uint8_t COMMS_InstID = 0, HISTO_InstID = 0, IMU_InstID = 0;
  */
 /* USER CODE BEGIN 1 */
 
+/* Helper: close a list of non-control endpoints.
+ * Safe to call even if EP was never opened; the LL will ignore gracefully.
+ */
+static void CloseEPList(USBD_HandleTypeDef *pdev, const uint8_t *eps, uint8_t count)
+{
+  if (!eps) return;
+  for (uint8_t i = 0; i < count; ++i) {
+    uint8_t ea = eps[i];
+    if ((ea & 0x0F) != 0x00) {                 // never try to close EP0
+      (void)USBD_LL_CloseEP(pdev, ea);
+    }
+  }
+}
+
+
+void MX_USB_DEVICE_DeInit(void){
+
+	  /* Block ISR races while we tear down (optional but helpful) */
+	  uint32_t primask = __get_PRIMASK();
+	  __disable_irq();
+
+	  /* 1) Proactively stop the stack (halts transfers, sets D+ pull-up off) */
+	  (void)USBD_Stop(&hUsbDeviceHS);
+
+	  CloseEPList(&hUsbDeviceHS, COMMS_EpAdd_Inst, 2);
+	  CloseEPList(&hUsbDeviceHS, HISTO_EpAdd_Inst, 1);
+	  CloseEPList(&hUsbDeviceHS, IMU_EpAdd_Inst, 1);
+
+	  /* 3) Fully de-initialize the device core (calls USBD_LL_DeInit → HAL_PCD_DeInit) */
+	  (void)USBD_DeInit(&hUsbDeviceHS);
+
+	  /* 4) Symmetry with your Init: turn off the USB voltage detector if you don’t want it left on */
+	  HAL_PWREx_DisableUSBVoltageDetector();
+
+	  /* 5) Clear your composite instance bookkeeping (optional but nice) */
+	  COMMS_InstID = -1;
+	  HISTO_InstID = -1;
+	  IMU_InstID   = -1;
+
+	  /* class pointers/callbacks in hUsbDeviceHS, clear them here.
+	     Example:
+	     // hUsbDeviceHS.pClass = NULL;
+	     // hUsbDeviceHS.pClassData = NULL;
+	  */
+	  USBD_UnRegisterClassComposite(&hUsbDeviceHS);
+
+	  /* Restore IRQ state */
+	  if (!primask) __enable_irq();
+}
+
 /* USER CODE END 1 */
 
 /**

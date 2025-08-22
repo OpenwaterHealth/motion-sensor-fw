@@ -128,6 +128,7 @@ extern TIM_HandleTypeDef htim8;
 extern CRC_HandleTypeDef   hcrc;
 extern UART_HandleTypeDef huart4;
 extern TIM_HandleTypeDef htim4;
+extern TIM_HandleTypeDef htim15;
 extern TIM_HandleTypeDef htim16;
 
 #define HISTO_FAKE_TIMER htim16

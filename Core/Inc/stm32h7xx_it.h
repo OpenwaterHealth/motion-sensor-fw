@@ -78,6 +78,7 @@ void OTG_HS_EP1_IN_IRQHandler(void);
 void OTG_HS_IRQHandler(void);
 void SPI4_IRQHandler(void);
 void SPI6_IRQHandler(void);
+void TIM15_IRQHandler(void);
 void TIM16_IRQHandler(void);
 void TIM17_IRQHandler(void);
 void BDMA_Channel0_IRQHandler(void);

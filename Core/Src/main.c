@@ -77,6 +77,7 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim14;
+TIM_HandleTypeDef htim15;
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart4;
@@ -153,6 +154,7 @@ static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_TIM15_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -233,6 +235,7 @@ int main(void)
   MX_USART3_Init();
   MX_TIM14_Init();
   MX_TIM16_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
   init_dma_logging();
 
@@ -318,55 +321,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
   	comms_host_check_received(); // check comms
-    
-    // Send out data if all the histograms have come in
-    if(!fake_data_gen && send_data_flag  && event_bits_enabled > 0) {
-      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-     
-      most_recent_frame = HAL_GetTick();
-      streaming = true;
-
-      // if(!send_histogram_data()) Error_Handler();
-
-      if(!send_histogram_data()){
-    	  fail_count++;
-      }
-      send_data_flag = false;
-      event_bits = 0x00;
-    }
-    else if(fake_data_gen && send_data_flag){
-            printf(".\r\n");
-
-      send_fake_data();
-      send_data_flag = false;
- 		}
-    
-    // Print out at end of scan or if data hasn't come in in time to detect bad cameras
-    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
-    {
-      streaming = false;
-      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
-      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
-      printf("Fail Count: %d\r\n",fail_count);
-      printf("No data received in 75ms\r\n");
-      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
-      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
-      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
-      printf("total_time_streaming: %f\r\n", total_time_streaming);
-
-      for (int i = 0; i < 8; i++)
-      {
-        get_camera_status(i);
-      }
-      if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
-    	  // Error_Handler();
-        printf("FSIN Still ON\r\n");
-    }
-
-    if(streaming==false) ticks_at_start = HAL_GetTick();
-
-    /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-    PollCameraTemperatures();
   }
 
   /* USER CODE END 3 */
@@ -400,9 +354,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 100;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 25;
+  RCC_OscInitStruct.PLL.PLLQ = 20;
   RCC_OscInitStruct.PLL.PLLR = 8;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
@@ -419,13 +373,13 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -443,8 +397,11 @@ void PeriphCommonClock_Config(void)
 
   /** Initializes the peripherals clock
   */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI3|RCC_PERIPHCLK_SPI2
-                              |RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART6;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI6|RCC_PERIPHCLK_I2C1
+                              |RCC_PERIPHCLK_SPI3|RCC_PERIPHCLK_SPI2
+                              |RCC_PERIPHCLK_SPI4|RCC_PERIPHCLK_USART1
+                              |RCC_PERIPHCLK_USART6|RCC_PERIPHCLK_UART4
+                              |RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_USART3;
   PeriphClkInitStruct.PLL2.PLL2M = 4;
   PeriphClkInitStruct.PLL2.PLL2N = 100;
   PeriphClkInitStruct.PLL2.PLL2P = 25;
@@ -462,7 +419,11 @@ void PeriphCommonClock_Config(void)
   PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;
   PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
   PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL3;
+  PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_PLL2;
+  PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_PLL2;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_PLL2;
+  PeriphClkInitStruct.I2c123ClockSelection = RCC_I2C123CLKSOURCE_PLL3;
+  PeriphClkInitStruct.Spi6ClockSelection = RCC_SPI6CLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -841,7 +802,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 1000;
+  htim4.Init.Prescaler = 12000-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 5999;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -902,7 +863,7 @@ static void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 10-1;
+  htim8.Init.Period = 20-1;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -944,7 +905,7 @@ static void MX_TIM14_Init(void)
 
   /* USER CODE END TIM14_Init 1 */
   htim14.Instance = TIM14;
-  htim14.Init.Prescaler = 240-1;
+  htim14.Init.Prescaler = 120-1;
   htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim14.Init.Period = 5000-1;
   htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -956,6 +917,52 @@ static void MX_TIM14_Init(void)
   /* USER CODE BEGIN TIM14_Init 2 */
 
   /* USER CODE END TIM14_Init 2 */
+
+}
+
+/**
+  * @brief TIM15 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 12000-1;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 25000-1;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
 
 }
 
@@ -975,7 +982,7 @@ static void MX_TIM16_Init(void)
 
   /* USER CODE END TIM16_Init 1 */
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 240-1;
+  htim16.Init.Prescaler = 120-1;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim16.Init.Period = 25000-1;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -1666,6 +1673,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
 	  }
   }
+
+  if (htim->Instance == TIM15){
+	HAL_TIM_Base_Stop_IT(htim);
+	MX_USB_DEVICE_DeInit();
+	delay_us(100000);
+	// Reset the board
+	NVIC_SystemReset();
+  }
+
   /* USER CODE END Callback 1 */
 }
 

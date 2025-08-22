@@ -136,6 +136,13 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
 		// softreset
+
+		__HAL_TIM_CLEAR_FLAG(&htim15, TIM_FLAG_UPDATE);
+		__HAL_TIM_SET_COUNTER(&htim15, 0);
+		if(HAL_TIM_Base_Start_IT(&htim15) != HAL_OK){
+			uartResp->packet_type = OW_ERROR;
+		}
+
 		break;
 	default:
 		uartResp->data_len = 0;
