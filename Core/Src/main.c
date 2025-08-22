@@ -394,15 +394,16 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 6;
-  RCC_OscInitStruct.PLL.PLLN = 120;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 100;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 20;
-  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 25;
+  RCC_OscInitStruct.PLL.PLLR = 8;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
@@ -418,18 +419,18 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
   __HAL_RCC_PLL2CLKOUT_ENABLE(RCC_PLL2_DIVP);
-  HAL_RCC_MCOConfig(RCC_MCO2, RCC_MCO2SOURCE_PLL2PCLK, RCC_MCODIV_5);
+  HAL_RCC_MCOConfig(RCC_MCO2, RCC_MCO2SOURCE_PLL2PCLK, RCC_MCODIV_1);
 }
 
 /**
@@ -442,24 +443,26 @@ void PeriphCommonClock_Config(void)
 
   /** Initializes the peripherals clock
   */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI6|RCC_PERIPHCLK_SPI3
-                              |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_SPI4
-                              |RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART6
-                              |RCC_PERIPHCLK_UART4|RCC_PERIPHCLK_USART2
-                              |RCC_PERIPHCLK_USART3;
-  PeriphClkInitStruct.PLL2.PLL2M = 6;
-  PeriphClkInitStruct.PLL2.PLL2N = 120;
-  PeriphClkInitStruct.PLL2.PLL2P = 4;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI3|RCC_PERIPHCLK_SPI2
+                              |RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART6;
+  PeriphClkInitStruct.PLL2.PLL2M = 4;
+  PeriphClkInitStruct.PLL2.PLL2N = 100;
+  PeriphClkInitStruct.PLL2.PLL2P = 25;
   PeriphClkInitStruct.PLL2.PLL2Q = 8;
   PeriphClkInitStruct.PLL2.PLL2R = 2;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
   PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
-  PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL2;
-  PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_PLL2;
-  PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_PLL2;
+  PeriphClkInitStruct.PLL3.PLL3M = 4;
+  PeriphClkInitStruct.PLL3.PLL3N = 100;
+  PeriphClkInitStruct.PLL3.PLL3P = 8;
+  PeriphClkInitStruct.PLL3.PLL3Q = 8;
+  PeriphClkInitStruct.PLL3.PLL3R = 8;
+  PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_2;
+  PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;
+  PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
+  PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL3;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_PLL2;
-  PeriphClkInitStruct.Spi6ClockSelection = RCC_SPI6CLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -513,7 +516,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00501E6C;
+  hi2c1.Init.Timing = 0x00702787;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -1052,7 +1055,7 @@ static void MX_USART1_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   husart1.Instance = USART1;
-  husart1.Init.BaudRate = 115200;
+  husart1.Init.BaudRate = 3750000;
   husart1.Init.WordLength = USART_WORDLENGTH_8B;
   husart1.Init.StopBits = USART_STOPBITS_1;
   husart1.Init.Parity = USART_PARITY_NONE;
@@ -1156,7 +1159,7 @@ static void MX_USART3_Init(void)
 
   /* USER CODE END USART3_Init 1 */
   husart3.Instance = USART3;
-  husart3.Init.BaudRate = 115200;
+  husart3.Init.BaudRate = 3750000;
   husart3.Init.WordLength = USART_WORDLENGTH_8B;
   husart3.Init.StopBits = USART_STOPBITS_1;
   husart3.Init.Parity = USART_PARITY_NONE;
