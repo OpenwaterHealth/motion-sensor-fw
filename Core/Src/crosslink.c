@@ -27,6 +27,8 @@
 #define CMD_VERIFY_USERCODE 0xC8
 #define CMD_DISABLE 0x26
 
+#define TIMEOUT_MS 100
+
 volatile uint8_t txComplete = 0;
 volatile uint8_t rxComplete = 0;
 volatile uint8_t i2cError = 0;
@@ -54,7 +56,10 @@ static int xi2c_write_and_read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uin
         return -1;
 
     // Wait for the transmission to complete
-    while (!txComplete && !i2cError) {}
+    uint32_t t0 = HAL_GetTick();
+    while (!txComplete && !i2cError) {
+    	if ((HAL_GetTick() - t0) >= TIMEOUT_MS) return HAL_ERROR;
+    }
 
     if (i2cError)
     {
@@ -66,7 +71,10 @@ static int xi2c_write_and_read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uin
         return -1;
 
     // Wait for the reception to complete
-    while (!rxComplete && !i2cError) {}
+    t0 = HAL_GetTick();
+    while (!rxComplete && !i2cError) {
+    	if ((HAL_GetTick() - t0) >= TIMEOUT_MS) return HAL_ERROR;
+    }
 
     if (i2cError)
     {
