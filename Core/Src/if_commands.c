@@ -283,7 +283,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!func_ret)
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Program FPGA on camera %d\r\n", i);
+	    			printf("Failed to Program FPGA on camera %d\r\n", i+1);
 	    		}
 	        }
 	    }
@@ -474,7 +474,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!configure_camera_sensor(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed set registers for camera %d\r\n", i);
+	    			printf("Failed set registers for camera %d\r\n", i+1);
 
 	        	}
 	        }
@@ -489,7 +489,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!capture_single_histogram(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed capture histo for camera %d\r\n", i);
+	    			printf("Failed capture histo for camera %d\r\n", i+1);
 
 	        	}
 	        }
@@ -507,7 +507,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	{
 	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed capture histo for camera %d\r\n", i);
+	    			printf("Failed capture histo for camera %d\r\n", i+1);
 
 	        	} else {
 	        		uartResp->reserved |= (1 << i);
@@ -530,7 +530,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!configure_camera_testpattern(i,test_pattern))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed set camera test pattern for camera %d\r\n", i);
+	    			printf("Failed set camera test pattern for camera %d\r\n", i+1);
 
 	        	}
 	        }

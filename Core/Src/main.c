@@ -335,7 +335,7 @@ int main(void)
       event_bits = 0x00;
     }
     else if(fake_data_gen && send_data_flag){
-            printf(".\r\n");
+      printf(".\r\n");
 
       send_fake_data();
       send_data_flag = false;
@@ -366,7 +366,7 @@ int main(void)
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
     /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-    PollCameraTemperatures();
+    // PollCameraTemperatures(); TODO(re-add this to happen only while streaming)
   }
 
   /* USER CODE END 3 */
@@ -1631,32 +1631,32 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-  if (htim->Instance == TIM16){
-	  HistoFake_GenerateAndSend(&hUsbDeviceHS);
-  }
+  // if (htim->Instance == TIM16){
+	//   HistoFake_GenerateAndSend(&hUsbDeviceHS);
+  // }
 
-  if (htim->Instance == TIM14)
-  {
-	  imu_frame_counter++;
-	  // call imu
-	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
-		  printf("IMU Read Error\r\n");
-	  }else{
-		  memset(usb_buf,0,128);
-		  int len = snprintf(
-		      usb_buf, sizeof(usb_buf),
-		      "{\"F\":%ld,\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
-			  imu_frame_counter,
-		      g.x, g.y, g.z,
-		      m.x, m.y, m.z,
-		      a.x, a.y, a.z,
-			  (int)t, (int)((t - (int)t) * 100.0f)
-		  );
-		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
-	  }
-  }
-  /* USER CODE END Callback 1 */
-}
+//   if (htim->Instance == TIM14)
+//   {
+// 	  imu_frame_counter++;
+// 	  // call imu
+// 	  if(ICM_GetAllRawData(&a,&t, &g, &m) != HAL_OK){
+// 		  printf("IMU Read Error\r\n");
+// 	  }else{
+// 		  memset(usb_buf,0,128);
+// 		  int len = snprintf(
+// 		      usb_buf, sizeof(usb_buf),
+// 		      "{\"F\":%ld,\"G\":[%d,%d,%d],\"M\":[%d,%d,%d],\"A\":[%d,%d,%d],\"T\":%d.%02d}\r\n",
+// 			  imu_frame_counter,
+// 		      g.x, g.y, g.z,
+// 		      m.x, m.y, m.z,
+// 		      a.x, a.y, a.z,
+// 			  (int)t, (int)((t - (int)t) * 100.0f)
+// 		  );
+// 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
+// 	  }
+//   }
+//   /* USER CODE END Callback 1 */
+ }
 
 /**
   * @brief  This function is executed in case of error occurrence.

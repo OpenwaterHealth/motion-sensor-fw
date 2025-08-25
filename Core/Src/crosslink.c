@@ -27,7 +27,7 @@
 #define CMD_VERIFY_USERCODE 0xC8
 #define CMD_DISABLE 0x26
 
-#define TIMEOUT_MS 100
+#define TIMEOUT_MS 5000
 
 volatile uint8_t txComplete = 0;
 volatile uint8_t rxComplete = 0;
@@ -58,9 +58,20 @@ static int xi2c_write_and_read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uin
     // Wait for the transmission to complete
     uint32_t t0 = HAL_GetTick();
     while (!txComplete && !i2cError) {
-    	if ((HAL_GetTick() - t0) >= TIMEOUT_MS) return HAL_ERROR;
+        // printf("~");
+        if ((HAL_GetTick() - t0) >= TIMEOUT_MS){
+            printf("I2C receive timeout\r\n");
+            uint32_t t3 = HAL_GetTick();
+            printf("I2C receive took %lu ms\r\n", t3 - t0);
+            printf("txcomplete: %d, i2cError: %d\r\n", txComplete, i2cError);
+            return HAL_ERROR;
+        }
     }
-
+    uint32_t t_diff = HAL_GetTick() - t0;
+    if(t_diff > 0)
+        printf("                           I2C write took %lu ms\r\n", t_diff); // ????? why is this always 0??????? 
+    // printf("T0: %lu\r\n", t0);
+    // printf("T1: %lu\r\n", t1);
     if (i2cError)
     {
         return HAL_ERROR;
@@ -272,8 +283,6 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
 	int ret_status = 0;
 	uint8_t attempt = 0;
 	_Bool idcode_match = false;
-
-	if(verbose_on) printf("Starting FPGA configuration...\r\n");
 
     // Set GPIO HIGH
     HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
