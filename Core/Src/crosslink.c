@@ -302,12 +302,17 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
 		HAL_Delay(1000);
 
 		// Activation Key
-		uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
+        uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
+        if(verbose_on) printf("Sending Activation Key, Attempt %d...\r\n", attempt);
+        HAL_Delay(5);
 		xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
-		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
+        HAL_Delay(15); // remove this once you can guarantee that i2c_write_bytes works correctly
+        HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
 		HAL_Delay(10);
+        if(verbose_on) printf("Activation Key sent.\r\n");
 
 		// IDCODE
+        if(verbose_on) printf("Checking IDCODE...\r\n");
 		memset(read_buf, 0, 4);
 		memcpy(write_buf, (uint8_t[]){0xE0,0x00,0x00,0x00}, 4);
 		xi2c_write_and_read(hi2c, DevAddress, write_buf, 4, read_buf, 4);
