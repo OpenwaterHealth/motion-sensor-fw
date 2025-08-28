@@ -107,6 +107,7 @@ volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the came
 volatile bool send_data_flag = false;
 extern uint32_t imu_frame_counter;
 
+
 ICM_Axis3D a;
 ICM_Axis3D m;
 ICM_Axis3D g;
@@ -333,6 +334,7 @@ int main(void)
       }
       send_data_flag = false;
       event_bits = 0x00;
+      PollCameraTemperatures();
     }
     else if(fake_data_gen && send_data_flag){
             printf(".\r\n");
@@ -366,7 +368,7 @@ int main(void)
     if(streaming==false) ticks_at_start = HAL_GetTick();
 
     /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-    PollCameraTemperatures();
+
   }
 
   /* USER CODE END 3 */

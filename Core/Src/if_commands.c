@@ -645,7 +645,6 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			printf("Failed Enabling FSIN_EXT...\r\n");
 			uartResp->packet_type = OW_ERROR;
 		}
-		X02C1B_FSIN_EXT_enable();
 		break;
 	default:
 		uartResp->data_len = 0;
