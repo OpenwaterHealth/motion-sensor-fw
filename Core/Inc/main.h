@@ -81,10 +81,14 @@ void Error_Handler(void);
 #define CRESET_8_GPIO_Port GPIOE
 #define CRESET_7_Pin GPIO_PIN_1
 #define CRESET_7_GPIO_Port GPIOE
+#define MUX_USB_MODE_Pin GPIO_PIN_12
+#define MUX_USB_MODE_GPIO_Port GPIOC
 #define CRESET_5_Pin GPIO_PIN_7
 #define CRESET_5_GPIO_Port GPIOD
 #define GPIO0_1_Pin GPIO_PIN_0
 #define GPIO0_1_GPIO_Port GPIOA
+#define MUX_OE_Pin GPIO_PIN_4
+#define MUX_OE_GPIO_Port GPIOC
 #define IMU_FSYNC_Pin GPIO_PIN_1
 #define IMU_FSYNC_GPIO_Port GPIOA
 #define IMU_INT_Pin GPIO_PIN_5

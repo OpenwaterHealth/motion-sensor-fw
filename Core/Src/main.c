@@ -94,7 +94,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 3, 2};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 3, 3};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -238,6 +238,13 @@ int main(void)
   init_dma_logging();
 
   DWT_Init();
+
+  // Disable USB MUX
+  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_SET);
+  // Default to USB HS MUX
+  HAL_GPIO_WritePin(MUX_USB_MODE_GPIO_Port, MUX_USB_MODE_Pin, GPIO_PIN_SET);
+  // Enable USB MUX
+  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_RESET);
 
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
@@ -1336,10 +1343,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|MUX_RESET_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|MUX_RESET_Pin|MUX_OE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(MUX_USB_MODE_GPIO_Port, MUX_USB_MODE_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
@@ -1347,15 +1357,15 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin */
-  GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin;
+  /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin MUX_USB_MODE_Pin MUX_OE_Pin */
+  GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin|MUX_USB_MODE_Pin|MUX_OE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GPIO0_8_Pin PC12 PC4 IMU_INT_Pin */
-  GPIO_InitStruct.Pin = GPIO0_8_Pin|GPIO_PIN_12|GPIO_PIN_4|IMU_INT_Pin;
+  /*Configure GPIO pins : GPIO0_8_Pin IMU_INT_Pin */
+  GPIO_InitStruct.Pin = GPIO0_8_Pin|IMU_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
