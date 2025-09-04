@@ -8,6 +8,7 @@
 #include "crosslink.h"
 #include "common.h"
 #include "main.h"
+#include "i2c_master.h"
 #include "utils.h"
 
 #include <stdio.h>
@@ -27,11 +28,9 @@
 #define CMD_VERIFY_USERCODE 0xC8
 #define CMD_DISABLE 0x26
 
-#define TIMEOUT_MS 5000
-
-volatile uint8_t txComplete = 0;
-volatile uint8_t rxComplete = 0;
-volatile uint8_t i2cError = 0;
+extern uint8_t txComplete;
+extern uint8_t rxComplete;
+extern uint8_t i2cError;
 
 unsigned char activation_key[5] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
 uint8_t expected_idcode[] = {0x01, 0x2C, 0x00, 0x43};
@@ -41,66 +40,6 @@ unsigned char read_buf[4];
 const uint8_t max_attempts = 3;
 extern uint8_t bitstream_buffer[];
 extern uint32_t bitstream_len;
-
-
-static int xi2c_write_bytes(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *data, uint16_t length) {
-
-    uint32_t isr = hi2c->Instance->ISR;     // H7/I2C v2
-    int busy = (isr & I2C_ISR_BUSY) != 0;
-    if(busy){
-        printf("I2C bus is busy, ISR=0x%08lx\r\n", isr);
-        return HAL_ERROR;
-    }
-    return HAL_I2C_Master_Transmit(hi2c, DevAddress << 1, data, length, HAL_MAX_DELAY);
-}
-
-static int xi2c_write_and_read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *wbuf, uint16_t wlen, uint8_t *rbuf, uint16_t rlen) {
-    txComplete = 0;
-    rxComplete = 0;
-    i2cError = 0;
-
-    if (HAL_I2C_Master_Seq_Transmit_IT(hi2c, DevAddress << 1, wbuf, wlen, I2C_FIRST_FRAME) != HAL_OK)
-        return -1;
-
-    // Wait for the transmission to complete
-    uint32_t t0 = HAL_GetTick();
-    while (!txComplete && !i2cError) {
-        // printf("~");
-        if ((HAL_GetTick() - t0) >= TIMEOUT_MS){
-            printf("I2C receive timeout\r\n");
-            uint32_t t3 = HAL_GetTick();
-            printf("I2C receive took %lu ms\r\n", t3 - t0);
-            printf("txcomplete: %d, i2cError: %d\r\n", txComplete, i2cError);
-            return HAL_ERROR;
-        }
-    }
-    uint32_t t_diff = HAL_GetTick() - t0;
-    if(t_diff > 0)
-        printf("                           I2C write took %lu ms\r\n", t_diff); // ????? why is this always 0??????? 
-    // printf("T0: %lu\r\n", t0);
-    // printf("T1: %lu\r\n", t1);
-    if (i2cError)
-    {
-        return HAL_ERROR;
-    }
-
-
-    if (HAL_I2C_Master_Seq_Receive_IT(hi2c, DevAddress << 1, rbuf, rlen, I2C_LAST_FRAME) != HAL_OK)
-        return -1;
-
-    // Wait for the reception to complete
-    t0 = HAL_GetTick();
-    while (!rxComplete && !i2cError) {
-    	if ((HAL_GetTick() - t0) >= TIMEOUT_MS) return HAL_ERROR;
-    }
-
-    if (i2cError)
-    {
-        return HAL_ERROR;
-    }
-
-    return HAL_OK;
-}
 
 static HAL_StatusTypeDef xi2c_write_long(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *cmd, int cmd_len, uint8_t *data, size_t data_len) {
 	HAL_StatusTypeDef ret;
@@ -392,20 +331,4 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
 
     if(verbose_on) printf("FPGA configuration complete.\r\n");
     return ret_status;
-}
-
-// Callback implementations
-void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-    txComplete = 1;
-}
-
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-    rxComplete = 1;
-}
-
-void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
-{
-    i2cError = 1;
 }

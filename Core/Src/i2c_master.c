@@ -14,8 +14,14 @@
 
 // I2C Expander specific
 #define TCA9548_ADDR 0x70
+#define TIMEOUT_MS 5000
 
 uint8_t I2C_current_target = 0x00; // Default target address
+
+volatile uint8_t txComplete = 0;
+volatile uint8_t rxComplete = 0;
+volatile uint8_t i2cError = 0;
+
 
 uint8_t I2C_scan(I2C_HandleTypeDef * pI2c, uint8_t* addr_list, size_t list_size, bool display) {
 
@@ -198,3 +204,80 @@ HAL_StatusTypeDef TCA9548A_SelectBroadcast(I2C_HandleTypeDef *hi2c, uint8_t addr
     I2C_current_target = data;
     return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
 }
+
+int xi2c_write_bytes(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *data, uint16_t length) {
+
+    uint32_t isr = hi2c->Instance->ISR;     // H7/I2C v2
+    int busy = (isr & I2C_ISR_BUSY) != 0;
+    if(busy){
+        printf("I2C bus is busy, ISR=0x%08lx\r\n", isr);
+        return HAL_ERROR;
+    }
+    return HAL_I2C_Master_Transmit(hi2c, DevAddress << 1, data, length, HAL_MAX_DELAY);
+}
+
+int xi2c_write_and_read(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *wbuf, uint16_t wlen, uint8_t *rbuf, uint16_t rlen) {
+    txComplete = 0;
+    rxComplete = 0;
+    i2cError = 0;
+
+    if (HAL_I2C_Master_Seq_Transmit_IT(hi2c, DevAddress << 1, wbuf, wlen, I2C_FIRST_FRAME) != HAL_OK)
+        return -1;
+
+    // Wait for the transmission to complete
+    uint32_t t0 = HAL_GetTick();
+    while (!txComplete && !i2cError) {
+        // printf("~");
+        if ((HAL_GetTick() - t0) >= TIMEOUT_MS){
+            printf("I2C receive timeout\r\n");
+            uint32_t t3 = HAL_GetTick();
+            printf("I2C receive took %lu ms\r\n", t3 - t0);
+            printf("txcomplete: %d, i2cError: %d\r\n", txComplete, i2cError);
+            return HAL_ERROR;
+        }
+    }
+    uint32_t t_diff = HAL_GetTick() - t0;
+    if(t_diff > 0)
+        printf("                           I2C write took %lu ms\r\n", t_diff); // ????? why is this always 0??????? 
+    // printf("T0: %lu\r\n", t0);
+    // printf("T1: %lu\r\n", t1);
+    if (i2cError)
+    {
+        return HAL_ERROR;
+    }
+
+
+    if (HAL_I2C_Master_Seq_Receive_IT(hi2c, DevAddress << 1, rbuf, rlen, I2C_LAST_FRAME) != HAL_OK)
+        return -1;
+
+    // Wait for the reception to complete
+    t0 = HAL_GetTick();
+    while (!rxComplete && !i2cError) {
+    	if ((HAL_GetTick() - t0) >= TIMEOUT_MS) return HAL_ERROR;
+    }
+
+    if (i2cError)
+    {
+        return HAL_ERROR;
+    }
+
+    return HAL_OK;
+}
+
+
+// Callback implementations
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+    txComplete = 1;
+}
+
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+    rxComplete = 1;
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
+{
+    i2cError = 1;
+}
+
