@@ -145,6 +145,13 @@ extern TIM_HandleTypeDef htim16;
 #define BIT_6    ( 1 << 6 )
 #define BIT_7    ( 1 << 7 )
 
+struct regval_list {
+	uint16_t addr;
+	uint8_t data;
+};
+
+
+
 void vTaskWaitForAllBits();
 
 /* USER CODE END Private defines */

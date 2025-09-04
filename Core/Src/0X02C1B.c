@@ -7,61 +7,10 @@
 #include "0X02C1B.h"
 #include "X02C1B_Sensor_Config.h"
 #include "utils.h"
+#include "i2c_master.h"
 #include <stdio.h>
 
 volatile _Bool ext_fsin_enabled = false;
-#define I2C_TIMEOUT 1000 // Set an appropriate timeout for I2C transactions
-
-static int X02C1B_write(I2C_HandleTypeDef * pI2c, uint16_t reg, uint8_t val)
-{
-    uint8_t data[3] = { reg >> 8, reg & 0xff, val };
-
-    if (HAL_I2C_GetState(pI2c) != HAL_I2C_STATE_READY) {
-        printf("===> ERROR: I2C Not in ready state\r\n");
-        return -1;
-    }
-
-    if (HAL_I2C_Master_Transmit(pI2c, (uint16_t)(X02C1B_ADDRESS << 1), data, 3, I2C_TIMEOUT) != HAL_OK) {
-        printf("===> ERROR: I2C Transmission failed\r\n");
-        return -1;
-    }
-
-    return 0;
-}
-
-static int X02C1B_read(I2C_HandleTypeDef * pI2c, uint16_t reg, uint8_t *val)
-{
-    uint8_t buf[2] = { reg >> 8, reg & 0xff };
-
-    if (HAL_I2C_GetState(pI2c) != HAL_I2C_STATE_READY) {
-        printf("===> ERROR: I2C Not in ready state\r\n");
-        return -1;
-    }
-
-    if (HAL_I2C_Master_Transmit(pI2c, (uint16_t)(X02C1B_ADDRESS << 1), buf, 2, I2C_TIMEOUT) != HAL_OK) {
-        printf("===> ERROR: I2C Write failed\r\n");
-        Error_Handler();
-    }
-
-    if (HAL_I2C_Master_Receive(pI2c, (uint16_t)(X02C1B_ADDRESS << 1), val, 1, I2C_TIMEOUT) != HAL_OK) {
-        printf("===> ERROR: I2C Read failed\r\n");
-        Error_Handler();
-    }
-
-    return 0;
-}
-
-static int X02C1B_write_array(I2C_HandleTypeDef * pI2c, const struct regval_list *regs, int array_size)
-{
-    for (int i = 0; i < array_size; i++) {
-        int ret = X02C1B_write(pI2c, regs[i].addr, regs[i].data);
-        if (ret < 0) {
-            printf("Failed to write register 0x%04X\r\n", regs[i].addr);
-            return ret;
-        }
-    }
-    return 0;
-}
 
 int X02C1B_configure_sensor(CameraDevice *cam) {
 
@@ -181,7 +130,7 @@ int X02C1B_stream_off(CameraDevice *cam) {
 
 int X02C1B_detect(CameraDevice *cam)
 {
-    HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(cam->pI2c, X02C1B_ADDRESS << 1, 2, I2C_TIMEOUT);
+    HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(cam->pI2c, X02C1B_ADDRESS << 1, 2, HAL_MAX_DELAY);
     if (status != HAL_OK) {
         printf("Camera Device %d Not Ready\r\n", cam->id+1);
         return -1;
