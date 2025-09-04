@@ -44,6 +44,13 @@ extern uint32_t bitstream_len;
 
 
 static int xi2c_write_bytes(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *data, uint16_t length) {
+
+    uint32_t isr = hi2c->Instance->ISR;     // H7/I2C v2
+    int busy = (isr & I2C_ISR_BUSY) != 0;
+    if(busy){
+        printf("I2C bus is busy, ISR=0x%08lx\r\n", isr);
+        return HAL_ERROR;
+    }
     return HAL_I2C_Master_Transmit(hi2c, DevAddress << 1, data, length, HAL_MAX_DELAY);
 }
 
@@ -305,7 +312,12 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
         uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
         if(verbose_on) printf("Sending Activation Key, Attempt %d...\r\n", attempt);
         HAL_Delay(5);
-		xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
+	    int ret = xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
+        if(ret != HAL_OK){
+            printf("ERROR: Failed to send Activation Key on attempt %d\r\n", attempt);
+            continue;
+        }
+        printf("xi2c_write_bytes returned: %d\r\n", ret);
         HAL_Delay(15); // remove this once you can guarantee that i2c_write_bytes works correctly
         HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
 		HAL_Delay(10);
