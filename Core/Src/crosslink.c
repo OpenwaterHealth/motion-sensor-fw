@@ -18,7 +18,6 @@
 #include <stdint.h>
 
 #define I2C_ADDRESS 0x40  // Replace with your FPGA's I2C address
-#define BITSTREAM_CHUNK_SIZE 8192
 #define CMD_INITIATE 0xC0
 #define CMD_ISSUE 0x74
 #define CMD_ENABLE_SRAM 0xC6
@@ -40,69 +39,6 @@ unsigned char read_buf[4];
 const uint8_t max_attempts = 3;
 extern uint8_t bitstream_buffer[];
 extern uint32_t bitstream_len;
-
-static HAL_StatusTypeDef xi2c_write_long(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *cmd, int cmd_len, uint8_t *data, size_t data_len) {
-	HAL_StatusTypeDef ret;
-    size_t offset = 0;
-    uint32_t frame_flag;
-    size_t total_len = data_len+cmd_len;
-    int num_chunks = (total_len + BITSTREAM_CHUNK_SIZE - 1) / BITSTREAM_CHUNK_SIZE;  // Calculate number of chunks
-    uint8_t *pData;
-	uint16_t datalen;
-
-	memset(bitstream_buffer, 0, MAX_BITSTREAM_SIZE);
-    memcpy(bitstream_buffer, cmd, cmd_len);  // copy the long write command in
-    memcpy(bitstream_buffer + cmd_len, data, data_len);
-
-    for (int i = 0; i < num_chunks; i++) {
-        size_t current_chunk_size = (total_len - offset > BITSTREAM_CHUNK_SIZE)
-                                     ? BITSTREAM_CHUNK_SIZE
-                                     : (total_len - offset);
-
-        // Determine frame flags
-        if (i == 0 && num_chunks == 1) {
-            frame_flag = I2C_FIRST_AND_LAST_FRAME;
-        } else if (i == 0) {
-            frame_flag = I2C_FIRST_AND_NEXT_FRAME;
-        } else if (i == num_chunks - 1) {
-            frame_flag = I2C_LAST_FRAME;
-        } else {
-            frame_flag = I2C_NEXT_FRAME;
-        }
-
-        // Check if the I2C peripheral is ready
-        while (HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY) {
-            //if(verbose_on) printf("I2C busy, waiting...\r\n");
-            HAL_Delay(1);  // Add a small delay to avoid busy looping
-        }
-
-        pData = (uint8_t*)&bitstream_buffer[offset];
-        datalen = (uint16_t)current_chunk_size;
-
-        // Reset completion flags
-        txComplete = 0;
-        i2cError = 0;
-
-        // Transmit the current chunk
-        ret = HAL_I2C_Master_Seq_Transmit_IT(hi2c, DevAddress << 1, pData, datalen, frame_flag);
-        if (ret != HAL_OK) {
-        	printf("++++> i2c_write_long HAL TX HAL_StatusTypeDef: 0%04X I2C_ERROR: 0%04lX\r\n", ret, hi2c1.ErrorCode);
-            return ret; // Return if any transmission fails
-        }
-
-        // Wait for the transmission to complete
-        while (!txComplete && !i2cError) {}
-
-        if (i2cError)
-        {
-            return HAL_ERROR;
-        }
-
-        offset += current_chunk_size;
-    }
-
-    return HAL_OK;
-}
 
 int fpga_send_activation(I2C_HandleTypeDef *hi2c, uint16_t DevAddress)
 {
