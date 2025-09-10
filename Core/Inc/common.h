@@ -16,7 +16,7 @@
 #define MAX_BITSTREAM_SIZE 200 * 1024
 #define COMMAND_MAX_SIZE 2048*3
 
-#define SPI_PACKET_LENGTH 4096
+#define SPI_PACKET_LENGTH 4100
 #define USART_PACKET_LENGTH 4100
 
 #define verbose_on true
