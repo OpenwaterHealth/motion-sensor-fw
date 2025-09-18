@@ -314,6 +314,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
   	comms_host_check_received(); // check comms  
+    check_streaming();
   }
 
   /* USER CODE END 3 */
@@ -1519,19 +1520,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM4) // Call data sender (internal FSIN))
   {
-    if (fake_data_gen) // Call FAKE data sender if enabled)
-    {
-      send_fake_data();
-    }
-    else {
-      if(!send_histogram_data()){
-    	  printf("Failed to send histogram data\r\n");
-      }
-      event_bits = 0x00;
-      poll_camera_temperatures();
-    }
-    
-    // send_data_flag = true; // trigger the send event
+    send_data();
   }
 }
 
@@ -1539,18 +1528,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {     
     if (GPIO_Pin == GPIO_PIN_13) // Call REAL data sender if interrupt hit and enabled
     {
-      if (fake_data_gen) // Call FAKE data sender if enabled)
-      {
-          send_fake_data();
-      }
-      else {
-        if(!send_histogram_data()){
-      	  printf("Failed to send histogram data\r\n");
-        }
-        event_bits = 0x00;
-        poll_camera_temperatures();
-      }
-  }
+      send_data();
+    }
 }
 
 /* USER CODE END 4 */

@@ -47,6 +47,16 @@ extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
+
+// Variables for keeping track of statisticss
+uint32_t total_frames_sent = 0;
+uint32_t total_frames_failed = 0;
+
+#define STREAMING_TIMEOUT_MS 75
+uint32_t most_recent_frame_time = 0;
+uint32_t streaming_start_time = 0;
+bool streaming_active = false;
+
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
 
 
@@ -969,6 +979,48 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	return ret;
 }
 
+_Bool send_data(void) {
+
+	// Take care of statistics
+	if(!streaming_active){
+		streaming_start_time = HAL_GetTick();
+		streaming_active = true;
+	}
+	most_recent_frame_time = HAL_GetTick();
+
+	bool success = false;
+	if (fake_data_gen) // Call FAKE data sender if enabled)
+    {
+        success = send_fake_data();
+    }
+    else {
+       success = send_histogram_data();
+    }
+	event_bits = 0x00;
+	poll_camera_temperatures();
+
+    if (success) {
+		total_frames_sent++;
+	} else {
+		total_frames_failed++;
+	}
+	return success;
+}
+
+_Bool check_streaming(void){
+	if(streaming_active){
+		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
+			send_data();
+			uint32_t elapsed = HAL_GetTick() - streaming_start_time;
+			printf("Streaming stopped after %lu ms\r\n", elapsed);
+			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
+			total_frames_sent = 0;
+			total_frames_failed = 0;
+			streaming_active = false;
+		}
+	}
+	return streaming_active;
+}
 _Bool send_histogram_data(void) {
 	_Bool status = true;
 	int offset = 0;
@@ -979,6 +1031,8 @@ _Bool send_histogram_data(void) {
 			count++;
 		}
 	}
+	if(count == 0)
+		printf("No cameras have data to send\r\n");
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
     uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
@@ -1132,6 +1186,21 @@ _Bool send_fake_data(void) {
 _Bool start_data_reception(uint8_t cam_id){
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
+
+    // Check if the device is BUSY
+    if (cam.useUsart) {
+        if (cam.pUart->State == HAL_USART_STATE_BUSY_RX ||
+            cam.pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
+				printf("USART busy\r\n");
+				return false;  // Device is busy, don't start another reception
+        }
+    } else {
+        if (cam.pSpi->State == HAL_SPI_STATE_BUSY_RX ||
+            cam.pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+            printf("SPI busy\r\n");
+            return false;  // Device is busy, don't start another reception
+        }
+	}
 
 	if (cam.useUsart) {
 		if (cam.useDma) {

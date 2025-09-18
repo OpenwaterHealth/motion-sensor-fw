@@ -69,16 +69,16 @@ _Bool capture_single_histogram(uint8_t cam_id);
 _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len);
 _Bool start_data_reception(uint8_t cam_id);
 _Bool abort_data_reception(uint8_t cam_id);
+_Bool send_data(void);
 _Bool send_fake_data(void);
 _Bool send_histogram_data(void);
 _Bool enable_camera_stream(uint8_t cam_id);
 _Bool disable_camera_stream(uint8_t cam_id);
 uint8_t get_camera_status(uint8_t cam_id);
-
+_Bool check_streaming(void);
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);
-
 uint32_t read_status_fpga(uint8_t cam_id);
 uint32_t read_usercode_fpga(uint8_t cam_id);
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update);
