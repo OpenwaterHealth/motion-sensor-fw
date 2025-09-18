@@ -1016,6 +1016,7 @@ _Bool check_streaming(void){
 			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
 			total_frames_sent = 0;
 			total_frames_failed = 0;
+			abort_all_data_receptions();
 			streaming_active = false;
 		}
 	}
@@ -1241,7 +1242,7 @@ _Bool start_data_reception(uint8_t cam_id){
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
-	printf("Abort C: %d\r\n",cam_id);
+	// printf("Abort C: %d\r\n",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
@@ -1279,12 +1280,14 @@ _Bool abort_data_reception(uint8_t cam_id){
 }
 
 _Bool abort_all_data_receptions(void){
+	printf("Abort All\r\n");
 	_Bool status = true;
 	for(int i=0; i<CAMERA_COUNT; i++){
-		if(event_bits_enabled & (1 << i)){
+		// if(event_bits_enabled & (1 << i)){
 			status &= abort_data_reception(i);
-		}
+		// }
 	}
+	event_bits_enabled = 0x00;
 	return status;
 }
 
@@ -1335,12 +1338,12 @@ _Bool enable_camera_stream(uint8_t cam_id){
 
 _Bool disable_camera_stream(uint8_t cam_id){
 //	printf("Disable C: %d\r\n",cam_id);
-	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("Camera %d already disabled\r\n", cam_id+1);
 		return true;
 	}
+
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
@@ -1348,22 +1351,19 @@ _Bool disable_camera_stream(uint8_t cam_id){
 			printf("failed to select Camera %d channel\r\n", cam_id+1);
 			return false;
 		}
+	bool status = false;
 
-	status |= abort_data_reception(cam_id);
-	status |= (X02C1B_stream_off(cam) < 0); // returns -1 if failed
-
+	status |= (X02C1B_stream_off(cam) == 0); // 0 if successful, -1 if failed
 	delay_us(200);
-
-	status |= (X02C1B_soft_reset(cam) < 0); 
+	status |= (X02C1B_soft_reset(cam) == 0); // 0 if successful, -1 if failed
 
 	if(!status)
 	{
 		printf("Failed to stop camera %d stream\r\n", cam_id+1);
 		return false;
 	}
-	event_bits_enabled &= ~(1 << cam_id);
+
 	cam->streaming_enabled = false;
-	cam->isConfigured = false;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 //	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
