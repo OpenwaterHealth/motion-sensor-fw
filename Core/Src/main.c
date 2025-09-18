@@ -1528,7 +1528,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     	  printf("Failed to send histogram data\r\n");
       }
       event_bits = 0x00;
-      PollCameraTemperatures();
+      poll_camera_temperatures();
     }
     
     // send_data_flag = true; // trigger the send event
@@ -1548,7 +1548,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       	  printf("Failed to send histogram data\r\n");
         }
         event_bits = 0x00;
-        PollCameraTemperatures();
+        poll_camera_temperatures();
       }
   }
 }
