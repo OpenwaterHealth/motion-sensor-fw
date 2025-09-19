@@ -104,6 +104,8 @@ void init_camera_sensors() {
 	cam_array[0].gpio0_pin = GPIO0_1_Pin;
 	cam_array[0].gpio1_port = GPIOA;
 	cam_array[0].gpio1_pin = GPIO_PIN_2;
+	cam_array[0].power_port = CAM_PWR_1_GPIO_Port;
+	cam_array[0].power_pin = CAM_PWR_1_Pin;
 	cam_array[0].useUsart = true;
 	cam_array[0].useDma = true;
 	cam_array[0].pI2c = &hi2c1;
@@ -120,6 +122,8 @@ void init_camera_sensors() {
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
 	cam_array[1].gpio1_port = GPIOA;
 	cam_array[1].gpio1_pin = GPIO_PIN_6;
+	cam_array[1].power_port = CAM_PWR_2_GPIO_Port;
+	cam_array[1].power_pin = CAM_PWR_2_Pin;
 	cam_array[1].useUsart = false;
 	cam_array[1].useDma = true;
 	cam_array[1].pI2c = &hi2c1;
@@ -136,6 +140,8 @@ void init_camera_sensors() {
 	cam_array[2].gpio0_pin = GPIO0_3_Pin;
 	cam_array[2].gpio1_port = GPIOD;
 	cam_array[2].gpio1_pin = GPIO_PIN_8;
+	cam_array[2].power_port = CAM_PWR_3_GPIO_Port;
+	cam_array[2].power_pin = CAM_PWR_3_Pin;
 	cam_array[2].useUsart = true;
 	cam_array[2].useDma = true;
 	cam_array[2].pI2c = &hi2c1;
@@ -152,6 +158,8 @@ void init_camera_sensors() {
 	cam_array[3].gpio0_pin = GPIO0_4_Pin;
 	cam_array[3].gpio1_port = GPIOC;
 	cam_array[3].gpio1_pin = GPIO_PIN_6;
+	cam_array[3].power_port = CAM_PWR_4_GPIO_Port;
+	cam_array[3].power_pin = CAM_PWR_4_Pin;
 	cam_array[3].useUsart = true;
 	cam_array[3].useDma = true;
 	cam_array[3].pI2c = &hi2c1;
@@ -168,6 +176,8 @@ void init_camera_sensors() {
 	cam_array[4].gpio0_pin = GPIO0_5_Pin;
 	cam_array[4].gpio1_port = GPIOA;
 	cam_array[4].gpio1_pin = GPIO_PIN_9;
+	cam_array[4].power_port = CAM_PWR_5_GPIO_Port;
+	cam_array[4].power_pin = CAM_PWR_5_Pin;
 	cam_array[4].useUsart = true;
 	cam_array[4].useDma = true;
 	cam_array[4].pI2c = &hi2c1;
@@ -184,6 +194,8 @@ void init_camera_sensors() {
 	cam_array[5].gpio0_pin = GPIO0_6_Pin;
 	cam_array[5].gpio1_port = GPIOC;
 	cam_array[5].gpio1_pin = GPIO_PIN_11;
+	cam_array[5].power_port = CAM_PWR_6_GPIO_Port;
+	cam_array[5].power_pin = CAM_PWR_6_Pin;
 	cam_array[5].useUsart = false;
 	cam_array[5].useDma = true;
 	cam_array[5].pI2c = &hi2c1;
@@ -200,6 +212,8 @@ void init_camera_sensors() {
 	cam_array[6].gpio0_pin = GPIO0_7_Pin;
 	cam_array[6].gpio1_port = GPIOB;
 	cam_array[6].gpio1_pin = GPIO_PIN_14;
+	cam_array[6].power_port = CAM_PWR_7_GPIO_Port;
+	cam_array[6].power_pin = CAM_PWR_7_Pin;
 	cam_array[6].useUsart = false;
 	cam_array[6].useDma = true;
 	cam_array[6].pI2c = &hi2c1;
@@ -216,6 +230,8 @@ void init_camera_sensors() {
 	cam_array[7].gpio0_pin = GPIO0_8_Pin;
 	cam_array[7].gpio1_port = GPIOE;
 	cam_array[7].gpio1_pin = GPIO_PIN_5;
+	cam_array[7].power_port = CAM_PWR_8_GPIO_Port;
+	cam_array[7].power_pin = CAM_PWR_8_Pin;
 	cam_array[7].useUsart = false;
 	cam_array[7].useDma = true;
 	cam_array[7].pI2c = &hi2c1;
@@ -1022,6 +1038,7 @@ _Bool check_streaming(void){
 	}
 	return streaming_active;
 }
+
 _Bool send_histogram_data(void) {
 	_Bool status = true;
 	int offset = 0;
@@ -1378,3 +1395,36 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 	return status;
 }
 /* -------- END HISTOGRAM TRANSFER FUNCTIONS -------- */
+
+/* -------- BEGIN CAMERA POWER TOGGLE FUNCTIONS -------- */
+_Bool enable_camera_power(uint8_t cam_id){
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Enable Power for Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+
+	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
+	HAL_Delay(10); // wait for power to stabilize
+
+	printf("Enabled Power for Camera %d\r\n", cam_id+1);
+	return true;
+}
+
+_Bool disable_camera_power(uint8_t cam_id){
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Disable Power for Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+
+	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
+	HAL_Delay(10); // wait for power to stabilize
+
+	printf("Disabled Power for Camera %d\r\n", cam_id+1);
+	return true;
+}
