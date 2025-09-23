@@ -256,7 +256,7 @@ int main(void)
   printf("Initializing, please wait ...\r\n");
 
   // enable HS USB MUX
-  HAL_GPIO_WritePin(USB_MUX_GPIO_Port, USB_MUX_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(USB_MUX_GPIO_Port, USB_MUX_Pin, GPIO_PIN_RESET);
 
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
@@ -1343,7 +1343,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|MUX_RESET_Pin|USB_MUX_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, USB_RESET_Pin|CAM_PWR_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, CAM_PWR_1_Pin|CAM_PWR_5_Pin|CAM_PWR_8_Pin|CAM_PWR_4_Pin
@@ -1351,6 +1351,9 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, CAM_PWR_7_Pin|CAM_PWR_2_Pin|FSIN_EN_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(CAM_PWR_3_GPIO_Port, CAM_PWR_3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CAM_PWR_6_GPIO_Port, CAM_PWR_6_Pin, GPIO_PIN_SET);
