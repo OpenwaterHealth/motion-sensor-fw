@@ -103,6 +103,8 @@ void Error_Handler(void);
 #define CAM_PWR_2_GPIO_Port GPIOE
 #define CAM_PWR_4_Pin GPIO_PIN_15
 #define CAM_PWR_4_GPIO_Port GPIOD
+#define FAN_CTL_Pin GPIO_PIN_11
+#define FAN_CTL_GPIO_Port GPIOD
 #define IMU_FSYNC_Pin GPIO_PIN_1
 #define IMU_FSYNC_GPIO_Port GPIOA
 #define IMU_INT_Pin GPIO_PIN_5
