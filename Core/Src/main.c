@@ -1462,9 +1462,29 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 // Error handling callback for USART
 void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 {
-  // Identify specific errors using error codes
-  printf("USART Error occurred: ");
+  // Print which USART instance caused the error
+  if (husart->Instance == USART1)
+  {
+    printf("Error in USART1: ");
+  }
+  else if (husart->Instance == USART2)
+  {
+    printf("Error in USART2: ");
+  }
+  else if (husart->Instance == USART3)
+  {
+    printf("Error in USART3: ");
+  }
+  else if (husart->Instance == USART6)
+  {
+    printf("Error in USART6: ");
+  }
+  else
+  {
+    printf("Error in Unknown USART instance: ");
+  }
 
+  // Identify specific errors using error codes
   if (husart->ErrorCode & HAL_USART_ERROR_PE)
   {
     printf("Parity error ");
@@ -1493,8 +1513,29 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 // Error handling callback for SPI
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
+  // Print which SPI instance caused the error
+  if (hspi->Instance == SPI2)
+  {
+    printf("Error in SPI2: ");
+  }
+  else if (hspi->Instance == SPI3)
+  {
+    printf("Error in SPI3: ");
+  }
+  else if (hspi->Instance == SPI4)
+  {
+    printf("Error in SPI4: ");
+  }
+  else if (hspi->Instance == SPI6)
+  {
+    printf("Error in SPI6: ");
+  }
+  else
+  {
+    printf("Error in Unknown SPI instance: ");
+  }
+  
   // Identify specific errors using error codes
-  printf("SPI Error occurred: ");
   if (hspi->ErrorCode & HAL_SPI_ERROR_OVR)
   {
     printf("Overrun error ");
