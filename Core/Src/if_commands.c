@@ -646,6 +646,36 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
+
+	case OW_CAMERA_POWER_ON:
+		uartResp->command = OW_CAMERA_POWER_ON;
+		uartResp->packet_type = OW_RESP;
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	if(!enable_camera_power(i))
+	        	{
+	    			uartResp->packet_type = OW_ERROR;
+	    			printf("Failed to power on camera %d\r\n", i);
+
+	        	}
+	        }
+	    }
+		break;
+
+	case OW_CAMERA_POWER_OFF:
+		uartResp->command = OW_CAMERA_POWER_OFF;
+		uartResp->packet_type = OW_RESP;
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	if(!disable_camera_power(i))
+	        	{
+	    			uartResp->packet_type = OW_ERROR;
+	    			printf("Failed to power off camera %d\r\n", i);
+	        	}
+	        }
+	    }
+		break;
+
 	default:
 		uartResp->data_len = 0;
 		uartResp->command = cmd.command;

@@ -17,6 +17,8 @@ typedef struct {
 	uint16_t  		gpio0_pin;
 	GPIO_TypeDef *	gpio1_port;
 	uint16_t  		gpio1_pin;
+	GPIO_TypeDef *	power_port;
+	uint16_t  		power_pin; 
 	I2C_HandleTypeDef * pI2c;
 	uint8_t  		device_address;
 	bool 			useUsart; // use usart over spi
@@ -69,16 +71,19 @@ _Bool capture_single_histogram(uint8_t cam_id);
 _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len);
 _Bool start_data_reception(uint8_t cam_id);
 _Bool abort_data_reception(uint8_t cam_id);
+_Bool abort_all_data_receptions(void);
+_Bool send_data(void);
 _Bool send_fake_data(void);
 _Bool send_histogram_data(void);
 _Bool enable_camera_stream(uint8_t cam_id);
 _Bool disable_camera_stream(uint8_t cam_id);
 uint8_t get_camera_status(uint8_t cam_id);
-
+_Bool check_streaming(void);
+_Bool enable_camera_power(uint8_t cam_id);
+_Bool disable_camera_power(uint8_t cam_id);
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);
-
 uint32_t read_status_fpga(uint8_t cam_id);
 uint32_t read_usercode_fpga(uint8_t cam_id);
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update);
@@ -94,7 +99,7 @@ void print_active_cameras(uint8_t cameras_present);
 void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
 void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
-void PollCameraTemperatures(void);
+void poll_camera_temperatures(void);
 void scan_camera_sensors(bool scanI2cAtStart);
 
 #endif /* INC_CAMERA_MANAGER_H_ */

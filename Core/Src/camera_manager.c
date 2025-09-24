@@ -47,45 +47,18 @@ extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
+
+// Variables for keeping track of statisticss
+uint32_t total_frames_sent = 0;
+uint32_t total_frames_failed = 0;
+
+#define STREAMING_TIMEOUT_MS 75
+uint32_t most_recent_frame_time = 0;
+uint32_t streaming_start_time = 0;
+bool streaming_active = false;
+
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
 
-
-static void generate_fake_histogram(uint8_t *histogram_data) {
-    // Cast the byte buffer to uint32_t pointer to store histogram data
-    uint32_t *histogram = (uint32_t *)histogram_data;
-
-    // Initialize histogram bins to zero
-    memset(histogram, 0, HISTOGRAM_DATA_SIZE/4);
-
-    // Generate random 10-bit grayscale image and compute histogram
-    switch(HISTO_TEST_PATTERN){
-    	case 0: // this one will run VERY slow but look like an actual histo. run once at startup.
-			for (int i = 0; i < WIDTH * HEIGHT; i++) {
-					uint32_t pixel_value = rand() % HISTOGRAM_BINS; // Random 10-bit value (0-1023)
-					histogram[pixel_value]++;
-				}
-			break;
-    	case 1:
-    		for(int i=0;i<HISTOGRAM_BINS;i++){
-    			histogram[i] = (uint32_t) (i + frame_id);
-    		}
-			break;
-		case 2:
-    		for(int i=0;i<HISTOGRAM_BINS;i++){
-    			histogram[i] =  (uint32_t) 0xAAAAAAAA;
-    		}
-			break;
-		case 3:
-			for(int i=0;i<HISTOGRAM_BINS;i++){
-    			histogram[i] =  i;//(i>HISTOGRAM_BINS) ? (uint32_t) 1024: 2048;
-    		}
-			break;
-		
-    }
-
-	histogram_data[0]+= 0x06;
-    histogram[HISTOGRAM_BINS-1] |= ((uint32_t) frame_id)<<24; // fill in the frame_id to the last bin's spacer
-}
 
 static void init_camera(CameraDevice *cam){
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -120,7 +93,6 @@ static void init_camera(CameraDevice *cam){
 	cam->isProgrammed = false;
 }
 
-
 void init_camera_sensors() {
 	int i = 0;
 
@@ -132,6 +104,8 @@ void init_camera_sensors() {
 	cam_array[0].gpio0_pin = GPIO0_1_Pin;
 	cam_array[0].gpio1_port = GPIOA;
 	cam_array[0].gpio1_pin = GPIO_PIN_2;
+	cam_array[0].power_port = CAM_PWR_1_GPIO_Port;
+	cam_array[0].power_pin = CAM_PWR_1_Pin;
 	cam_array[0].useUsart = true;
 	cam_array[0].useDma = true;
 	cam_array[0].pI2c = &hi2c1;
@@ -148,6 +122,8 @@ void init_camera_sensors() {
 	cam_array[1].gpio0_pin = GPIO0_2_Pin;
 	cam_array[1].gpio1_port = GPIOA;
 	cam_array[1].gpio1_pin = GPIO_PIN_6;
+	cam_array[1].power_port = CAM_PWR_2_GPIO_Port;
+	cam_array[1].power_pin = CAM_PWR_2_Pin;
 	cam_array[1].useUsart = false;
 	cam_array[1].useDma = true;
 	cam_array[1].pI2c = &hi2c1;
@@ -164,6 +140,8 @@ void init_camera_sensors() {
 	cam_array[2].gpio0_pin = GPIO0_3_Pin;
 	cam_array[2].gpio1_port = GPIOD;
 	cam_array[2].gpio1_pin = GPIO_PIN_8;
+	cam_array[2].power_port = CAM_PWR_3_GPIO_Port;
+	cam_array[2].power_pin = CAM_PWR_3_Pin;
 	cam_array[2].useUsart = true;
 	cam_array[2].useDma = true;
 	cam_array[2].pI2c = &hi2c1;
@@ -180,6 +158,8 @@ void init_camera_sensors() {
 	cam_array[3].gpio0_pin = GPIO0_4_Pin;
 	cam_array[3].gpio1_port = GPIOC;
 	cam_array[3].gpio1_pin = GPIO_PIN_6;
+	cam_array[3].power_port = CAM_PWR_4_GPIO_Port;
+	cam_array[3].power_pin = CAM_PWR_4_Pin;
 	cam_array[3].useUsart = true;
 	cam_array[3].useDma = true;
 	cam_array[3].pI2c = &hi2c1;
@@ -196,6 +176,8 @@ void init_camera_sensors() {
 	cam_array[4].gpio0_pin = GPIO0_5_Pin;
 	cam_array[4].gpio1_port = GPIOB;
 	cam_array[4].gpio1_pin = GPIO_PIN_6;
+	cam_array[4].power_port = CAM_PWR_5_GPIO_Port;
+	cam_array[4].power_pin = CAM_PWR_5_Pin;
 	cam_array[4].useUsart = true;
 	cam_array[4].useDma = true;
 	cam_array[4].pI2c = &hi2c1;
@@ -212,6 +194,8 @@ void init_camera_sensors() {
 	cam_array[5].gpio0_pin = GPIO0_6_Pin;
 	cam_array[5].gpio1_port = GPIOC;
 	cam_array[5].gpio1_pin = GPIO_PIN_11;
+	cam_array[5].power_port = CAM_PWR_6_GPIO_Port;
+	cam_array[5].power_pin = CAM_PWR_6_Pin;
 	cam_array[5].useUsart = false;
 	cam_array[5].useDma = true;
 	cam_array[5].pI2c = &hi2c1;
@@ -228,6 +212,8 @@ void init_camera_sensors() {
 	cam_array[6].gpio0_pin = GPIO0_7_Pin;
 	cam_array[6].gpio1_port = GPIOB;
 	cam_array[6].gpio1_pin = GPIO_PIN_14;
+	cam_array[6].power_port = CAM_PWR_7_GPIO_Port;
+	cam_array[6].power_pin = CAM_PWR_7_Pin;
 	cam_array[6].useUsart = false;
 	cam_array[6].useDma = true;
 	cam_array[6].pI2c = &hi2c1;
@@ -244,6 +230,8 @@ void init_camera_sensors() {
 	cam_array[7].gpio0_pin = GPIO0_8_Pin;
 	cam_array[7].gpio1_port = GPIOE;
 	cam_array[7].gpio1_pin = GPIO_PIN_5;
+	cam_array[7].power_port = CAM_PWR_8_GPIO_Port;
+	cam_array[7].power_pin = CAM_PWR_8_Pin;
 	cam_array[7].useUsart = false;
 	cam_array[7].useDma = true;
 	cam_array[7].pI2c = &hi2c1;
@@ -266,43 +254,6 @@ void init_camera_sensors() {
 	fill_frame_buffers();
 }
 
-void scan_camera_sensors(bool scanI2cAtStart){
-  // Scan for I2C cameras
-  for (int i = 0; i < CAMERA_COUNT; i++)
-  {
-	uint8_t addresses_found[10];
-	uint8_t found;
-	bool camera_found = false, fpga_found = false;
-
-	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
-	HAL_Delay(10);
-
-	if (scanI2cAtStart)
-	  printf("I2C Scanning bus %d\r\n", i + 1);
-	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
-
-	for (int j = 0; j < found; j++)
-	{
-	  if (addresses_found[j] == 0x36)
-		camera_found = true;
-	  else if (addresses_found[j] == 0x40)
-		fpga_found = true;
-	}
-
-	if (camera_found && fpga_found)
-	  cameras_present |= 0x01 << i;
-	else
-	  printf("Camera %d not found\r\n", i + 1);
-  }
-
-  if (cameras_present == 0xFF)
-  {
-	printf("All cameras found\r\n");
-  }else{
-	  print_active_cameras(cameras_present);
-  }
-}
-
 CameraDevice* get_active_cam(void) {
 	return &cam_array[_active_cam_idx];
 }
@@ -320,6 +271,123 @@ CameraDevice* get_camera_byID(int id) {
 	return &cam_array[id];
 }
 
+// Get SPI/USART status for the specified camera ID
+// Returns a bitfield where each bit indicates a specific status:
+//
+// Bit 0: SPI or USART state is READY
+// Bit 1: Camera firmware is programmed
+// Bit 2: Camera is configured
+// Bit 7: Streaming is enabled
+//
+// Bits 3–6: Reserved (unused)
+//
+uint8_t get_camera_status(uint8_t cam_id) {
+	
+	uint8_t status_flags = 0x00;
+
+	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
+		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+	if (cam->useUsart) {
+		HAL_USART_StateTypeDef usart_state;
+		usart_state = HAL_USART_GetState(cam->pUart);
+		
+		if(usart_state == HAL_USART_STATE_READY) {			
+			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			// Print the USART state for debugging
+			if(usart_state == HAL_USART_STATE_RESET){
+				printf("USART state: HAL_USART_STATE_RESET\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY){
+				printf("USART state: HAL_USART_STATE_BUSY\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
+				printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_TIMEOUT){
+				printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
+			}
+			else if(usart_state == HAL_USART_STATE_ERROR){
+				printf("USART state: HAL_USART_STATE_ERROR\r\n");
+			}
+			else{
+				printf("USART state: Unknown\r\n");
+			}
+		}
+	} else {
+		HAL_SPI_StateTypeDef spi_state;
+		spi_state = HAL_SPI_GetState(cam->pSpi);
+		if(spi_state == HAL_SPI_STATE_READY) {			
+			status_flags |= (1 << 0);  // Set bit 0
+		} else {
+			// Print the SPI state for debugging
+			if(spi_state == HAL_SPI_STATE_RESET){
+				printf("SPI state: HAL_SPI_STATE_RESET\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY){
+				printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
+				printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ERROR){
+				printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
+			}
+			else if(spi_state == HAL_SPI_STATE_ABORT){
+				printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
+			}
+			else{
+				printf("SPI state: Unknown\r\n");
+			}
+		}
+	}
+
+	if(cam->isProgrammed) {
+		status_flags |= (1 << 1);  // Set bit 1
+	}
+
+	if(cam->isConfigured) {
+		status_flags |= (1 << 2);  // Set bit 2		
+	}
+
+	if(cam->streaming_enabled) {
+		status_flags |= (1 << 7);  // Set bit 7		
+	}
+
+	return status_flags;
+}
+
+void print_active_cameras(uint8_t cameras_present)
+{
+    printf("Active cameras: ");
+    for (int i = 0; i < 8; ++i)
+    {
+        if (cameras_present & (1 << i))
+        {
+            printf("%d ", i + 1);  // Cameras are 1-based
+        }
+    }
+    printf("\r\n");
+}
+
+
+/* -------- START FPGA FUNCTIONS -------- */
 _Bool reset_camera(uint8_t cam_id)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
@@ -642,6 +710,45 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 
 	return true;
 }
+/* -------- END FPGA FUNCTIONS -------- */
+
+/* -------- START CAMERA I2C FUNCTIONS -------- */
+void scan_camera_sensors(bool scanI2cAtStart){
+  // Scan for I2C cameras
+  for (int i = 0; i < CAMERA_COUNT; i++)
+  {
+	uint8_t addresses_found[10];
+	uint8_t found;
+	bool camera_found = false, fpga_found = false;
+
+	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
+	HAL_Delay(10);
+
+	if (scanI2cAtStart)
+	  printf("I2C Scanning bus %d\r\n", i + 1);
+	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
+
+	for (int j = 0; j < found; j++)
+	{
+	  if (addresses_found[j] == 0x36)
+		camera_found = true;
+	  else if (addresses_found[j] == 0x40)
+		fpga_found = true;
+	}
+
+	if (camera_found && fpga_found)
+	  cameras_present |= 0x01 << i;
+	else
+	  printf("Camera %d not found\r\n", i + 1);
+  }
+
+  if (cameras_present == 0xFF)
+  {
+	printf("All cameras found\r\n");
+  }else{
+	  print_active_cameras(cameras_present);
+  }
+}
 
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
@@ -706,6 +813,98 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 	return true;
 }
 
+void poll_camera_temperatures(void)
+{
+    if (HAL_GetTick() >= next_temp_ms)
+    {
+        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+
+        // Skip to next active camera
+        for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
+        {
+            uint8_t cam = next_cam_idx;
+            next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
+
+            if (cameras_present & (1 << cam))
+            {
+                CameraDevice *pCam = get_camera_byID(cam);
+                if (pCam != NULL)
+                {
+                    cam_temp[cam] = X02C1B_read_temp(pCam);
+                    break;  // One camera per 100ms interval
+                }
+            }
+        }
+
+        // If we wrapped back to camera 0, add the idle pause
+        if (next_cam_idx == 0)
+        {
+            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
+        }
+    }
+}
+/* -------- END CAMERA I2C FUNCTIONS -------- */
+/* -------- START FRAME BUFFER FUNCTIONS -------- */
+void switch_frame_buffer(void) {
+    _active_buffer = 1 - _active_buffer; // Toggle between 0 and 1
+    // Reassign each camera’s buffer pointer
+    for (int i = 0; i < CAMERA_COUNT; i++) {
+        cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
+    }
+}
+
+uint8_t* get_active_frame_buffer(void) {
+    return (uint8_t*)frame_buffer[_active_buffer];
+}
+
+uint8_t* get_inactive_frame_buffer(void) {
+    return (uint8_t*)frame_buffer[1 - _active_buffer];
+}
+
+static void generate_fake_histogram(uint8_t *histogram_data) {
+    // Cast the byte buffer to uint32_t pointer to store histogram data
+    uint32_t *histogram = (uint32_t *)histogram_data;
+
+    // Initialize histogram bins to zero
+    memset(histogram, 0, HISTOGRAM_DATA_SIZE/4);
+
+    // Generate random 10-bit grayscale image and compute histogram
+    switch(HISTO_TEST_PATTERN){
+    	case 0: // this one will run VERY slow but look like an actual histo. run once at startup.
+			for (int i = 0; i < WIDTH * HEIGHT; i++) {
+					uint32_t pixel_value = rand() % HISTOGRAM_BINS; // Random 10-bit value (0-1023)
+					histogram[pixel_value]++;
+				}
+			break;
+    	case 1:
+    		for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] = (uint32_t) (i + frame_id);
+    		}
+			break;
+		case 2:
+    		for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] =  (uint32_t) 0xAAAAAAAA;
+    		}
+			break;
+		case 3:
+			for(int i=0;i<HISTOGRAM_BINS;i++){
+    			histogram[i] =  i;//(i>HISTOGRAM_BINS) ? (uint32_t) 1024: 2048;
+    		}
+			break;
+		
+    }
+
+	histogram_data[0]+= 0x06;
+    histogram[HISTOGRAM_BINS-1] |= ((uint32_t) frame_id)<<24; // fill in the frame_id to the last bin's spacer
+}
+
+void fill_frame_buffers(void) {
+    for (int i = 0; i < CAMERA_COUNT; i++) {
+    	generate_fake_histogram(cam_array[i].pRecieveHistoBuffer);
+    }
+}
+/* -------- END FRAME BUFFER FUNCTIONS -------- */
+/* -------- START HISTOGRAM TRANSFER FUNCTIONS -------- */
 _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 {
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
@@ -796,26 +995,134 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	return ret;
 }
 
-void switch_frame_buffer(void) {
-    _active_buffer = 1 - _active_buffer; // Toggle between 0 and 1
-    // Reassign each camera’s buffer pointer
-    for (int i = 0; i < CAMERA_COUNT; i++) {
-        cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
+_Bool send_data(void) {
+
+	// Take care of statistics
+	if(!streaming_active){
+		streaming_start_time = HAL_GetTick();
+		streaming_active = true;
+	}
+	most_recent_frame_time = HAL_GetTick();
+
+	bool success = false;
+	if (fake_data_gen) // Call FAKE data sender if enabled)
+    {
+        success = send_fake_data();
     }
-}
-
-uint8_t* get_active_frame_buffer(void) {
-    return (uint8_t*)frame_buffer[_active_buffer];
-}
-
-uint8_t* get_inactive_frame_buffer(void) {
-    return (uint8_t*)frame_buffer[1 - _active_buffer];
-}
-
-void fill_frame_buffers(void) {
-    for (int i = 0; i < CAMERA_COUNT; i++) {
-    	generate_fake_histogram(cam_array[i].pRecieveHistoBuffer);
+    else {
+       success = send_histogram_data();
     }
+	event_bits = 0x00;
+	poll_camera_temperatures();
+
+    if (success) {
+		total_frames_sent++;
+	} else {
+		total_frames_failed++;
+	}
+	return success;
+}
+
+_Bool check_streaming(void){
+	if(streaming_active){
+		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
+			send_data();
+			uint32_t elapsed = HAL_GetTick() - streaming_start_time;
+			printf("Streaming stopped after %lu ms\r\n", elapsed);
+			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
+			total_frames_sent = 0;
+			total_frames_failed = 0;
+			abort_all_data_receptions();
+			streaming_active = false;
+		}
+	}
+	return streaming_active;
+}
+
+_Bool send_histogram_data(void) {
+	_Bool status = true;
+	int offset = 0;
+
+	uint8_t count = 0;
+	for (int i = 0; i < CAMERA_COUNT ; ++i) {
+		if (event_bits & (1 << i)) {
+			count++;
+		}
+	}
+	if(count == 0)
+		printf("No cameras have data to send\r\n");
+	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
+    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    if (HISTO_JSON_BUFFER_SIZE < total_size) {
+        return false;  // Buffer too small
+    }
+
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	
+	// --- Header ---
+    packet_buffer[offset++] = HISTO_SOF;
+    packet_buffer[offset++] = TYPE_HISTO;
+    packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
+    packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+	if(total_size>32833){
+		printf("Packet too large\r\n");
+	}
+
+	// --- Data ---
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
+		if((event_bits & (0x01 << cam_id)) != 0) {
+			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
+		    packet_buffer[offset++] = HISTO_SOH;
+			packet_buffer[offset++] = cam_id;
+			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
+			offset += HISTO_SIZE_32B*4;
+			
+			uint32_t temp_bits;
+			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
+
+			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 16) & 0xFF);
+			packet_buffer[offset++] = (uint8_t)((temp_bits >> 24) & 0xFF);
+
+			packet_buffer[offset++] = HISTO_EOH;
+			
+		}
+	}
+
+	// --- Footer --- 
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+    packet_buffer[offset++] = crc & 0xFF;
+    packet_buffer[offset++] = (crc >> 8) & 0xFF;
+    packet_buffer[offset++] = HISTO_EOF;
+	
+	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
+	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	uint8_t timeout_tries = 0;
+	while(tx_status != USBD_OK){
+		printf("-\r\n");
+		HAL_Delay(1);
+		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+		timeout_tries++;
+		if(timeout_tries > 2){
+			printf("F\r\n");
+			status = false;
+			usb_failed = true;
+			break;
+		}
+	}
+	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
+	// kick off the next frame reception
+	for(int i = 0;i<CAMERA_COUNT;i++){
+		if((event_bits & (0x01 << i)) != 0)
+			start_data_reception(i);
+	}
+	frame_id++;
+
+	return status;
 }
 
 _Bool send_fake_data(void) {
@@ -902,14 +1209,16 @@ _Bool start_data_reception(uint8_t cam_id){
     if (cam.useUsart) {
         if (cam.pUart->State == HAL_USART_STATE_BUSY_RX ||
             cam.pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
-            return false;  // Device is busy, don't start another reception
+				printf("USART busy\r\n");
+				return false;  // Device is busy, don't start another reception
         }
     } else {
         if (cam.pSpi->State == HAL_SPI_STATE_BUSY_RX ||
             cam.pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+            printf("SPI busy\r\n");
             return false;  // Device is busy, don't start another reception
         }
-    }
+	}
 
 	if (cam.useUsart) {
 		if (cam.useDma) {
@@ -930,6 +1239,19 @@ _Bool start_data_reception(uint8_t cam_id){
 	}
 	if (status != HAL_OK) {
 		printf("failed to setup receive for Camera %d channel\r\n", cam_id+1);
+		// Check if the device is BUSY
+		if (cam.useUsart) {
+			if (cam.pUart->State == HAL_USART_STATE_BUSY_RX ||
+				cam.pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
+					printf("USART busy\r\n");
+				}
+		} else {
+			if (cam.pSpi->State == HAL_SPI_STATE_BUSY_RX ||
+				cam.pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+				printf("SPI busy\r\n");
+			}
+		}
+		
 		abort_data_reception(cam_id);
 		return false;
 	}
@@ -937,24 +1259,53 @@ _Bool start_data_reception(uint8_t cam_id){
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
+	// printf("Abort C: %d\r\n",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
-	if(get_camera_byID(cam_id)->useUsart) {
-		if(get_camera_byID(cam_id)->useDma)
-			status = HAL_USART_Abort(get_camera_byID(cam_id)->pUart);
+	CameraDevice* cam = get_camera_byID(cam_id);
+	if(cam->useUsart) {
+		if(cam->useDma)
+			status = HAL_USART_Abort(cam->pUart);
 		else
-			status = HAL_USART_Abort_IT(get_camera_byID(cam_id)->pUart);
+			status = HAL_USART_Abort_IT(cam->pUart);
 	}
 	else{
-		if(get_camera_byID(cam_id)->useDma)
-			status = HAL_SPI_Abort(get_camera_byID(cam_id)->pSpi);
+		if(cam->useDma)
+			status = HAL_SPI_Abort(cam->pSpi);
 		else
-			status = HAL_SPI_Abort_IT(get_camera_byID(cam_id)->pSpi);
+			status = HAL_SPI_Abort_IT(cam->pSpi);
 	}
 	if (status != HAL_OK) {
 		return false;
 	}
+	HAL_Delay(10);
+	// Check if the device is BUSY
+    if (cam->useUsart) {
+        if (cam->pUart->State == HAL_USART_STATE_BUSY_RX ||
+            cam->pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
+				printf("USART still busy aborting\r\n");
+			return false;
+		}
+    } else {
+        if (cam->pSpi->State == HAL_SPI_STATE_BUSY_RX ||
+            cam->pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
+            printf("SPI still busy aborting\r\n");
+            return false;  
+        }
+    }
 	return true;
+}
+
+_Bool abort_all_data_receptions(void){
+	printf("Abort All\r\n");
+	_Bool status = true;
+	for(int i=0; i<CAMERA_COUNT; i++){
+		// if(event_bits_enabled & (1 << i)){
+			status &= abort_data_reception(i);
+		// }
+	}
+	event_bits_enabled = 0x00;
+	return status;
 }
 
 _Bool enable_camera_stream(uint8_t cam_id){
@@ -1004,12 +1355,12 @@ _Bool enable_camera_stream(uint8_t cam_id){
 
 _Bool disable_camera_stream(uint8_t cam_id){
 //	printf("Disable C: %d\r\n",cam_id);
-	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("Camera %d already disabled\r\n", cam_id+1);
 		return true;
 	}
+
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
@@ -1017,22 +1368,19 @@ _Bool disable_camera_stream(uint8_t cam_id){
 			printf("failed to select Camera %d channel\r\n", cam_id+1);
 			return false;
 		}
+	bool status = false;
 
-	status |= abort_data_reception(cam_id);
-	status |= (X02C1B_stream_off(cam) < 0); // returns -1 if failed
-
+	status |= (X02C1B_stream_off(cam) == 0); // 0 if successful, -1 if failed
 	delay_us(200);
-
-	status |= (X02C1B_soft_reset(cam) < 0); 
+	status |= (X02C1B_soft_reset(cam) == 0); // 0 if successful, -1 if failed
 
 	if(!status)
 	{
 		printf("Failed to stop camera %d stream\r\n", cam_id+1);
 		return false;
 	}
-	event_bits_enabled &= ~(1 << cam_id);
+
 	cam->streaming_enabled = false;
-	cam->isConfigured = false;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
 //	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
@@ -1046,233 +1394,37 @@ _Bool toggle_camera_stream(uint8_t cam_id){
 
 	return status;
 }
+/* -------- END HISTOGRAM TRANSFER FUNCTIONS -------- */
 
-_Bool send_histogram_data(void) {
-	_Bool status = true;
-	int offset = 0;
-
-	uint8_t count = 0;
-	for (int i = 0; i < CAMERA_COUNT ; ++i) {
-		if (event_bits & (1 << i)) {
-			count++;
-		}
-	}
-	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
-    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
-    if (HISTO_JSON_BUFFER_SIZE < total_size) {
-        return false;  // Buffer too small
-    }
-
-	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-	
-	// --- Header ---
-    packet_buffer[offset++] = HISTO_SOF;
-    packet_buffer[offset++] = TYPE_HISTO;
-    packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
-    packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
-	if(total_size>32833){
-		printf("Packet too large\r\n");
-	}
-
-	// --- Data ---
-	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
-		if((event_bits & (0x01 << cam_id)) != 0) {
-			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
-		    packet_buffer[offset++] = HISTO_SOH;
-			packet_buffer[offset++] = cam_id;
-			memcpy(packet_buffer+offset,histo_ptr,HISTO_SIZE_32B*4);
-			offset += HISTO_SIZE_32B*4;
-			
-			uint32_t temp_bits;
-			memcpy(&temp_bits, (uint8_t*)&cam_temp[cam_id],4);
-
-			packet_buffer[offset++] = (uint8_t)(temp_bits & 0xFF);
-			packet_buffer[offset++] = (uint8_t)((temp_bits >> 8) & 0xFF);
-			packet_buffer[offset++] = (uint8_t)((temp_bits >> 16) & 0xFF);
-			packet_buffer[offset++] = (uint8_t)((temp_bits >> 24) & 0xFF);
-
-			packet_buffer[offset++] = HISTO_EOH;
-			
-		}
-	}
-
-	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
-    packet_buffer[offset++] = crc & 0xFF;
-    packet_buffer[offset++] = (crc >> 8) & 0xFF;
-    packet_buffer[offset++] = HISTO_EOF;
-	
-	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-	uint8_t timeout_tries = 0;
-	while(tx_status != USBD_OK){
-		printf("-\r\n");
-		HAL_Delay(1);
-		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-		timeout_tries++;
-		if(timeout_tries > 2){
-			printf("F\r\n");
-			status = false;
-			usb_failed = true;
-			break;
-		}
-	}
-	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-
-	// kick off the next frame reception
-	for(int i = 0;i<CAMERA_COUNT;i++){
-		if((event_bits & (0x01 << i)) != 0)
-			start_data_reception(i);
-	}
-	frame_id++;
-
-	return status;
-}
-
-void PollCameraTemperatures(void)
-{
-    if (HAL_GetTick() >= next_temp_ms)
-    {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
-
-        // Skip to next active camera
-        for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
-        {
-            uint8_t cam = next_cam_idx;
-            next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
-
-            if (cameras_present & (1 << cam))
-            {
-                CameraDevice *pCam = get_camera_byID(cam);
-                if (pCam != NULL)
-                {
-                    cam_temp[cam] = X02C1B_read_temp(pCam);
-                    break;  // One camera per 100ms interval
-                }
-            }
-        }
-
-        // If we wrapped back to camera 0, add the idle pause
-        if (next_cam_idx == 0)
-        {
-            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
-        }
-    }
-}
-
-// Get SPI/USART status for the specified camera ID
-// Returns a bitfield where each bit indicates a specific status:
-//
-// Bit 0: SPI or USART state is READY
-// Bit 1: Camera firmware is programmed
-// Bit 2: Camera is configured
-// Bit 7: Streaming is enabled
-//
-// Bits 3–6: Reserved (unused)
-//
-uint8_t get_camera_status(uint8_t cam_id) {
-	
-	uint8_t status_flags = 0x00;
-
-	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
-		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
+/* -------- BEGIN CAMERA POWER TOGGLE FUNCTIONS -------- */
+_Bool enable_camera_power(uint8_t cam_id){
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Enable Power for Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
 
 	CameraDevice *cam = get_camera_byID(cam_id);
-	if (cam->useUsart) {
-		HAL_USART_StateTypeDef usart_state;
-		usart_state = HAL_USART_GetState(cam->pUart);
-		
-		if(usart_state == HAL_USART_STATE_READY) {			
-			status_flags |= (1 << 0);  // Set bit 0
-		} else {
-			// Print the USART state for debugging
-			if(usart_state == HAL_USART_STATE_RESET){
-				printf("USART state: HAL_USART_STATE_RESET\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_BUSY){
-				printf("USART state: HAL_USART_STATE_BUSY\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_BUSY_TX){
-				printf("USART state: HAL_USART_STATE_BUSY_TX\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_BUSY_RX){
-				printf("USART state: HAL_USART_STATE_BUSY_RX\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_BUSY_TX_RX){
-				printf("USART state: HAL_USART_STATE_BUSY_TX_RX\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_TIMEOUT){
-				printf("USART state: HAL_USART_STATE_TIMEOUT\r\n");
-			}
-			else if(usart_state == HAL_USART_STATE_ERROR){
-				printf("USART state: HAL_USART_STATE_ERROR\r\n");
-			}
-			else{
-				printf("USART state: Unknown\r\n");
-			}
-		}
-	} else {
-		HAL_SPI_StateTypeDef spi_state;
-		spi_state = HAL_SPI_GetState(cam->pSpi);
-		if(spi_state == HAL_SPI_STATE_READY) {			
-			status_flags |= (1 << 0);  // Set bit 0
-		} else {
-			// Print the SPI state for debugging
-			if(spi_state == HAL_SPI_STATE_RESET){
-				printf("SPI state: HAL_SPI_STATE_RESET\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_BUSY){
-				printf("SPI state: HAL_SPI_STATE_BUSY\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_BUSY_TX){
-				printf("SPI state: HAL_SPI_STATE_BUSY_TX\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_BUSY_RX){
-				printf("SPI state: HAL_SPI_STATE_BUSY_RX\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_BUSY_TX_RX){
-				printf("SPI state: HAL_SPI_STATE_BUSY_TX_RX\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_ERROR){
-				printf("SPI state: HAL_SPI_STATE_ERROR\r\n");
-			}
-			else if(spi_state == HAL_SPI_STATE_ABORT){
-				printf("SPI state: HAL_SPI_STATE_ABORT\r\n");
-			}
-			else{
-				printf("SPI state: Unknown\r\n");
-			}
-		}
-	}
 
-	if(cam->isProgrammed) {
-		status_flags |= (1 << 1);  // Set bit 1
-	}
+	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
+	HAL_Delay(10); // wait for power to stabilize
 
-	if(cam->isConfigured) {
-		status_flags |= (1 << 2);  // Set bit 2		
-	}
-
-	if(cam->streaming_enabled) {
-		status_flags |= (1 << 7);  // Set bit 7		
-	}
-
-	return status_flags;
+	printf("Enabled Power for Camera %d\r\n", cam_id+1);
+	return true;
 }
 
-void print_active_cameras(uint8_t cameras_present)
-{
-    printf("Active cameras: ");
-    for (int i = 0; i < 8; ++i)
-    {
-        if (cameras_present & (1 << i))
-        {
-            printf("%d ", i + 1);  // Cameras are 1-based
-        }
-    }
-    printf("\r\n");
+_Bool disable_camera_power(uint8_t cam_id){
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Disable Power for Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+
+	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
+	HAL_Delay(10); // wait for power to stabilize
+
+	printf("Disabled Power for Camera %d\r\n", cam_id+1);
+	return true;
 }

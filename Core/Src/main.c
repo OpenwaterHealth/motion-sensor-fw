@@ -94,7 +94,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 3, 2};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 0};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -104,7 +104,6 @@ __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
-volatile bool send_data_flag = false;
 extern uint32_t imu_frame_counter;
 
 
@@ -313,66 +312,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t most_recent_frame = HAL_GetTick();
-  uint32_t ticks_at_start = HAL_GetTick();
-  bool streaming = false;
-
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  	comms_host_check_received(); // check comms
-    
-    // Send out data if all the histograms have come in
-    if(!fake_data_gen && send_data_flag  && event_bits_enabled > 0) {
-      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-     
-      most_recent_frame = HAL_GetTick();
-      streaming = true;
-
-      // if(!send_histogram_data()) Error_Handler();
-
-      if(!send_histogram_data()){
-    	  fail_count++;
-      }
-      send_data_flag = false;
-      event_bits = 0x00;
-      PollCameraTemperatures();
-    }
-    else if(fake_data_gen && send_data_flag){
-            printf(".\r\n");
-
-      send_fake_data();
-      send_data_flag = false;
- 		}
-    
-    // Print out at end of scan or if data hasn't come in in time to detect bad cameras
-    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
-    {
-      streaming = false;
-      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
-      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
-      printf("Fail Count: %d\r\n",fail_count);
-      printf("No data received in 75ms\r\n");
-      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
-      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
-      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
-      printf("total_time_streaming: %f\r\n", total_time_streaming);
-
-      for (int i = 0; i < 8; i++)
-      {
-        get_camera_status(i);
-      }
-      if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
-    	  // Error_Handler();
-        printf("FSIN Still ON\r\n");
-    }
-
-    if(streaming==false) ticks_at_start = HAL_GetTick();
-
-    /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-
+  	comms_host_check_received(); // check comms  
+    check_streaming();
   }
 
   /* USER CODE END 3 */
@@ -1631,17 +1577,17 @@ void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
-  if (htim->Instance == TIM4)
+  if (htim->Instance == TIM4) // Call data sender (internal FSIN))
   {
-    send_data_flag = true; // trigger the send event
+    send_data();
   }
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {     
-    if (GPIO_Pin == GPIO_PIN_13)
+    if (GPIO_Pin == GPIO_PIN_13) // Call REAL data sender if interrupt hit and enabled
     {
-      send_data_flag = true; // trigger the send event
+      send_data();
     }
 }
 
