@@ -194,8 +194,8 @@ void init_camera_sensors() {
 	cam_array[4].cresetb_pin = CRESET_5_Pin;
 	cam_array[4].gpio0_port = GPIO0_5_GPIO_Port;
 	cam_array[4].gpio0_pin = GPIO0_5_Pin;
-	cam_array[4].gpio1_port = GPIOA;
-	cam_array[4].gpio1_pin = GPIO_PIN_9;
+	cam_array[4].gpio1_port = GPIOB;
+	cam_array[4].gpio1_pin = GPIO_PIN_6;
 	cam_array[4].useUsart = true;
 	cam_array[4].useDma = true;
 	cam_array[4].pI2c = &hi2c1;
