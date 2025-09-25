@@ -238,13 +238,6 @@ int main(void)
 
   DWT_Init();
 
-  // Disable USB MUX
-  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_SET);
-  // Default to USB HS MUX
-  HAL_GPIO_WritePin(MUX_USB_MODE_GPIO_Port, MUX_USB_MODE_Pin, GPIO_PIN_SET);
-  // Enable USB MUX
-  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_RESET);
-
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
 
@@ -1301,6 +1294,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, CAM_PWR_1_Pin|CAM_PWR_5_Pin|CAM_PWR_8_Pin|CAM_PWR_4_Pin
                           |FS_OUT_EN_Pin, GPIO_PIN_SET);
+
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, CAM_PWR_7_Pin|CAM_PWR_2_Pin|FSIN_EN_Pin, GPIO_PIN_SET);
 
