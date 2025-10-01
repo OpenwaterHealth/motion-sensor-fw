@@ -761,17 +761,19 @@ UartPacket process_if_command(UartPacket cmd)
 		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
-
-//		print_uart_packet(&cmd);
-
-        // printBuffer(cmd.data, 10);
+		uartReturn.command = OW_I2C_PASSTHRU;
+		uartReturn.packet_type = OW_RESP;
+		uartReturn.data_len = 0;
+		
 		i2c_packet_fromBuffer(cmd.data, &i2c_packet);
-		// i2c_tx_packet_print(&i2c_packet);
-
-		HAL_Delay(20);
-
-		send_buffer_to_slave(pCam->pI2c, cmd.command, cmd.data, cmd.data_len);
-
+		
+		if (send_buffer_to_slave(pCam->pI2c, cmd.command, cmd.data, cmd.data_len) == 0) {
+			// I2C operation successful
+			uartReturn.packet_type = OW_RESP;
+		} else {
+			// I2C operation failed
+			uartReturn.packet_type = OW_ERROR;
+		}
 		break;
 	default:
 		uartReturn.data_len = 0;

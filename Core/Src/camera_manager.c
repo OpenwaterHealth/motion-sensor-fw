@@ -1407,7 +1407,6 @@ _Bool enable_camera_power(uint8_t cam_id){
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
-	HAL_Delay(10); // wait for power to stabilize
 
 	printf("Enabled Power for Camera %d\r\n", cam_id+1);
 	return true;
@@ -1423,7 +1422,6 @@ _Bool disable_camera_power(uint8_t cam_id){
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
-	HAL_Delay(10); // wait for power to stabilize
 
 	printf("Disabled Power for Camera %d\r\n", cam_id+1);
 	return true;
