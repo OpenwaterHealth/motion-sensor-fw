@@ -1305,7 +1305,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(CAM_PWR_6_GPIO_Port, CAM_PWR_6_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin USB_MUX_Pin CAM_PWR_6_Pin */
   GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin|USB_MUX_Pin|CAM_PWR_6_Pin;
