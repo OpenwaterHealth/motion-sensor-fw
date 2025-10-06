@@ -1026,13 +1026,12 @@ _Bool send_data(void) {
 _Bool check_streaming(void){
 	if(streaming_active){
 		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
-			send_data();
 			uint32_t elapsed = HAL_GetTick() - streaming_start_time;
-			printf("Streaming stopped after %lu ms\r\n", elapsed);
+			send_data(); // send data one last frame to finish the buffers 
+			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
 			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
 			total_frames_sent = 0;
 			total_frames_failed = 0;
-			abort_all_data_receptions();
 			streaming_active = false;
 		}
 	}
@@ -1202,6 +1201,7 @@ _Bool send_fake_data(void) {
 }
 
 _Bool start_data_reception(uint8_t cam_id){
+	printf("Start data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 
@@ -1255,11 +1255,12 @@ _Bool start_data_reception(uint8_t cam_id){
 		abort_data_reception(cam_id);
 		return false;
 	}
+	printf("done\r\n");
 	return true;
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
-	// printf("Abort C: %d\r\n",cam_id);
+	printf("Abort data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
@@ -1293,19 +1294,8 @@ _Bool abort_data_reception(uint8_t cam_id){
             return false;  
         }
     }
+	printf("done\r\n");
 	return true;
-}
-
-_Bool abort_all_data_receptions(void){
-	printf("Abort All\r\n");
-	_Bool status = true;
-	for(int i=0; i<CAMERA_COUNT; i++){
-		// if(event_bits_enabled & (1 << i)){
-			status &= abort_data_reception(i);
-		// }
-	}
-	event_bits_enabled = 0x00;
-	return status;
 }
 
 _Bool enable_camera_stream(uint8_t cam_id){
@@ -1335,9 +1325,9 @@ _Bool enable_camera_stream(uint8_t cam_id){
 			return false;
 		}
 
-	bool data_recp_status= start_data_reception(cam_id);
-
 	bool stream_on_status= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
+
+	bool data_recp_status= start_data_reception(cam_id);
 
 	status |= data_recp_status | stream_on_status;
 	if(!status)
@@ -1354,7 +1344,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-//	printf("Disable C: %d\r\n",cam_id);
+	printf("Disable C: %d... ",cam_id);
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("Camera %d already disabled\r\n", cam_id+1);
@@ -1368,21 +1358,21 @@ _Bool disable_camera_stream(uint8_t cam_id){
 			printf("failed to select Camera %d channel\r\n", cam_id+1);
 			return false;
 		}
-	bool status = false;
 
-	status |= (X02C1B_stream_off(cam) == 0); // 0 if successful, -1 if failed
-	delay_us(200);
-	status |= (X02C1B_soft_reset(cam) == 0); // 0 if successful, -1 if failed
-
+	bool status = true;
+	status &= (X02C1B_stream_off(cam) == 0); // 0 if successful, -1 if failed
+	status &= abort_data_reception(cam_id);
 	if(!status)
 	{
 		printf("Failed to stop camera %d stream\r\n", cam_id+1);
 		return false;
 	}
 
+	event_bits_enabled &= ~(1 << cam_id);
+
 	cam->streaming_enabled = false;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
-//	printf("Disabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
+	printf("done\r\n");
 	return true;
 }
 
