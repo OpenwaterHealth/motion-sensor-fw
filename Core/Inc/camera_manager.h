@@ -29,6 +29,7 @@ typedef struct {
 	bool 			streaming_enabled;
 	bool 			isProgrammed;
 	bool 			isConfigured;
+	bool 			isPowered;
 	uint8_t 		gain;
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;

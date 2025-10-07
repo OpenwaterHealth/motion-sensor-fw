@@ -243,6 +243,7 @@ void init_camera_sensors() {
 
 	for(i=0; i<CAMERA_COUNT; i++){
 		cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
+		cam_array[i].isPowered = true; // Initialize all cameras as powered on
 		init_camera(&cam_array[i]);
 	}
 
@@ -675,6 +676,14 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
+	// Check if camera is powered on before attempting to program
+	if(!cam->isPowered)
+	{
+		printf("Cannot program FPGA - Camera %d is powered off\r\n", cam_id+1);
+		cam->isProgrammed = false;
+		return false;
+	}
+
 	if(!force_update)
 	{
 		if(cam->isProgrammed) return true;
@@ -761,6 +770,21 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	// printf("Configure Camera %d Registers Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	// Check if camera is already configured and powered on
+	if(cam->isConfigured && cam->isPowered)
+	{
+		printf("Camera %d Sensor already configured\r\n", cam_id+1);
+		return true;
+	}
+
+	// Check if camera is powered on before attempting to configure
+	if(!cam->isPowered)
+	{
+		printf("Cannot configure Camera %d - camera is powered off\r\n", cam_id+1);
+		cam->isConfigured = false;
+		return false;
+	}
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 	{
@@ -1397,6 +1421,7 @@ _Bool enable_camera_power(uint8_t cam_id){
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
+	cam->isPowered = true;
 
 	printf("Enabled Power for Camera %d\r\n", cam_id+1);
 	return true;
@@ -1412,6 +1437,10 @@ _Bool disable_camera_power(uint8_t cam_id){
 	CameraDevice *cam = get_camera_byID(cam_id);
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
+	cam->isPowered = false;
+	cam->isProgrammed = false; // Clear programmed status when power is off
+	cam->isConfigured = false; // Clear configured status when power is off
+	cam->streaming_enabled = false; // Clear streaming status when power is off
 
 	printf("Disabled Power for Camera %d\r\n", cam_id+1);
 	return true;

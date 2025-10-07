@@ -658,6 +658,11 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    			printf("Failed to power on camera %d\r\n", i);
 
 	        	}
+	        	else
+	        	{
+	        		// Clear camera status when power is turned on (camera state unknown until initialized)
+	        		camera_status[i] = 0x00;
+	        	}
 	        }
 	    }
 		break;
@@ -671,6 +676,11 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
 	    			printf("Failed to power off camera %d\r\n", i);
+	        	}
+	        	else
+	        	{
+	        		// Clear camera status when power is turned off
+	        		camera_status[i] = 0x00;
 	        	}
 	        }
 	    }
