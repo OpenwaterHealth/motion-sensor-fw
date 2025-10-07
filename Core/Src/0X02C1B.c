@@ -40,12 +40,12 @@ static int X02C1B_read(I2C_HandleTypeDef * pI2c, uint16_t reg, uint8_t *val)
 
     if (HAL_I2C_Master_Transmit(pI2c, (uint16_t)(X02C1B_ADDRESS << 1), buf, 2, I2C_TIMEOUT) != HAL_OK) {
         printf("===> ERROR: I2C Write failed\r\n");
-        Error_Handler();
+        return -1;
     }
 
     if (HAL_I2C_Master_Receive(pI2c, (uint16_t)(X02C1B_ADDRESS << 1), val, 1, I2C_TIMEOUT) != HAL_OK) {
         printf("===> ERROR: I2C Read failed\r\n");
-        Error_Handler();
+        return -1;
     }
 
     return 0;
