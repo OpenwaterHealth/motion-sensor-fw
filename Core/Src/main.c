@@ -278,7 +278,7 @@ int main(void)
 	{
 		printf("IMU detected\r\n");
 	    HAL_Delay(100);
-	    ICM_DumpRegisters();
+	    if(verbose_on) ICM_DumpRegisters();
 	}
   }
   else

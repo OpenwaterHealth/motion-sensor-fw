@@ -630,6 +630,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
+	printf("\r\nProgramming FPGA Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -660,13 +661,13 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	}else{
 
 	}
-
+	printf("done\r\n");
 	return true;
 }
 
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
-	printf("Programming FPGA Camera %d...", cam_id+1);
+	printf("\r\nProgramming FPGA Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);

@@ -604,10 +604,10 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
 		// printf("Switching to camera %d\r\n",channel+1);
-        if(TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel))
+        if(!TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel)){
 			set_active_camera(channel);
 			printf(" done\r\n");
-		else{
+        } else{
 			printf("Failed to select Camera %d channel\r\n", channel + 1);
 			uartResp->packet_type = OW_ERROR;
 		}
