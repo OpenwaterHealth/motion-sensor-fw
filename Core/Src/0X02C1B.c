@@ -82,7 +82,6 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
         printf("Camera %d Sensor configuration failed\r\n", cam->id+1);
         return ret;
     }
-    printf("Camera %d Sensor successfully configured\r\n", cam->id+1);
 
     uint8_t gain = 0x00;
     switch(cam->id){

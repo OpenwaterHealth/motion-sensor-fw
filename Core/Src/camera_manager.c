@@ -687,7 +687,10 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 
 	if(!force_update)
 	{
-		if(cam->isProgrammed) return true;
+		if(cam->isProgrammed){
+			printf("already programmed\r\n");
+			return true;
+		} 
 	} else {
 		cam->isProgrammed = false; // set isProgrammed to false and program FPGA
 	}

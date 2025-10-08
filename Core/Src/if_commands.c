@@ -599,14 +599,19 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_SWITCH:
-		printf("Switching to Camera %d\r\n",cmd.data[0]+1);
+		printf("Switching to Camera %d... ",cmd.data[0]+1);
 		uint8_t channel = cmd.data[0];
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
 		// printf("Switching to camera %d\r\n",channel+1);
-        TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel);
-        set_active_camera(channel);
-		break;
+        if(TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel))
+			set_active_camera(channel);
+			printf(" done\r\n");
+		else{
+			printf("Failed to select Camera %d channel\r\n", channel + 1);
+			uartResp->packet_type = OW_ERROR;
+		}
+        break;
 	case OW_CAMERA_READ_TEMP:
 		// printf("Reading Camera %d Temp\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_READ_TEMP;
@@ -791,12 +796,12 @@ UartPacket process_if_command(UartPacket cmd)
 		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
-		printf("I2C Passthru Cmd: 0x%02X Data: ", cmd.command);
+		printf("I2C Passthru Target: 0x%02X Data: ", cmd.command);
 		for (int i = 0; i < cmd.data_len; i++) {
 			printf("0x%02X ", cmd.data[i]);
 		}
 		printf("Len: %d\r\n", cmd.data_len);
-		
+
 		uartReturn.command = OW_I2C_PASSTHRU;
 		uartReturn.packet_type = OW_RESP;
 		uartReturn.data_len = 0;
