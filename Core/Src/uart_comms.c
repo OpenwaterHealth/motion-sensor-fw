@@ -117,7 +117,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	// Initiate transmission via USB CDC
 	USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
 
-	if(pResp->command == OW_CAMERA_GET_HISTOGRAM)
+	if(pResp->command == OW_CAMERA_GET_HISTOGRAM && verbose_on)
 	{
 		printf("F:%d C: 0x%02X V: 0x%02X S:%d\r\n", pResp->id, pResp->addr, pResp->reserved, bufferIndex);
 	}

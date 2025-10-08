@@ -308,7 +308,7 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
         // Optionally return or handle error
         return HAL_ERROR;
     } else {
-        printf("IDCODE matched successfully.\r\n");
+        if(verbose_on) printf("IDCODE matched successfully.\r\n");
         // Proceed with the next steps
     }
 

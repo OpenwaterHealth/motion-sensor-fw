@@ -666,6 +666,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
+	printf("Programming FPGA Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -704,7 +705,6 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 		cam->isProgrammed = false;
 		return false;
 	} else {
-		printf("Program FPGA Camera %d Success\r\n", cam_id+1);
 		cam->isProgrammed = true;
 	}
 
@@ -716,6 +716,7 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 		cam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
 		cam->pUart->Instance->CR1 |= USART_CR1_UE;
 	}
+	printf("done\r\n");
 
 	return true;
 }
@@ -761,6 +762,7 @@ void scan_camera_sensors(bool scanI2cAtStart){
 
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
+	printf("Configuring Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
@@ -799,8 +801,9 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 		return false;
 	}else{
 		cam->isConfigured = true;
-	}
+		printf("done\r\n");
 
+	}
 	return true;
 }
 
@@ -1225,7 +1228,7 @@ _Bool send_fake_data(void) {
 }
 
 _Bool start_data_reception(uint8_t cam_id){
-	printf("Start data reception C: %d... ",cam_id);
+	printf("Start data reception on camera: %d... ",cam_id+1);
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 

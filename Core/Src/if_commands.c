@@ -599,6 +599,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_SWITCH:
+		printf("Switching to Camera %d\r\n",cmd.data[0]+1);
 		uint8_t channel = cmd.data[0];
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
@@ -692,14 +693,13 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		
 		// Build 8-bit mask where each bit represents power status of camera 0-7
+		// Always return status for all cameras (0-7) regardless of query mask
 		camera_power_status = 0x00;  // Initialize to 0
 	    for (uint8_t i = 0; i < 8; i++) {
-	        if ((cmd.addr >> i) & 0x01) {
-	        	// Set bit i if camera i is powered on
-	        	if (get_camera_power_status(i)) {
-	        		camera_power_status |= (1 << i);
-	        	}
-	        }
+	    	// Set bit i if camera i is powered on
+	    	if (get_camera_power_status(i)) {
+	    		camera_power_status |= (1 << i);
+	    	}
 	    }
 	    
 	    uartResp->data = &camera_power_status;
@@ -791,6 +791,12 @@ UartPacket process_if_command(UartPacket cmd)
 		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
+		printf("I2C Passthru Cmd: 0x%02X Data: ", cmd.command);
+		for (int i = 0; i < cmd.data_len; i++) {
+			printf("0x%02X ", cmd.data[i]);
+		}
+		printf("Len: %d\r\n", cmd.data_len);
+		
 		uartReturn.command = OW_I2C_PASSTHRU;
 		uartReturn.packet_type = OW_RESP;
 		uartReturn.data_len = 0;
