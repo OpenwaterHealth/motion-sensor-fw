@@ -1445,3 +1445,14 @@ _Bool disable_camera_power(uint8_t cam_id){
 	printf("Disabled Power for Camera %d\r\n", cam_id+1);
 	return true;
 }
+
+_Bool get_camera_power_status(uint8_t cam_id){
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Get Power Status for Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}
+
+	CameraDevice *cam = get_camera_byID(cam_id);
+	return cam->isPowered;
+}

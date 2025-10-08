@@ -21,6 +21,7 @@
 extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
+static uint8_t camera_power_status = 0;
 static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
@@ -684,6 +685,25 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	}
 	        }
 	    }
+		break;
+
+	case OW_CAMERA_POWER_STATUS:
+		uartResp->command = OW_CAMERA_POWER_STATUS;
+		uartResp->packet_type = OW_RESP;
+		
+		// Build 8-bit mask where each bit represents power status of camera 0-7
+		camera_power_status = 0x00;  // Initialize to 0
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	// Set bit i if camera i is powered on
+	        	if (get_camera_power_status(i)) {
+	        		camera_power_status |= (1 << i);
+	        	}
+	        }
+	    }
+	    
+	    uartResp->data = &camera_power_status;
+	    uartResp->data_len = 1;
 		break;
 
 	default:

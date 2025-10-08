@@ -81,6 +81,7 @@ uint8_t get_camera_status(uint8_t cam_id);
 _Bool check_streaming(void);
 _Bool enable_camera_power(uint8_t cam_id);
 _Bool disable_camera_power(uint8_t cam_id);
+_Bool get_camera_power_status(uint8_t cam_id);
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);

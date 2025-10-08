@@ -114,6 +114,7 @@ typedef enum {
 	OW_CAMERA_RESET = 0x2F,
 	OW_CAMERA_POWER_ON = 0x50,
 	OW_CAMERA_POWER_OFF = 0x51,
+	OW_CAMERA_POWER_STATUS = 0x52,
 
 } MotionCAMERACommands;
 
