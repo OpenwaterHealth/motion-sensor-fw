@@ -71,6 +71,25 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 		break;
+	case OW_CMD_SET_FAN_CTL:
+		uartResp->command = OW_CMD_SET_FAN_CTL;
+		uartResp->packet_type = OW_RESP;
+		if (cmd.reserved == 1) {
+			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
+			printf("Fan control set to HIGH (ON)\r\n");
+		} else {
+			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
+			printf("Fan control set to LOW (OFF)\r\n");
+		}
+		break;
+	case OW_CMD_GET_FAN_CTL:
+		uartResp->command = OW_CMD_GET_FAN_CTL;
+		uartResp->packet_type = OW_RESP;
+		uartResp->data_len = 1;
+		uartResp->data = (uint8_t *)&uartResp->reserved;
+		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
+		printf("Fan control status: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
+		break;
 	case OW_CMD_I2C_BROADCAST:
 		printf("Broadcasting I2C on all channels\r\n");
 		uartResp->command = OW_CMD_I2C_BROADCAST;

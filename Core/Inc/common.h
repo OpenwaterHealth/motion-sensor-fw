@@ -65,7 +65,9 @@ typedef enum {
 	OW_CMD_RESET = 0x0F,
 	OW_TOGGLE_CAMERA_STREAM = 0x07,
 	OW_CMD_HISTO_ON = 0x08,
-	OW_CMD_HISTO_OFF = 0x09
+	OW_CMD_HISTO_OFF = 0x09,
+	OW_CMD_SET_FAN_CTL = 0x0A,
+	OW_CMD_GET_FAN_CTL = 0x0B
 } UstxGlobalCommands;
 
 typedef enum {
