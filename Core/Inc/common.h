@@ -16,10 +16,10 @@
 #define MAX_BITSTREAM_SIZE 200 * 1024
 #define COMMAND_MAX_SIZE 2048*3
 
-#define SPI_PACKET_LENGTH 4096
+#define SPI_PACKET_LENGTH 4100
 #define USART_PACKET_LENGTH 4100
 
-#define verbose_on true
+#define verbose_on false
 
 #define CAM_TEMP_INTERVAL_MS   1000u          // 1 Hz
 
@@ -65,7 +65,9 @@ typedef enum {
 	OW_CMD_RESET = 0x0F,
 	OW_TOGGLE_CAMERA_STREAM = 0x07,
 	OW_CMD_HISTO_ON = 0x08,
-	OW_CMD_HISTO_OFF = 0x09
+	OW_CMD_HISTO_OFF = 0x09,
+	OW_CMD_SET_FAN_CTL = 0x0A,
+	OW_CMD_GET_FAN_CTL = 0x0B
 } UstxGlobalCommands;
 
 typedef enum {
@@ -112,6 +114,9 @@ typedef enum {
 	OW_CAMERA_SET_TESTPATTERN = 0x2D,
 	OW_CAMERA_STATUS = 0x2E,
 	OW_CAMERA_RESET = 0x2F,
+	OW_CAMERA_POWER_ON = 0x50,
+	OW_CAMERA_POWER_OFF = 0x51,
+	OW_CAMERA_POWER_STATUS = 0x52,
 
 } MotionCAMERACommands;
 

@@ -94,7 +94,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 3, 3};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 1};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -104,7 +104,6 @@ __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 
-volatile bool send_data_flag = false;
 extern uint32_t imu_frame_counter;
 
 
@@ -239,13 +238,6 @@ int main(void)
 
   DWT_Init();
 
-  // Disable USB MUX
-  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_SET);
-  // Default to USB HS MUX
-  HAL_GPIO_WritePin(MUX_USB_MODE_GPIO_Port, MUX_USB_MODE_Pin, GPIO_PIN_SET);
-  // Enable USB MUX
-  HAL_GPIO_WritePin(MUX_OE_GPIO_Port, MUX_OE_Pin, GPIO_PIN_RESET);
-
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
 
@@ -261,6 +253,10 @@ int main(void)
   printf("CPU Clock Frequency: %lu MHz\r\n",
          HAL_RCC_GetSysClockFreq() / 1000000);
   printf("Initializing, please wait ...\r\n");
+
+  // enable HS USB MUX
+  HAL_GPIO_WritePin(USB_MUX_GPIO_Port, USB_MUX_Pin, GPIO_PIN_RESET);
+
   // enable I2C MUX
   HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
 
@@ -282,7 +278,7 @@ int main(void)
 	{
 		printf("IMU detected\r\n");
 	    HAL_Delay(100);
-	    ICM_DumpRegisters();
+	    if(verbose_on) ICM_DumpRegisters();
 	}
   }
   else
@@ -316,66 +312,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t most_recent_frame = HAL_GetTick();
-  uint32_t ticks_at_start = HAL_GetTick();
-  bool streaming = false;
-
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  	comms_host_check_received(); // check comms
-    
-    // Send out data if all the histograms have come in
-    if(!fake_data_gen && send_data_flag  && event_bits_enabled > 0) {
-      // printf("Ticks since last frame: %d\r\n", HAL_GetTick() - most_recent_frame);
-     
-      most_recent_frame = HAL_GetTick();
-      streaming = true;
-
-      // if(!send_histogram_data()) Error_Handler();
-
-      if(!send_histogram_data()){
-    	  fail_count++;
-      }
-      send_data_flag = false;
-      event_bits = 0x00;
-      PollCameraTemperatures();
-    }
-    else if(fake_data_gen && send_data_flag){
-            printf(".\r\n");
-
-      send_fake_data();
-      send_data_flag = false;
- 		}
-    
-    // Print out at end of scan or if data hasn't come in in time to detect bad cameras
-    if ((HAL_GetTick() - most_recent_frame) > 75 && streaming)
-    {
-      streaming = false;
-      uint8_t missing_event_bits = event_bits_enabled & ~event_bits;
-      float total_time_streaming = (HAL_GetTick() - ticks_at_start)/1000.0f;
-      printf("Fail Count: %d\r\n",fail_count);
-      printf("No data received in 75ms\r\n");
-      printf("Event bits: %s%s\r\n", bit_rep[event_bits >> 4], bit_rep[event_bits & 0x0F]);
-      printf("Event bits enabled: %s%s\r\n", bit_rep[event_bits_enabled >> 4], bit_rep[event_bits_enabled & 0x0F]);
-      printf("Missing event bits: %s%s\r\n", bit_rep[missing_event_bits >> 4], bit_rep[missing_event_bits & 0x0F]);
-      printf("total_time_streaming: %f\r\n", total_time_streaming);
-
-      for (int i = 0; i < 8; i++)
-      {
-        get_camera_status(i);
-      }
-      if(htim4.Instance->CR1 & TIM_CR1_CEN) //if fsin is ON and we havent heard from all the cameras, Error_Handler
-    	  // Error_Handler();
-        printf("FSIN Still ON\r\n");
-    }
-
-    if(streaming==false) ticks_at_start = HAL_GetTick();
-
-    /* ‑‑‑ 1 Hz camera‑temperature poller ‑‑‑ */
-
+  	comms_host_check_received(); // check comms  
+    check_streaming();
   }
 
   /* USER CODE END 3 */
@@ -1343,22 +1286,29 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|MUX_RESET_Pin|MUX_OE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|MUX_RESET_Pin|USB_MUX_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(MUX_USB_MODE_GPIO_Port, MUX_USB_MODE_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOD, CAM_PWR_1_Pin|CAM_PWR_5_Pin|CAM_PWR_8_Pin|CAM_PWR_4_Pin
+                          |FS_OUT_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE, CAM_PWR_7_Pin|CAM_PWR_2_Pin|FSIN_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FS_OUT_EN_GPIO_Port, FS_OUT_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(CAM_PWR_3_GPIO_Port, CAM_PWR_3_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin MUX_USB_MODE_Pin MUX_OE_Pin */
-  GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin|MUX_USB_MODE_Pin|MUX_OE_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(CAM_PWR_6_GPIO_Port, CAM_PWR_6_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin USB_MUX_Pin CAM_PWR_6_Pin */
+  GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin|USB_MUX_Pin|CAM_PWR_6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1370,44 +1320,58 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GPIO0_7_Pin GPIO0_5_Pin PB8 */
-  GPIO_InitStruct.Pin = GPIO0_7_Pin|GPIO0_5_Pin|GPIO_PIN_8;
+  /*Configure GPIO pins : GPIO0_7_Pin GPIO0_5_Pin */
+  GPIO_InitStruct.Pin = GPIO0_7_Pin|GPIO0_5_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : USB_RESET_Pin */
-  GPIO_InitStruct.Pin = USB_RESET_Pin;
+  /*Configure GPIO pins : USB_RESET_Pin CAM_PWR_3_Pin */
+  GPIO_InitStruct.Pin = USB_RESET_Pin|CAM_PWR_3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(USB_RESET_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GPIO0_6_Pin CRESET_8_Pin CRESET_7_Pin PE0
-                           PE10 PE14 GPIO0_2_Pin GPIO0_3_Pin
-                           CRESET_1_Pin CRESET_3_Pin CRESET_2_Pin CRESET_4_Pin */
-  GPIO_InitStruct.Pin = GPIO0_6_Pin|CRESET_8_Pin|CRESET_7_Pin|GPIO_PIN_0
-                          |GPIO_PIN_10|GPIO_PIN_14|GPIO0_2_Pin|GPIO0_3_Pin
-                          |CRESET_1_Pin|CRESET_3_Pin|CRESET_2_Pin|CRESET_4_Pin;
+  /*Configure GPIO pins : GPIO0_6_Pin CRESET_8_Pin CRESET_7_Pin PE14
+                           GPIO0_2_Pin GPIO0_3_Pin CRESET_1_Pin CRESET_3_Pin
+                           CRESET_2_Pin CRESET_4_Pin */
+  GPIO_InitStruct.Pin = GPIO0_6_Pin|CRESET_8_Pin|CRESET_7_Pin|GPIO_PIN_14
+                          |GPIO0_2_Pin|GPIO0_3_Pin|CRESET_1_Pin|CRESET_3_Pin
+                          |CRESET_2_Pin|CRESET_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : CRESET_6_Pin PD2 PD3 CRESET_5_Pin
-                           PD4 PD0 PD15 PD11
-                           GPIO0_4_Pin */
-  GPIO_InitStruct.Pin = CRESET_6_Pin|GPIO_PIN_2|GPIO_PIN_3|CRESET_5_Pin
-                          |GPIO_PIN_4|GPIO_PIN_0|GPIO_PIN_15|GPIO_PIN_11
-                          |GPIO0_4_Pin;
+  /*Configure GPIO pins : CRESET_6_Pin CRESET_5_Pin GPIO0_4_Pin */
+  GPIO_InitStruct.Pin = CRESET_6_Pin|CRESET_5_Pin|GPIO0_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA10 GPIO0_1_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO0_1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  /*Configure GPIO pins : CAM_PWR_1_Pin CAM_PWR_5_Pin CAM_PWR_8_Pin CAM_PWR_4_Pin
+                           FAN_CTL_Pin FS_OUT_EN_Pin */
+  GPIO_InitStruct.Pin = CAM_PWR_1_Pin|CAM_PWR_5_Pin|CAM_PWR_8_Pin|CAM_PWR_4_Pin
+                          |FAN_CTL_Pin|FS_OUT_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA12 PA11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_11;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF10_OTG1_FS;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : CAM_PWR_7_Pin CAM_PWR_2_Pin FSIN_EN_Pin */
+  GPIO_InitStruct.Pin = CAM_PWR_7_Pin|CAM_PWR_2_Pin|FSIN_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PC9 */
   GPIO_InitStruct.Pin = GPIO_PIN_9;
@@ -1417,19 +1381,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF0_MCO;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : FSIN_EN_Pin */
-  GPIO_InitStruct.Pin = FSIN_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : GPIO0_1_Pin */
+  GPIO_InitStruct.Pin = GPIO0_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(FSIN_EN_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : FS_OUT_EN_Pin */
-  GPIO_InitStruct.Pin = FS_OUT_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(FS_OUT_EN_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIO0_1_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* USER CODE END MX_GPIO_Init_2 */
@@ -1452,9 +1408,29 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 // Error handling callback for USART
 void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 {
-  // Identify specific errors using error codes
-  printf("USART Error occurred: ");
+  // Print which USART instance caused the error
+  if (husart->Instance == USART1)
+  {
+    printf("Error in USART1: ");
+  }
+  else if (husart->Instance == USART2)
+  {
+    printf("Error in USART2: ");
+  }
+  else if (husart->Instance == USART3)
+  {
+    printf("Error in USART3: ");
+  }
+  else if (husart->Instance == USART6)
+  {
+    printf("Error in USART6: ");
+  }
+  else
+  {
+    printf("Error in Unknown USART instance: ");
+  }
 
+  // Identify specific errors using error codes
   if (husart->ErrorCode & HAL_USART_ERROR_PE)
   {
     printf("Parity error ");
@@ -1483,8 +1459,29 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 // Error handling callback for SPI
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
+  // Print which SPI instance caused the error
+  if (hspi->Instance == SPI2)
+  {
+    printf("Error in SPI2: ");
+  }
+  else if (hspi->Instance == SPI3)
+  {
+    printf("Error in SPI3: ");
+  }
+  else if (hspi->Instance == SPI4)
+  {
+    printf("Error in SPI4: ");
+  }
+  else if (hspi->Instance == SPI6)
+  {
+    printf("Error in SPI6: ");
+  }
+  else
+  {
+    printf("Error in Unknown SPI instance: ");
+  }
+  
   // Identify specific errors using error codes
-  printf("SPI Error occurred: ");
   if (hspi->ErrorCode & HAL_SPI_ERROR_OVR)
   {
     printf("Overrun error ");
@@ -1580,17 +1577,17 @@ void HAL_USART_RxCpltCallback(USART_HandleTypeDef *husart)
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
-  if (htim->Instance == TIM4)
+  if (htim->Instance == TIM4) // Call data sender (internal FSIN))
   {
-    send_data_flag = true; // trigger the send event
+    send_data();
   }
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {     
-    if (GPIO_Pin == GPIO_PIN_13)
+    if (GPIO_Pin == GPIO_PIN_13) // Call REAL data sender if interrupt hit and enabled
     {
-      send_data_flag = true; // trigger the send event
+      send_data();
     }
 }
 

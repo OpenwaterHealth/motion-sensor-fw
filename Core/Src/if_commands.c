@@ -21,6 +21,7 @@
 extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
+static uint8_t camera_power_status = 0;
 static float cam_temp;
 volatile float imu_temp = 0;
 static ICM_Axis3D accel;
@@ -69,6 +70,25 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->command = OW_CMD_TOGGLE_LED;
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+		break;
+	case OW_CMD_SET_FAN_CTL:
+		uartResp->command = OW_CMD_SET_FAN_CTL;
+		uartResp->packet_type = OW_RESP;
+		if (cmd.reserved == 1) {
+			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
+			printf("Fan control set to HIGH (ON)\r\n");
+		} else {
+			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
+			printf("Fan control set to LOW (OFF)\r\n");
+		}
+		break;
+	case OW_CMD_GET_FAN_CTL:
+		uartResp->command = OW_CMD_GET_FAN_CTL;
+		uartResp->packet_type = OW_RESP;
+		uartResp->data_len = 1;
+		uartResp->data = (uint8_t *)&uartResp->reserved;
+		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
+		printf("Fan control status: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
 	case OW_CMD_I2C_BROADCAST:
 		printf("Broadcasting I2C on all channels\r\n");
@@ -598,13 +618,19 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_SWITCH:
+		printf("Switching to Camera %d... ",cmd.data[0]+1);
 		uint8_t channel = cmd.data[0];
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
 		// printf("Switching to camera %d\r\n",channel+1);
-        TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel);
-        set_active_camera(channel);
-		break;
+        if(!TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel)){
+			set_active_camera(channel);
+			printf(" done\r\n");
+        } else{
+			printf("Failed to select Camera %d channel\r\n", channel + 1);
+			uartResp->packet_type = OW_ERROR;
+		}
+        break;
 	case OW_CAMERA_READ_TEMP:
 		// printf("Reading Camera %d Temp\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_READ_TEMP;
@@ -646,6 +672,64 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
+
+	case OW_CAMERA_POWER_ON:
+		uartResp->command = OW_CAMERA_POWER_ON;
+		uartResp->packet_type = OW_RESP;
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	if(!enable_camera_power(i))
+	        	{
+	    			uartResp->packet_type = OW_ERROR;
+	    			printf("Failed to power on camera %d\r\n", i);
+
+	        	}
+	        	else
+	        	{
+	        		// Clear camera status when power is turned on (camera state unknown until initialized)
+	        		camera_status[i] = 0x00;
+	        	}
+	        }
+	    }
+		break;
+
+	case OW_CAMERA_POWER_OFF:
+		uartResp->command = OW_CAMERA_POWER_OFF;
+		uartResp->packet_type = OW_RESP;
+	    for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	if(!disable_camera_power(i))
+	        	{
+	    			uartResp->packet_type = OW_ERROR;
+	    			printf("Failed to power off camera %d\r\n", i);
+	        	}
+	        	else
+	        	{
+	        		// Clear camera status when power is turned off
+	        		camera_status[i] = 0x00;
+	        	}
+	        }
+	    }
+		break;
+
+	case OW_CAMERA_POWER_STATUS:
+		uartResp->command = OW_CAMERA_POWER_STATUS;
+		uartResp->packet_type = OW_RESP;
+		
+		// Build 8-bit mask where each bit represents power status of camera 0-7
+		// Always return status for all cameras (0-7) regardless of query mask
+		camera_power_status = 0x00;  // Initialize to 0
+	    for (uint8_t i = 0; i < 8; i++) {
+	    	// Set bit i if camera i is powered on
+	    	if (get_camera_power_status(i)) {
+	    		camera_power_status |= (1 << i);
+	    	}
+	    }
+	    
+	    uartResp->data = &camera_power_status;
+	    uartResp->data_len = 1;
+		break;
+
 	default:
 		uartResp->data_len = 0;
 		uartResp->command = cmd.command;
@@ -731,17 +815,25 @@ UartPacket process_if_command(UartPacket cmd)
 		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
+		printf("I2C Passthru Target: 0x%02X Data: ", cmd.command);
+		for (int i = 0; i < cmd.data_len; i++) {
+			printf("0x%02X ", cmd.data[i]);
+		}
+		printf("Len: %d\r\n", cmd.data_len);
 
-//		print_uart_packet(&cmd);
-
-        // printBuffer(cmd.data, 10);
+		uartReturn.command = OW_I2C_PASSTHRU;
+		uartReturn.packet_type = OW_RESP;
+		uartReturn.data_len = 0;
+		
 		i2c_packet_fromBuffer(cmd.data, &i2c_packet);
-		// i2c_tx_packet_print(&i2c_packet);
-
-		HAL_Delay(20);
-
-		send_buffer_to_slave(pCam->pI2c, cmd.command, cmd.data, cmd.data_len);
-
+		
+		if (send_buffer_to_slave(pCam->pI2c, cmd.command, cmd.data, cmd.data_len) == 0) {
+			// I2C operation successful
+			uartReturn.packet_type = OW_RESP;
+		} else {
+			// I2C operation failed
+			uartReturn.packet_type = OW_ERROR;
+		}
 		break;
 	default:
 		uartReturn.data_len = 0;
