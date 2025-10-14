@@ -1232,7 +1232,7 @@ _Bool send_fake_data(void) {
 }
 
 _Bool start_data_reception(uint8_t cam_id){
-	printf("Start data reception on camera: %d... ",cam_id+1);
+	if(verbose_on) printf("Start data reception on camera: %d... ",cam_id+1);
 	HAL_StatusTypeDef status;
 	CameraDevice cam = cam_array[cam_id];
 
