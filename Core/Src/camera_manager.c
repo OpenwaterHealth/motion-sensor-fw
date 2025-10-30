@@ -1291,7 +1291,7 @@ _Bool start_data_reception(uint8_t cam_id){
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
-	if(verbose_on) printf("Abort data reception C: %d... ",cam_id);
+	printf("Abort data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
