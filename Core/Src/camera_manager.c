@@ -1133,7 +1133,7 @@ _Bool send_histogram_data(void) {
 	uint8_t timeout_tries = 0;
 	while(tx_status != USBD_OK){
 		printf("-\r\n");
-		HAL_Delay(1);
+		delay_us(1000);
 		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 		timeout_tries++;
 		if(timeout_tries > 2){
@@ -1286,12 +1286,12 @@ _Bool start_data_reception(uint8_t cam_id){
 		abort_data_reception(cam_id);
 		return false;
 	}
-	printf("done\r\n");
+	if(verbose_on) printf("done\r\n");
 	return true;
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
-	printf("Abort data reception C: %d... ",cam_id);
+	if(verbose_on) printf("Abort data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
@@ -1325,7 +1325,7 @@ _Bool abort_data_reception(uint8_t cam_id){
             return false;  
         }
     }
-	printf("done\r\n");
+	if(verbose_on) printf("done\r\n");
 	return true;
 }
 
@@ -1375,7 +1375,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("Disable C: %d... ",cam_id);
+	printf("Disable camera %d... ",cam_id);
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("Camera %d already disabled\r\n", cam_id+1);
