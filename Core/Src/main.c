@@ -298,7 +298,7 @@ int main(void)
   printf("\033c");
   fflush(stdout);
   HAL_Delay(500);
-  printf("Openwater open-MOTION Aggregator FW v%d.%d.%d\r\n\r\n",
+  printf("Openwater open-MOTION Aggregator FW v%d.%d.%d - HEARTBEAT EDITION\r\n\r\n",
          FIRMWARE_VERSION_DATA[0], FIRMWARE_VERSION_DATA[1],
          FIRMWARE_VERSION_DATA[2]);
   printf("CPU Clock Frequency: %lu MHz\r\n",
