@@ -116,6 +116,11 @@ char usb_buf[128];
 bool uart_stream = false;
 bool fake_data_gen = false;
 bool scanI2cAtStart = false;
+bool blink_error_led = true;  // Enable error LED blinking (50ms on every second)
+
+// Error LED blink state tracking
+static uint32_t error_led_last_toggle = 0;
+static bool error_led_state = false;
 
 uint16_t fail_count = 0;
 
@@ -175,6 +180,52 @@ static void PrintI2CSpeed(I2C_HandleTypeDef *hi2c)
 
   // Print I2C speed
   printf("I2C Speed: %ld Hz\r\n", scl_freq); // Print the I2C speed in kHz
+}
+
+/**
+  * @brief  Handle error LED blinking when enabled
+  * @note   Blinks LED for 50ms every second when blink_error_led is true
+  * @retval None
+  */
+static void HandleErrorLedBlink(void)
+{
+  if (!blink_error_led)
+  {
+    // If blinking is disabled, ensure LED is off
+    if (error_led_state)
+    {
+      HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_RESET);
+      error_led_state = false;
+    }
+    return;
+  }
+
+  uint32_t current_tick = HAL_GetTick();
+  // Unsigned subtraction automatically handles wrap-around correctly
+  uint32_t elapsed = current_tick - error_led_last_toggle;
+  uint32_t on_time = 50;
+  uint32_t period = 1000;
+  
+  if (!error_led_state)
+  {
+    // LED is off, wait for 950ms (1000ms - 50ms) before turning on
+    if (elapsed >= (period-on_time))
+    {
+      HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_RESET);
+      error_led_state = true;
+      error_led_last_toggle = current_tick;
+    }
+  }
+  else
+  {
+    // LED is on, wait for 50ms before turning off
+    if (elapsed >= on_time)
+    {
+      HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
+      error_led_state = false;
+      error_led_last_toggle = current_tick;
+    }
+  }
 }
 
 /* USER CODE END 0 */
@@ -292,6 +343,13 @@ int main(void)
 
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
+  // Initialize error LED blink state
+  if (blink_error_led)
+  {
+    error_led_last_toggle = HAL_GetTick();
+    error_led_state = true; // LED is currently set to ON
+  }
+
   init_camera_sensors(); // init structures and camera configs
   HAL_Delay(100);
 
@@ -319,6 +377,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
   	comms_host_check_received(); // check comms  
     check_streaming();
+    HandleErrorLedBlink(); // Handle error LED blinking if enabled
   }
 
   /* USER CODE END 3 */
