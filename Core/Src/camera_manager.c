@@ -1133,7 +1133,7 @@ _Bool send_histogram_data(void) {
 	uint8_t timeout_tries = 0;
 	while(tx_status != USBD_OK){
 		printf("-\r\n");
-		delay_us(1000);
+		delay_us(1);
 		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
 		timeout_tries++;
 		if(timeout_tries > 2){
