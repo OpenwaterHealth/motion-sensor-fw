@@ -1082,7 +1082,7 @@ _Bool send_histogram_data(void) {
 	if(count == 0)
 		printf("No cameras have data to send\r\n");
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
-    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    uint32_t total_size = HISTO_HEADER_SIZE + 4 + payload_size + HISTO_TRAILER_SIZE; // +4 for timestamp
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
     }
@@ -1096,7 +1096,15 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
-	if(total_size>32833){
+	
+	// --- Timestamp ---
+	uint32_t timestamp = HAL_GetTick();
+	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 24) & 0xFF);
+	
+	if(total_size>32837){  // Updated to account for 4-byte timestamp
 		printf("Packet too large\r\n");
 	}
 
@@ -1123,7 +1131,7 @@ _Bool send_histogram_data(void) {
 	}
 
 	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH (including timestamp)
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
@@ -1170,7 +1178,7 @@ _Bool send_fake_data(void) {
 		}
 	}
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
-	uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+	uint32_t total_size = HISTO_HEADER_SIZE + 4 + payload_size + HISTO_TRAILER_SIZE; // +4 for timestamp
 	if (HISTO_JSON_BUFFER_SIZE < total_size) {
 		return false;  // Buffer too small
 	}
@@ -1184,6 +1192,13 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+	
+	// --- Timestamp ---
+	uint32_t timestamp = HAL_GetTick();
+	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 24) & 0xFF);
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < count; ++cam_id) {
@@ -1207,7 +1222,7 @@ _Bool send_fake_data(void) {
 		}
 	}
 	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 0 to EOH
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH (including timestamp)
 	packet_buffer[offset++] = crc & 0xFF;
 	packet_buffer[offset++] = (crc >> 8) & 0xFF;
 	packet_buffer[offset++] = HISTO_EOF;
@@ -1315,14 +1330,14 @@ _Bool abort_data_reception(uint8_t cam_id){
     if (cam->useUsart) {
         if (cam->pUart->State == HAL_USART_STATE_BUSY_RX ||
             cam->pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
-				printf("USART still busy aborting\r\n");
+				printf("USART still busy aborting on camera %d\r\n", cam_id);
 			return false;
 		}
     } else {
         if (cam->pSpi->State == HAL_SPI_STATE_BUSY_RX ||
             cam->pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
-            printf("SPI still busy aborting\r\n");
-            return false;  
+            printf("SPI still busy aborting on camera %d\r\n", cam_id);
+            return false;
         }
     }
 	if(verbose_on) printf("done\r\n");
