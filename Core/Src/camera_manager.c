@@ -1140,22 +1140,9 @@ _Bool send_histogram_data(void) {
 	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
 	if(tx_status != USBD_OK){
 		status = false;
-		printf("failed to send, fid: %d\r\n",frame_id);
+		printf("failed to enqueue, fid: %d\r\n",frame_id);
 	}
-	// uint8_t timeout_tries = 0;
-	// while(tx_status != USBD_OK){
-	// 	printf("-\r\n");
-	// 	delay_us(1);
-	// 	tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-	// 	timeout_tries++;
-	// 	if(timeout_tries > 2){
-	// 		printf("F\r\n");
-	// 		status = false;
-	// 		usb_failed = true;
-	// 		break;
-	// 	}
-	// }
-	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
 
 	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){
@@ -1426,14 +1413,6 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	return true;
 }
 
-_Bool toggle_camera_stream(uint8_t cam_id){
-	_Bool status = false;
-    bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
-	if(enabled) status = disable_camera_stream(cam_id);
-	else status = enable_camera_stream(cam_id);
-
-	return status;
-}
 /* -------- END HISTOGRAM TRANSFER FUNCTIONS -------- */
 
 /* -------- BEGIN CAMERA POWER TOGGLE FUNCTIONS -------- */
