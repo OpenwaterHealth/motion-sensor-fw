@@ -96,8 +96,8 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
-	case OW_TOGGLE_CAMERA_STREAM:
-		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
+	case OW_CMD_SET_CAMERA_STREAM:
+		uartResp->command = OW_CMD_SET_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
 		uint8_t status = 0;
 
