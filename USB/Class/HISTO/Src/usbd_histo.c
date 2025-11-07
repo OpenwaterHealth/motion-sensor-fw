@@ -9,12 +9,30 @@
 #include "usbd_desc.h"
 
 /* Private typedef */
+typedef struct {
+  uint8_t *buffer;
+  uint16_t length;
+} histo_queue_entry_t;
+
+#define HISTO_QUEUE_SIZE 2  /* Reduced from 8 to save memory (8 * 36KB = 288KB was too much) */
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
 /* Private variables */
+static histo_queue_entry_t histo_queue[HISTO_QUEUE_SIZE];
+static uint8_t histo_queue_head = 0;
+static uint8_t histo_queue_tail = 0;
+static uint8_t histo_queue_count = 0;
+static USBD_HandleTypeDef *histo_pdev = NULL;
+
+/* Private function prototypes */
+static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length);
+static uint8_t histo_queue_dequeue(uint8_t **data, uint16_t *length);
+static uint8_t histo_queue_is_empty(void);
+static uint8_t histo_queue_is_full(void);
+static uint8_t histo_process_queue(void);
 static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t USBD_Histo_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t USBD_Histo_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *req);
@@ -91,6 +109,28 @@ static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     	Error_Handler();
     }
 
+    /* Allocate buffers for queue entries */
+    for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
+      histo_queue[i].buffer = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
+      if(histo_queue[i].buffer == NULL){
+        /* Free any buffers we already allocated */
+        for (uint8_t j = 0; j < i; j++) {
+          if(histo_queue[j].buffer != NULL){
+            free(histo_queue[j].buffer);
+            histo_queue[j].buffer = NULL;
+          }
+        }
+        Error_Handler();
+      }
+      histo_queue[i].length = 0;
+    }
+
+    /* Initialize queue */
+    histo_queue_head = 0;
+    histo_queue_tail = 0;
+    histo_queue_count = 0;
+    histo_pdev = pdev;
+
     if (pdev->dev_speed == USBD_SPEED_HIGH)
     {
       /* Open EP IN */
@@ -133,6 +173,19 @@ static uint8_t USBD_Histo_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 	free(pTxHistoBuff);
 	pTxHistoBuff = 0;
   }
+
+  /* Free queue entry buffers */
+  for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
+    if(histo_queue[i].buffer){
+      free(histo_queue[i].buffer);
+      histo_queue[i].buffer = NULL;
+    }
+  }
+
+  histo_queue_head = 0;
+  histo_queue_tail = 0;
+  histo_queue_count = 0;
+  histo_pdev = NULL;
 #ifdef USE_USBD_COMPOSITE
   if (pdev->pClassDataCmsit[pdev->classId] != NULL)
   {
@@ -151,6 +204,81 @@ static uint8_t USBD_Histo_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 #endif
 
   return (uint8_t)USBD_OK;
+}
+
+/* Queue management functions */
+static uint8_t histo_queue_is_empty(void)
+{
+  return (histo_queue_count == 0);
+}
+
+static uint8_t histo_queue_is_full(void)
+{
+  return (histo_queue_count >= HISTO_QUEUE_SIZE);
+}
+
+static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
+{
+  if (histo_queue_is_full()) {
+    return USBD_FAIL;
+  }
+
+  if (length > USB_HISTO_MAX_SIZE) {
+    return USBD_FAIL;
+  }
+
+  /* Copy data into queue entry buffer */
+  memcpy(histo_queue[histo_queue_tail].buffer, data, length);
+  histo_queue[histo_queue_tail].length = length;
+
+  /* Update queue pointers */
+  histo_queue_tail = (histo_queue_tail + 1) % HISTO_QUEUE_SIZE;
+  histo_queue_count++;
+
+  return USBD_OK;
+}
+
+static uint8_t histo_queue_dequeue(uint8_t **data, uint16_t *length)
+{
+  if (histo_queue_is_empty()) {
+    return USBD_FAIL;
+  }
+
+  *data = histo_queue[histo_queue_head].buffer;
+  *length = histo_queue[histo_queue_head].length;
+
+  /* Update queue pointers */
+  histo_queue_head = (histo_queue_head + 1) % HISTO_QUEUE_SIZE;
+  histo_queue_count--;
+
+  return USBD_OK;
+}
+
+static uint8_t histo_process_queue(void)
+{
+  uint8_t *data;
+  uint16_t length;
+
+  if (histo_pdev == NULL) {
+    return USBD_FAIL;
+  }
+
+  if (histo_queue_is_empty()) {
+    return USBD_OK;
+  }
+
+  /* If still sending, don't process queue yet */
+  if (histo_ep_data != 0) {
+    return USBD_BUSY;
+  }
+
+  /* Dequeue next packet */
+  if (histo_queue_dequeue(&data, &length) != USBD_OK) {
+    return USBD_FAIL;
+  }
+
+  /* Send the dequeued packet */
+  return USBD_HISTO_SetTxBuffer(histo_pdev, data, length);
 }
 
 static uint8_t USBD_Histo_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *req)
@@ -183,8 +311,9 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           // Transfer complete
           histo_ep_data = 0;
           USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
-		  /* Send ZLP */
-		  // ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+		  
+		  /* Process queue to send next packet if available */
+		  histo_process_queue();
       }
   }else{
 	pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
@@ -197,7 +326,24 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t len, uint8_t ep_idx)
 {
-  return (uint8_t)USBD_OK;
+  UNUSED(ep_idx);
+  
+  if (pdev == NULL || data == NULL || len == 0) {
+    return USBD_FAIL;
+  }
+
+  /* Ensure pdev is stored (in case called before Init, though this shouldn't happen) */
+  if (histo_pdev == NULL) {
+    histo_pdev = pdev;
+  }
+
+  /* If queue is empty and not currently sending, send directly */
+  if (histo_queue_is_empty() && histo_ep_data == 0) {
+    return USBD_HISTO_SetTxBuffer(pdev, data, len);
+  }
+  
+  /* Otherwise, add to queue */
+  return histo_queue_enqueue(data, len);
 }
 
 uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_t length)

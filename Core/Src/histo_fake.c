@@ -60,5 +60,5 @@ void HistoFake_GenerateAndSend(USBD_HandleTypeDef *pdev)
 
     p32[offset++] = HISTO_EOF_MARKER;
 
-    USBD_HISTO_SetTxBuffer(pdev, histo_ctx.frame_buffer, histo_ctx.frame_size_bytes);
+    USBD_HISTO_SendData(pdev, histo_ctx.frame_buffer, histo_ctx.frame_size_bytes, 0);
 }

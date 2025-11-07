@@ -1136,21 +1136,25 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
 	
-	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-	uint8_t timeout_tries = 0;
-	while(tx_status != USBD_OK){
-		printf("-\r\n");
-		delay_us(1);
-		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-		timeout_tries++;
-		if(timeout_tries > 2){
-			printf("F\r\n");
-			status = false;
-			usb_failed = true;
-			break;
-		}
+	// Send data - will be queued if USB is busy
+	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
+	if(tx_status != USBD_OK){
+		status = false;
+		printf("failed to send, fid: %d\r\n",frame_id);
 	}
+	// uint8_t timeout_tries = 0;
+	// while(tx_status != USBD_OK){
+	// 	printf("-\r\n");
+	// 	delay_us(1);
+	// 	tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	// 	timeout_tries++;
+	// 	if(timeout_tries > 2){
+	// 		printf("F\r\n");
+	// 		status = false;
+	// 		usb_failed = true;
+	// 		break;
+	// 	}
+	// }
 	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
 	// kick off the next frame reception
@@ -1229,7 +1233,7 @@ _Bool send_fake_data(void) {
 
 	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
 
 	//TODO( handle the case where the packet fails to send better)
 	if(tx_status != USBD_OK){
