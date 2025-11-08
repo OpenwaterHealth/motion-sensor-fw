@@ -103,6 +103,13 @@ void delay_us(uint32_t us)
     while ((DWT->CYCCNT - start) < delay_cycles);
 }
 
+// get timestamp ms will grab the current timestamp in milliseconds as counted by tim5
+uint32_t get_timestamp_ms(void)
+{
+    uint32_t timestamp = TIM5->CNT*10;
+    printf("Timestamp: %d\r\n", timestamp);
+    return timestamp;
+}
 void GPIO_SetHiZ(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};

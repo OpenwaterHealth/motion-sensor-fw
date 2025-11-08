@@ -1030,10 +1030,10 @@ _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active){
-		streaming_start_time = HAL_GetTick();
+		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 	}
-	most_recent_frame_time = HAL_GetTick();
+	most_recent_frame_time = get_timestamp_ms();
 
 	bool success = false;
 	if (fake_data_gen) // Call FAKE data sender if enabled)
@@ -1057,7 +1057,7 @@ _Bool send_data(void) {
 _Bool check_streaming(void){
 	if(streaming_active){
 		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
-			uint32_t elapsed = HAL_GetTick() - streaming_start_time;
+			uint32_t elapsed = get_timestamp_ms() - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
 			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
