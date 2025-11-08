@@ -1056,7 +1056,7 @@ _Bool send_data(void) {
 
 _Bool check_streaming(void){
 	if(streaming_active){
-		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
+		if(get_timestamp_ms() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
 			uint32_t elapsed = get_timestamp_ms() - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
