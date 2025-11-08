@@ -108,7 +108,7 @@ static HAL_StatusTypeDef xi2c_write_long(I2C_HandleTypeDef *hi2c, uint16_t DevAd
         // Check if the I2C peripheral is ready
         while (HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY) {
             //if(verbose_on) printf("I2C busy, waiting...\r\n");
-            HAL_Delay(1);  // Add a small delay to avoid busy looping
+            delay_ms(1);  // Add a small delay to avoid busy looping
         }
 
         pData = (uint8_t*)&bitstream_buffer[offset];
@@ -174,7 +174,7 @@ int fpga_enter_sram_prog_mode(I2C_HandleTypeDef *hi2c, uint16_t DevAddress)
         if(verbose_on) printf("failed to send SRAM Command\r\n");
         return 1;  // Exit if writing fails
     }
-    HAL_Delay(1);
+    delay_ms(1);
     return 0;
 }
 
@@ -269,26 +269,26 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
 
     // Set GPIO HIGH
     HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-    HAL_Delay(250);
+    delay_ms(250);
 
     // Set GPIO LOW
     HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
-    HAL_Delay(250);
+    delay_ms(250);
 
     while (attempt < max_attempts && !idcode_match) {
         attempt++;
 		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-		HAL_Delay(100);
+		delay_ms(100);
 
 		// Set GPIO LOW
 		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
-		HAL_Delay(1000);
+		delay_ms(1000);
 
 		// Activation Key
 		uint8_t activation_key[] = {0xFF, 0xA4, 0xC6, 0xF4, 0x8A};
 		xi2c_write_bytes(hi2c, DevAddress, activation_key, 5);
 		HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-		HAL_Delay(10);
+		delay_ms(10);
 
 		// IDCODE
 		memset(read_buf, 0, 4);
@@ -315,12 +315,12 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
     // Enable SRAM
     memcpy(write_buf, (uint8_t[]){0xC6,0x00,0x00,0x00}, 4);
     xi2c_write_bytes(hi2c, DevAddress, write_buf, 4);
-    HAL_Delay(1);
+    delay_ms(1);
 
     // Erase SRAM
     memcpy(write_buf, (uint8_t[]){0x0E,0x00,0x00,0x00}, 4);
     xi2c_write_bytes(hi2c, DevAddress, write_buf, 4);
-    HAL_Delay(5000);
+    delay_ms(5000);
 
     // Read Status
     memset(read_buf, 0, 4);
@@ -331,12 +331,12 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
     // Program Command
     memcpy(write_buf, (uint8_t[]){0x46,0x00,0x00,0x00}, 4);
     xi2c_write_bytes(hi2c, DevAddress, write_buf, 4);
-    HAL_Delay(1);
+    delay_ms(1);
 
     // Send Bitstream
     memcpy(write_buf, (uint8_t[]){0x7A,0x00,0x00,0x00}, 4);
     xi2c_write_long(hi2c, DevAddress, write_buf, 4, (uint8_t*)0x081A0000, (size_t)163489);
-    HAL_Delay(1);
+    delay_ms(1);
 
     // USERCODE (optional)
     memset(read_buf, 0, 4);

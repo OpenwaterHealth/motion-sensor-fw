@@ -176,7 +176,7 @@ void I2C_DisableEnableReset(I2C_HandleTypeDef *hi2c)
     HAL_I2C_DeInit(hi2c);         // De-initialize the I2C to reset its state
 
     // Step 2: Add a small delay for safety
-    HAL_Delay(10);
+    delay_ms(10);
 
     // Step 3: Re-enable the I2C peripheral
     __HAL_RCC_I2C1_CLK_ENABLE(); // Re-enable the I2C clock

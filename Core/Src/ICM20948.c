@@ -96,14 +96,14 @@ uint8_t ICM_Init(void)
     // 2. Reset device (set DEVICE_RESET bit in PWR_MGMT_1)
     uint8_t reset_cmd = 0x80;
     status = ICM_WriteBytes(ICM20948_PWR_MGMT_1, &reset_cmd, 1);
-    HAL_Delay(100);  // Wait for reset
+    delay_ms(100);  // Wait for reset
     if (status != HAL_OK) return status;
 
     // 3. Wake up and set clock source
     uint8_t pwr_mgmt_1 = 0x01;  // sleep=0, clock=auto
     status = ICM_WriteBytes(ICM20948_PWR_MGMT_1, &pwr_mgmt_1, 1);
     if (status != HAL_OK) return status;
-    HAL_Delay(10);
+    delay_ms(10);
 
     // 4. Enable all sensors (Accel, Gyro, Temp)
     uint8_t pwr_mgmt_2 = 0x00; // All on
@@ -159,12 +159,12 @@ uint8_t ICM_Init(void)
     status = ICM_WriteBytes(ICM20948_I2C_SLV0_CTRL, &ctrl, 1);
     if (status != HAL_OK) return status;
 
-    HAL_Delay(10);  // Let mag config complete
+    delay_ms(10);  // Let mag config complete
 
     // 9. Return to USER BANK 0
     ICM_SelectBank(ICM20948_USER_BANK_0);
 
-    HAL_Delay(50);
+    delay_ms(50);
     // printf("ICM20948 initialization complete.\r\n");
 
     return HAL_OK;
@@ -239,7 +239,7 @@ uint8_t ICM_ReadMag(ICM_Axis3D *mag)
     status = ICM_WriteBytes(ICM20948_I2C_SLV0_CTRL, &ctrl, 1);
     if (status != HAL_OK) return status;
 
-    HAL_Delay(10);  // Wait for data to populate
+    delay_ms(10);  // Wait for data to populate
 
     ICM_SelectBank(ICM20948_USER_BANK_0);
 

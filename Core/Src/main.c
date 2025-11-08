@@ -246,7 +246,7 @@ int main(void)
 
   printf("\033c");
   fflush(stdout);
-  HAL_Delay(500);
+  delay_ms(500);
   printf("Openwater open-MOTION Aggregator FW v%d.%d.%d\r\n\r\n",
          FIRMWARE_VERSION_DATA[0], FIRMWARE_VERSION_DATA[1],
          FIRMWARE_VERSION_DATA[2]);
@@ -265,7 +265,7 @@ int main(void)
   // test i2c
   PrintI2CSpeed(&hi2c1);
   // I2C_scan(&hi2c1, NULL, 0, true);
-  HAL_Delay(100);
+  delay_ms(100);
   X02C1B_FSIN_EXT_disable();
   GPIO_SetOutput(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET); // disable fsin output
 
@@ -277,7 +277,7 @@ int main(void)
 	else
 	{
 		printf("IMU detected\r\n");
-	    HAL_Delay(100);
+	    delay_ms(100);
 	    if(verbose_on) ICM_DumpRegisters();
 	}
   }
@@ -286,23 +286,23 @@ int main(void)
     printf("IMU NOT detected\r\n\n");
   }
 
-  HAL_Delay(10);
+  delay_ms(10);
 
   HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_SET);
 
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
   init_camera_sensors(); // init structures and camera configs
-  HAL_Delay(100);
+  delay_ms(100);
 
   scan_camera_sensors(scanI2cAtStart);
 
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 
-  HAL_Delay(250);
+  delay_ms(250);
   MX_USB_DEVICE_Init();
-  HAL_Delay(1000);
+  delay_ms(1000);
   //GPIO_SetHiZ(GPIOA, GPIO_PIN_2);
 
   comms_host_start();
@@ -1698,7 +1698,7 @@ void Error_Handler(void)
   printf("xPSR: 0x%08lX\r\n", stack_ptr[7]);
   fflush(stdout);
 
-  HAL_Delay(100);
+  delay_ms(100);
   __disable_irq();
   while (1)
   {

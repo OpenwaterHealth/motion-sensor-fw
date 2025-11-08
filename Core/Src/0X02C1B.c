@@ -76,7 +76,7 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 		return ret;
 	}
 
-	HAL_Delay(100);
+	delay_ms(100);
     ret = X02C1B_write_array(cam->pI2c, X02C1B_SENSOR_CONFIG, ARRAY_SIZE(X02C1B_SENSOR_CONFIG));
     if (ret < 0) {
         printf("Camera %d Sensor configuration failed\r\n", cam->id+1);
@@ -101,13 +101,13 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 		return ret;
 	}
 
-	HAL_Delay(100);
+	delay_ms(100);
     return 0;
 }
 
 int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
 {
-    HAL_Delay(100);
+    delay_ms(100);
     int ret = 0;
     switch (test_pattern) {
         case 0:
@@ -142,7 +142,7 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
     }
     // printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
 
-	HAL_Delay(10);
+	delay_ms(10);
 
 	return 0;
 }

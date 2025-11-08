@@ -89,6 +89,11 @@ void DWT_Init(void)
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
+void delay_ms(uint32_t ms)
+{
+	delay_us(ms * 1000);
+}
+
 void delay_us(uint32_t us)
 {
     uint32_t cycles_per_us = SystemCoreClock / 1000000;

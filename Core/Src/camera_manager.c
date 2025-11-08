@@ -402,10 +402,10 @@ _Bool reset_camera(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
-    HAL_Delay(5);
+    delay_ms(5);
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
-    HAL_Delay(1000);
+    delay_ms(1000);
 
     cam->isConfigured = false;
     cam->isProgrammed = false;
@@ -426,7 +426,7 @@ _Bool enable_fpga(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
-    HAL_Delay(2);
+    delay_ms(2);
 	return true;
 }
 
@@ -443,7 +443,7 @@ _Bool disable_fpga(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
-    HAL_Delay(2);
+    delay_ms(2);
 
 	return true;
 }
@@ -736,7 +736,7 @@ void scan_camera_sensors(bool scanI2cAtStart){
 	bool camera_found = false, fpga_found = false;
 
 	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
-	HAL_Delay(10);
+	delay_ms(10);
 
 	if (scanI2cAtStart)
 	  printf("I2C Scanning bus %d\r\n", i + 1);
@@ -981,20 +981,20 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	}
 
 	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(1);
+	delay_ms(1);
 
 	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, cam->useUsart ? USART_PACKET_LENGTH : SPI_PACKET_LENGTH);
 
 	start_data_reception(cam_id);
 
 	X02C1B_stream_on(cam);
-	HAL_Delay(2);
+	delay_ms(2);
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-	HAL_Delay(2);
+	delay_ms(2);
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(2);
+	delay_ms(2);
 
 	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
 
@@ -1015,10 +1015,10 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	    	ret = false;
 	        break;
 	    }
-	    HAL_Delay(1);
+	    delay_ms(1);
 	}
 
-	HAL_Delay(1);
+	delay_ms(1);
 	X02C1B_stream_off(cam);
 	// printf("Received Frame\r\n");
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
@@ -1316,7 +1316,7 @@ _Bool abort_data_reception(uint8_t cam_id){
 	if (status != HAL_OK) {
 		return false;
 	}
-	HAL_Delay(10);
+	delay_ms(10);
 	// Check if the device is BUSY
     if (cam->useUsart) {
         if (cam->pUart->State == HAL_USART_STATE_BUSY_RX ||
