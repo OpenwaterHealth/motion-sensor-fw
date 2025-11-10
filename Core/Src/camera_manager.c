@@ -846,7 +846,7 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 
 void poll_camera_temperatures(void)
 {
-    if (HAL_GetTick() >= next_temp_ms)
+    if (get_timestamp_ms() >= next_temp_ms)
     {
         next_temp_ms += CAM_TEMP_INTERVAL_MS;
 
@@ -996,10 +996,10 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
 	delay_ms(2);
 
-	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
+	uint32_t timeout = get_timestamp_ms() + 5000; // 100ms timeout example
 
 	while(!event_bits) {
-	    if (HAL_GetTick() > timeout) {
+	    if (get_timestamp_ms() > timeout) {
 	        printf("HISTO receive timeout!\r\n");
 	        if(cam->useUsart) {
 	            HAL_DMA_Abort(cam->pUart->hdmarx); // safely abort DMA
@@ -1098,7 +1098,7 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 	
 	// --- Timestamp ---
-	uint32_t timestamp = HAL_GetTick();
+	uint32_t timestamp = get_timestamp_ms();
 	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
@@ -1185,7 +1185,7 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
 	
 	// --- Timestamp ---
-	uint32_t timestamp = HAL_GetTick();
+	uint32_t timestamp = get_timestamp_ms();
 	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);

@@ -123,10 +123,10 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	}
 
 	// Wait for the transmit complete flag with a timeout to avoid infinite loop.
-	uint32_t start_time = HAL_GetTick();
+	uint32_t start_time = get_timestamp_ms();
 
 	while (!tx_flag) {
-		if ((HAL_GetTick() - start_time) >= TX_TIMEOUT) {
+		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
 			printf("TX Timeout\r\n");
 			return false;
