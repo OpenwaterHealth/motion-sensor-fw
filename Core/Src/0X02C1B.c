@@ -292,7 +292,7 @@ int X02C1B_FSIN_EXT_enable()
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 
     /* Configure NVIC for receiving interrupts */
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, FSIN_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
     
     ext_fsin_enabled = true;

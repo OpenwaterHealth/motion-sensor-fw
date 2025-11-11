@@ -187,7 +187,10 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     HAL_NVIC_SetPriority(I2C1_ER_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
     /* USER CODE BEGIN I2C1_MspInit 1 */
-
+    HAL_NVIC_SetPriority(I2C1_EV_IRQn, I2C_IRQ_PRIORITY, 0);
+    HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
+    HAL_NVIC_SetPriority(I2C1_ER_IRQn, I2C_IRQ_PRIORITY, 0);
+    HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
     /* USER CODE END I2C1_MspInit 1 */
 
   }
@@ -355,8 +358,9 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     HAL_NVIC_SetPriority(SPI2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(SPI2_IRQn);
     /* USER CODE BEGIN SPI2_MspInit 1 */
-    HAL_NVIC_SetPriority(SPI3_IRQn, 6, 0);
-    HAL_NVIC_EnableIRQ(SPI3_IRQn);
+    HAL_NVIC_SetPriority(SPI2_IRQn, SPI2_IRQ_PRIORITY, 0);
+    HAL_NVIC_EnableIRQ(SPI2_IRQn);
+
     /* USER CODE END SPI2_MspInit 1 */
   }
   else if(hspi->Instance==SPI3)
@@ -412,7 +416,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     HAL_NVIC_SetPriority(SPI3_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(SPI3_IRQn);
     /* USER CODE BEGIN SPI3_MspInit 1 */
-    HAL_NVIC_SetPriority(SPI3_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(SPI3_IRQn, SPI3_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(SPI3_IRQn);
     /* USER CODE END SPI3_MspInit 1 */
   }
@@ -470,7 +474,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     HAL_NVIC_SetPriority(SPI4_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(SPI4_IRQn);
     /* USER CODE BEGIN SPI4_MspInit 1 */
-    HAL_NVIC_SetPriority(SPI4_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(SPI4_IRQn, SPI4_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(SPI4_IRQn);
     /* USER CODE END SPI4_MspInit 1 */
   }
@@ -535,7 +539,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     HAL_NVIC_SetPriority(SPI6_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(SPI6_IRQn);
     /* USER CODE BEGIN SPI6_MspInit 1 */
-    HAL_NVIC_SetPriority(SPI6_IRQn, 4, 0);
+    HAL_NVIC_SetPriority(SPI6_IRQn, SPI6_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(SPI6_IRQn);
     /* USER CODE END SPI6_MspInit 1 */
   }
@@ -999,7 +1003,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     __HAL_LINKDMA(huart,hdmatx,hdma_uart4_tx);
 
     /* UART4 interrupt Init */
-    HAL_NVIC_SetPriority(UART4_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(UART4_IRQn, UART4_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(UART4_IRQn);
     /* USER CODE BEGIN UART4_MspInit 1 */
 
@@ -1088,8 +1092,7 @@ void HAL_USART_MspInit(USART_HandleTypeDef* husart)
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
     /* USER CODE BEGIN USART1_MspInit 1 */
-
-    HAL_NVIC_SetPriority(USART1_IRQn, 4, 0);
+    HAL_NVIC_SetPriority(USART1_IRQn, USART1_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
     /* USER CODE END USART1_MspInit 1 */
   }
@@ -1155,7 +1158,7 @@ void HAL_USART_MspInit(USART_HandleTypeDef* husart)
     HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
     /* USER CODE BEGIN USART2_MspInit 1 */
-    HAL_NVIC_SetPriority(USART2_IRQn, 4, 0);
+    HAL_NVIC_SetPriority(USART2_IRQn, USART2_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
     /* USER CODE END USART2_MspInit 1 */
   }
@@ -1213,7 +1216,7 @@ void HAL_USART_MspInit(USART_HandleTypeDef* husart)
     HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART3_IRQn);
     /* USER CODE BEGIN USART3_MspInit 1 */
-    HAL_NVIC_SetPriority(USART3_IRQn, 4, 0);
+    HAL_NVIC_SetPriority(USART3_IRQn, USART3_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(USART3_IRQn);
     /* USER CODE END USART3_MspInit 1 */
   }
@@ -1271,7 +1274,7 @@ void HAL_USART_MspInit(USART_HandleTypeDef* husart)
     HAL_NVIC_SetPriority(USART6_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART6_IRQn);
     /* USER CODE BEGIN USART6_MspInit 1 */
-    HAL_NVIC_SetPriority(USART6_IRQn, 4, 0);
+    HAL_NVIC_SetPriority(USART6_IRQn, USART6_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(USART6_IRQn);
     /* USER CODE END USART6_MspInit 1 */
   }
