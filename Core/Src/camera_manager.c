@@ -46,6 +46,7 @@ extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be
 extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
+extern uint16_t pulse_count;
 
 
 // Variables for keeping track of statisticss
@@ -1060,6 +1061,7 @@ _Bool check_streaming(void){
 			uint32_t elapsed = get_timestamp_ms() - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
+			printf("Pulse count: %lu\r\n", pulse_count);
 			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
 			total_frames_sent = 0;
 			total_frames_failed = 0;

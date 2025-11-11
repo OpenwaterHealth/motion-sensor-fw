@@ -104,7 +104,7 @@ __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]
 
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
-
+volatile uint16_t pulse_count = 0;
 extern uint32_t imu_frame_counter;
 
 
@@ -1641,6 +1641,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {     
     if (GPIO_Pin == GPIO_PIN_13) // Call REAL data sender if interrupt hit and enabled
     {
+      pulse_count++;
       send_data();
     }
 }
