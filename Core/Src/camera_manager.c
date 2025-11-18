@@ -46,16 +46,16 @@ extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be
 extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
-extern uint16_t pulse_count;
+extern uint32_t pulse_count;
 
 
 // Variables for keeping track of statisticss
-uint32_t total_frames_sent = 0;
-uint32_t total_frames_failed = 0;
+volatile uint32_t total_frames_sent = 0;
+volatile uint32_t total_frames_failed = 0;
 
-#define STREAMING_TIMEOUT_MS 75
-uint32_t most_recent_frame_time = 0;
-uint32_t streaming_start_time = 0;
+#define STREAMING_TIMEOUT_MS 150
+volatile uint32_t most_recent_frame_time = 0;
+volatile uint32_t streaming_start_time = 0;
 bool streaming_active = false;
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
@@ -1031,11 +1031,19 @@ _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active){
+		printf("Streaming started\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 	}
-	most_recent_frame_time = get_timestamp_ms();
 
+	// Sometimes the frame sync fires 4ms after the previous frame due to electrical noise. Ignore these.
+	if(get_timestamp_ms() - most_recent_frame_time < 15 ){ 
+		printf("Frame sync detected less than 15ms after previous frame (debounce issue), passing.\r\n");
+		return true;
+	}
+
+	most_recent_frame_time = get_timestamp_ms();
+	// printf("%lu\r\n", most_recent_frame_time);
 	bool success = false;
 	if (fake_data_gen) // Call FAKE data sender if enabled)
     {
@@ -1057,12 +1065,19 @@ _Bool send_data(void) {
 
 _Bool check_streaming(void){
 	if(streaming_active){
-		if(get_timestamp_ms() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
-			uint32_t elapsed = get_timestamp_ms() - streaming_start_time;
+		uint32_t current_time = get_timestamp_ms();
+		uint32_t most_recent_frame_time_local = most_recent_frame_time;
+
+		if(current_time<most_recent_frame_time_local){
+			if(verbose_on) printf("Current time is less than most recent frame time, passing.\r\n");
+			// This is an edge case that seems to happen due to this function being interrupted by the interrupt that sets most_recent_frame_time.
+			return streaming_active;
+		}
+		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
+			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
+			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
-			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
-			printf("Pulse count: %lu\r\n", pulse_count);
-			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
+			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
 			total_frames_sent = 0;
 			total_frames_failed = 0;
 			streaming_active = false;

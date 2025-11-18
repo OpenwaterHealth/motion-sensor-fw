@@ -289,6 +289,7 @@ int X02C1B_FSIN_EXT_enable()
     GPIO_InitStruct.Pin = FSIN_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;     // Set to input mode, falling edge trigger
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 
     /* Configure NVIC for receiving interrupts */
