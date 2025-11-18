@@ -509,7 +509,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!capture_single_histogram(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed capture histo for camera %d\r\n", i+1);
+	    			printf("Failed to capture histo for camera %d\r\n", i+1);
 
 	        	}
 	        }
