@@ -96,8 +96,8 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
-	case OW_TOGGLE_CAMERA_STREAM:
-		uartResp->command = OW_TOGGLE_CAMERA_STREAM;
+	case OW_CMD_SET_CAMERA_STREAM:
+		uartResp->command = OW_CMD_SET_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
 		uint8_t status = 0;
 
@@ -176,7 +176,7 @@ void I2C_DisableEnableReset(I2C_HandleTypeDef *hi2c)
     HAL_I2C_DeInit(hi2c);         // De-initialize the I2C to reset its state
 
     // Step 2: Add a small delay for safety
-    HAL_Delay(10);
+    delay_ms(10);
 
     // Step 3: Re-enable the I2C peripheral
     __HAL_RCC_I2C1_CLK_ENABLE(); // Re-enable the I2C clock
@@ -509,7 +509,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!capture_single_histogram(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed capture histo for camera %d\r\n", i);
+	    			printf("Failed to capture histo for camera %d\r\n", i+1);
 
 	        	}
 	        }
@@ -527,7 +527,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	{
 	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed capture histo for camera %d\r\n", i);
+	    			printf("Failed get histo for camera %d\r\n", i+1);
 
 	        	} else {
 	        		uartResp->reserved |= (1 << i);

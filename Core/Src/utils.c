@@ -89,6 +89,11 @@ void DWT_Init(void)
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
+void delay_ms(uint32_t ms)
+{
+	delay_us(ms * 1000);
+}
+
 void delay_us(uint32_t us)
 {
     uint32_t cycles_per_us = SystemCoreClock / 1000000;
@@ -98,6 +103,13 @@ void delay_us(uint32_t us)
     while ((DWT->CYCCNT - start) < delay_cycles);
 }
 
+// get timestamp ms will grab the current timestamp in milliseconds as counted by tim5
+uint32_t get_timestamp_ms(void)
+{
+    uint32_t timestamp = TIM5->CNT/100;
+    // printf("Timestamp: %d\r\n", timestamp);
+    return timestamp;
+}
 void GPIO_SetHiZ(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};

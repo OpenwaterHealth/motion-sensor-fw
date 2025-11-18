@@ -75,6 +75,7 @@ DMA_HandleTypeDef hdma_spi6_rx;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim14;
 TIM_HandleTypeDef htim16;
@@ -94,7 +95,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 1};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 3};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -103,7 +104,7 @@ __attribute__((section(".RAM_D1"))) uint8_t bitstream_buffer[MAX_BITSTREAM_SIZE]
 
 volatile uint8_t event_bits = 0x00;         // holds the event bits to be flipped
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
-
+volatile uint16_t pulse_count = 0;
 extern uint32_t imu_frame_counter;
 
 
@@ -153,6 +154,7 @@ static void MX_USART2_Init(void);
 static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -233,7 +235,14 @@ int main(void)
   MX_USART3_Init();
   MX_TIM14_Init();
   MX_TIM16_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  
+  if (HAL_TIM_Base_Start(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  
   init_dma_logging();
 
   DWT_Init();
@@ -246,7 +255,7 @@ int main(void)
 
   printf("\033c");
   fflush(stdout);
-  HAL_Delay(500);
+  delay_ms(500);
   printf("Openwater open-MOTION Aggregator FW v%d.%d.%d\r\n\r\n",
          FIRMWARE_VERSION_DATA[0], FIRMWARE_VERSION_DATA[1],
          FIRMWARE_VERSION_DATA[2]);
@@ -265,7 +274,7 @@ int main(void)
   // test i2c
   PrintI2CSpeed(&hi2c1);
   // I2C_scan(&hi2c1, NULL, 0, true);
-  HAL_Delay(100);
+  delay_ms(100);
   X02C1B_FSIN_EXT_disable();
   GPIO_SetOutput(FSIN_EN_GPIO_Port, FSIN_EN_Pin, GPIO_PIN_RESET); // disable fsin output
 
@@ -277,7 +286,7 @@ int main(void)
 	else
 	{
 		printf("IMU detected\r\n");
-	    HAL_Delay(100);
+	    delay_ms(100);
 	    if(verbose_on) ICM_DumpRegisters();
 	}
   }
@@ -286,23 +295,23 @@ int main(void)
     printf("IMU NOT detected\r\n\n");
   }
 
-  HAL_Delay(10);
+  delay_ms(10);
 
   HAL_GPIO_WritePin(USB_RESET_GPIO_Port, USB_RESET_Pin, GPIO_PIN_SET);
 
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
   init_camera_sensors(); // init structures and camera configs
-  HAL_Delay(100);
+  delay_ms(100);
 
   scan_camera_sensors(scanI2cAtStart);
 
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 
-  HAL_Delay(250);
+  delay_ms(250);
   MX_USB_DEVICE_Init();
-  HAL_Delay(1000);
+  delay_ms(1000);
   //GPIO_SetHiZ(GPIOA, GPIO_PIN_2);
 
   comms_host_start();
@@ -823,6 +832,51 @@ static void MX_TIM4_Init(void)
 }
 
 /**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 2400-1;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 0xFFFFFFFF;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
+
+}
+
+/**
   * @brief TIM8 Initialization Function
   * @param None
   * @retval None
@@ -1199,7 +1253,7 @@ static void MX_BDMA_Init(void)
 
   /* DMA interrupt init */
   /* BDMA_Channel0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(BDMA_Channel0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(BDMA_Channel0_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(BDMA_Channel0_IRQn);
 
 }
@@ -1237,31 +1291,31 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
   /* DMA1_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
   /* DMA1_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
   /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
   /* DMA1_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream7_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream7_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream7_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, DMA_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
@@ -1293,7 +1347,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, CAM_PWR_1_Pin|CAM_PWR_5_Pin|CAM_PWR_8_Pin|CAM_PWR_4_Pin
-                          |FS_OUT_EN_Pin, GPIO_PIN_SET);
+                          |FAN_CTL_Pin|FS_OUT_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, CAM_PWR_7_Pin|CAM_PWR_2_Pin|FSIN_EN_Pin, GPIO_PIN_SET);
@@ -1303,9 +1357,6 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CAM_PWR_6_GPIO_Port, CAM_PWR_6_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : ERROR_LED_Pin MUX_RESET_Pin USB_MUX_Pin CAM_PWR_6_Pin */
   GPIO_InitStruct.Pin = ERROR_LED_Pin|MUX_RESET_Pin|USB_MUX_Pin|CAM_PWR_6_Pin;
@@ -1587,6 +1638,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {     
     if (GPIO_Pin == GPIO_PIN_13) // Call REAL data sender if interrupt hit and enabled
     {
+      pulse_count++;
       send_data();
     }
 }
@@ -1698,7 +1750,7 @@ void Error_Handler(void)
   printf("xPSR: 0x%08lX\r\n", stack_ptr[7]);
   fflush(stdout);
 
-  HAL_Delay(100);
+  delay_ms(100);
   __disable_irq();
   while (1)
   {

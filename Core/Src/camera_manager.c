@@ -46,15 +46,16 @@ extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be
 extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
+extern uint32_t pulse_count;
 
 
 // Variables for keeping track of statisticss
-uint32_t total_frames_sent = 0;
-uint32_t total_frames_failed = 0;
+volatile uint32_t total_frames_sent = 0;
+volatile uint32_t total_frames_failed = 0;
 
-#define STREAMING_TIMEOUT_MS 75
-uint32_t most_recent_frame_time = 0;
-uint32_t streaming_start_time = 0;
+#define STREAMING_TIMEOUT_MS 150
+volatile uint32_t most_recent_frame_time = 0;
+volatile uint32_t streaming_start_time = 0;
 bool streaming_active = false;
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
@@ -402,10 +403,10 @@ _Bool reset_camera(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
-    HAL_Delay(5);
+    delay_ms(5);
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
-    HAL_Delay(1000);
+    delay_ms(1000);
 
     cam->isConfigured = false;
     cam->isProgrammed = false;
@@ -426,7 +427,7 @@ _Bool enable_fpga(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_SET);
-    HAL_Delay(2);
+    delay_ms(2);
 	return true;
 }
 
@@ -443,7 +444,7 @@ _Bool disable_fpga(uint8_t cam_id)
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
     HAL_GPIO_WritePin(cam->cresetb_port, cam->cresetb_pin, GPIO_PIN_RESET);
-    HAL_Delay(2);
+    delay_ms(2);
 
 	return true;
 }
@@ -736,7 +737,7 @@ void scan_camera_sensors(bool scanI2cAtStart){
 	bool camera_found = false, fpga_found = false;
 
 	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
-	HAL_Delay(10);
+	delay_ms(10);
 
 	if (scanI2cAtStart)
 	  printf("I2C Scanning bus %d\r\n", i + 1);
@@ -846,7 +847,7 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 
 void poll_camera_temperatures(void)
 {
-    if (HAL_GetTick() >= next_temp_ms)
+    if (get_timestamp_ms() >= next_temp_ms)
     {
         next_temp_ms += CAM_TEMP_INTERVAL_MS;
 
@@ -981,25 +982,25 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	}
 
 	GPIO_SetOutput(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(1);
+	delay_ms(1);
 
 	memset((uint8_t*)cam->pRecieveHistoBuffer, 0, cam->useUsart ? USART_PACKET_LENGTH : SPI_PACKET_LENGTH);
 
 	start_data_reception(cam_id);
 
 	X02C1B_stream_on(cam);
-	HAL_Delay(2);
+	delay_ms(2);
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
 
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_SET);
-	HAL_Delay(2);
+	delay_ms(2);
 	HAL_GPIO_WritePin(FSIN_GPIO_Port, FSIN_Pin, GPIO_PIN_RESET);
-	HAL_Delay(2);
+	delay_ms(2);
 
-	uint32_t timeout = HAL_GetTick() + 5000; // 100ms timeout example
+	uint32_t timeout = get_timestamp_ms() + 5000; // 100ms timeout example
 
 	while(!event_bits) {
-	    if (HAL_GetTick() > timeout) {
+	    if (get_timestamp_ms() > timeout) {
 	        printf("HISTO receive timeout!\r\n");
 	        if(cam->useUsart) {
 	            HAL_DMA_Abort(cam->pUart->hdmarx); // safely abort DMA
@@ -1015,10 +1016,10 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	    	ret = false;
 	        break;
 	    }
-	    HAL_Delay(1);
+	    delay_ms(1);
 	}
 
-	HAL_Delay(1);
+	delay_ms(1);
 	X02C1B_stream_off(cam);
 	// printf("Received Frame\r\n");
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
@@ -1030,11 +1031,19 @@ _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active){
-		streaming_start_time = HAL_GetTick();
+		printf("Streaming started\r\n");
+		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 	}
-	most_recent_frame_time = HAL_GetTick();
 
+	// Sometimes the frame sync fires 4ms after the previous frame due to electrical noise. Ignore these.
+	if(get_timestamp_ms() - most_recent_frame_time < 15 ){ 
+		printf("Frame sync detected less than 15ms after previous frame (debounce issue), passing.\r\n");
+		return true;
+	}
+
+	most_recent_frame_time = get_timestamp_ms();
+	// printf("%lu\r\n", most_recent_frame_time);
 	bool success = false;
 	if (fake_data_gen) // Call FAKE data sender if enabled)
     {
@@ -1056,11 +1065,19 @@ _Bool send_data(void) {
 
 _Bool check_streaming(void){
 	if(streaming_active){
-		if(HAL_GetTick() - most_recent_frame_time > STREAMING_TIMEOUT_MS){
-			uint32_t elapsed = HAL_GetTick() - streaming_start_time;
+		uint32_t current_time = get_timestamp_ms();
+		uint32_t most_recent_frame_time_local = most_recent_frame_time;
+
+		if(current_time<most_recent_frame_time_local){
+			if(verbose_on) printf("Current time is less than most recent frame time, passing.\r\n");
+			// This is an edge case that seems to happen due to this function being interrupted by the interrupt that sets most_recent_frame_time.
+			return streaming_active;
+		}
+		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
+			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
+			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
-			printf("Cameras have stopped sending data %lu ms\r\n", elapsed);
-			printf("Total frames sent: %lu, failed: %lu\r\n", total_frames_sent, total_frames_failed);
+			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
 			total_frames_sent = 0;
 			total_frames_failed = 0;
 			streaming_active = false;
@@ -1082,7 +1099,7 @@ _Bool send_histogram_data(void) {
 	if(count == 0)
 		printf("No cameras have data to send\r\n");
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
-    uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+    uint32_t total_size = HISTO_HEADER_SIZE + 4 + payload_size + HISTO_TRAILER_SIZE; // +4 for timestamp
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
         return false;  // Buffer too small
     }
@@ -1096,7 +1113,15 @@ _Bool send_histogram_data(void) {
     packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
     packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
-	if(total_size>32833){
+	
+	// --- Timestamp ---
+	uint32_t timestamp = get_timestamp_ms();
+	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 24) & 0xFF);
+	
+	if(total_size>32837){  // Updated to account for 4-byte timestamp
 		printf("Packet too large\r\n");
 	}
 
@@ -1123,27 +1148,18 @@ _Bool send_histogram_data(void) {
 	}
 
 	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH (including timestamp)
     packet_buffer[offset++] = crc & 0xFF;
     packet_buffer[offset++] = (crc >> 8) & 0xFF;
     packet_buffer[offset++] = HISTO_EOF;
 	
-	// Send data with 3 retries if it fails, print - if retry and F if failed after 3 tries
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-	uint8_t timeout_tries = 0;
-	while(tx_status != USBD_OK){
-		printf("-\r\n");
-		HAL_Delay(1);
-		tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
-		timeout_tries++;
-		if(timeout_tries > 2){
-			printf("F\r\n");
-			status = false;
-			usb_failed = true;
-			break;
-		}
+	// Send data - will be queued if USB is busy
+	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
+	if(tx_status != USBD_OK){
+		status = false;
+		printf("failed to enqueue, fid: %d\r\n",frame_id);
 	}
-	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+
 
 	// kick off the next frame reception
 	for(int i = 0;i<CAMERA_COUNT;i++){
@@ -1170,7 +1186,7 @@ _Bool send_fake_data(void) {
 		}
 	}
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
-	uint32_t total_size = HISTO_HEADER_SIZE + payload_size + HISTO_TRAILER_SIZE;
+	uint32_t total_size = HISTO_HEADER_SIZE + 4 + payload_size + HISTO_TRAILER_SIZE; // +4 for timestamp
 	if (HISTO_JSON_BUFFER_SIZE < total_size) {
 		return false;  // Buffer too small
 	}
@@ -1184,6 +1200,13 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+	
+	// --- Timestamp ---
+	uint32_t timestamp = get_timestamp_ms();
+	packet_buffer[offset++] = (uint8_t)(timestamp & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((timestamp >> 24) & 0xFF);
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < count; ++cam_id) {
@@ -1207,14 +1230,14 @@ _Bool send_fake_data(void) {
 		}
 	}
 	// --- Footer --- 
-	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 0 to EOH
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);  // From 'type' to EOH (including timestamp)
 	packet_buffer[offset++] = crc & 0xFF;
 	packet_buffer[offset++] = (crc >> 8) & 0xFF;
 	packet_buffer[offset++] = HISTO_EOF;
 
 	// HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 
-	uint8_t tx_status = USBD_HISTO_SetTxBuffer(&hUsbDeviceHS, packet_buffer, offset);
+	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
 
 	//TODO( handle the case where the packet fails to send better)
 	if(tx_status != USBD_OK){
@@ -1286,12 +1309,12 @@ _Bool start_data_reception(uint8_t cam_id){
 		abort_data_reception(cam_id);
 		return false;
 	}
-	printf("done\r\n");
+	if(verbose_on) printf("done\r\n");
 	return true;
 }
 
 _Bool abort_data_reception(uint8_t cam_id){
-	printf("Abort data reception C: %d... ",cam_id);
+	if(verbose_on) printf("Abort data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
@@ -1310,22 +1333,22 @@ _Bool abort_data_reception(uint8_t cam_id){
 	if (status != HAL_OK) {
 		return false;
 	}
-	HAL_Delay(10);
+	delay_ms(10);
 	// Check if the device is BUSY
     if (cam->useUsart) {
         if (cam->pUart->State == HAL_USART_STATE_BUSY_RX ||
             cam->pUart->State == HAL_USART_STATE_BUSY_TX_RX) {
-				printf("USART still busy aborting\r\n");
+				printf("USART still busy aborting on camera %d\r\n", cam_id);
 			return false;
 		}
     } else {
         if (cam->pSpi->State == HAL_SPI_STATE_BUSY_RX ||
             cam->pSpi->State == HAL_SPI_STATE_BUSY_TX_RX) {
-            printf("SPI still busy aborting\r\n");
-            return false;  
+            printf("SPI still busy aborting on camera %d\r\n", cam_id);
+            return false;
         }
     }
-	printf("done\r\n");
+	if(verbose_on) printf("done\r\n");
 	return true;
 }
 
@@ -1375,7 +1398,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("Disable C: %d... ",cam_id);
+	printf("Disable camera %d... ",cam_id);
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("Camera %d already disabled\r\n", cam_id+1);
@@ -1407,14 +1430,6 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	return true;
 }
 
-_Bool toggle_camera_stream(uint8_t cam_id){
-	_Bool status = false;
-    bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
-	if(enabled) status = disable_camera_stream(cam_id);
-	else status = enable_camera_stream(cam_id);
-
-	return status;
-}
 /* -------- END HISTOGRAM TRANSFER FUNCTIONS -------- */
 
 /* -------- BEGIN CAMERA POWER TOGGLE FUNCTIONS -------- */

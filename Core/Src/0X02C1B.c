@@ -76,7 +76,7 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 		return ret;
 	}
 
-	HAL_Delay(100);
+	delay_ms(100);
     ret = X02C1B_write_array(cam->pI2c, X02C1B_SENSOR_CONFIG, ARRAY_SIZE(X02C1B_SENSOR_CONFIG));
     if (ret < 0) {
         printf("Camera %d Sensor configuration failed\r\n", cam->id+1);
@@ -101,13 +101,13 @@ int X02C1B_configure_sensor(CameraDevice *cam) {
 		return ret;
 	}
 
-	HAL_Delay(100);
+	delay_ms(100);
     return 0;
 }
 
 int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
 {
-    HAL_Delay(100);
+    delay_ms(100);
     int ret = 0;
     switch (test_pattern) {
         case 0:
@@ -142,7 +142,7 @@ int X02C1B_set_test_pattern(CameraDevice *cam, uint8_t test_pattern)
     }
     // printf("Camera %d test pattern successfully configured\r\n", cam->id+1);
 
-	HAL_Delay(10);
+	delay_ms(10);
 
 	return 0;
 }
@@ -287,12 +287,13 @@ int X02C1B_FSIN_EXT_enable()
     /* Configure the FSIN pin (the internal frame sync generator) to an input to rx the frame sync*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = FSIN_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;     // Set to input mode, falling edge trigger
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;     // Set to input mode, rising edge trigger
     GPIO_InitStruct.Pull = GPIO_NOPULL;         // No pull-up or pull-down resistors
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(FSIN_GPIO_Port, &GPIO_InitStruct);
 
     /* Configure NVIC for receiving interrupts */
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, FSIN_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
     
     ext_fsin_enabled = true;

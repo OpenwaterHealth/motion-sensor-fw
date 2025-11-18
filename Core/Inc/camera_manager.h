@@ -93,7 +93,6 @@ void switch_frame_buffer(void);
 uint8_t* get_active_frame_buffer(void);
 uint8_t* get_inactive_frame_buffer(void);
 void fill_frame_buffers(void);
-_Bool toggle_camera_stream(uint8_t cam_id);
 void print_active_cameras(uint8_t cameras_present);
 
 
