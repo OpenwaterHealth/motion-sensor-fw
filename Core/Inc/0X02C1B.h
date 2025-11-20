@@ -45,4 +45,16 @@ int X02C1B_fsin_off();
 float X02C1B_read_temp(CameraDevice *cam);
 int X02C1B_FSIN_EXT_enable();
 int X02C1B_FSIN_EXT_disable();
+
+// Lattice CrossLink TraceID reading functions
+// Lattice CrossLink configuration I2C address (7-bit = 0x40)
+// STM32 HAL expects this left-shifted by 1 bit.
+#define LATTICE_CFG_I2C_ADDR   (0x40U << 1)
+
+// Size of the TraceID in bytes
+#define LATTICE_TRACE_ID_LEN   8U
+
+HAL_StatusTypeDef X02C1B_ReadLatticeTraceID(CameraDevice *cam, uint8_t trace_id[LATTICE_TRACE_ID_LEN]);
+uint64_t X02C1B_LatticeTraceID_ToU64(const uint8_t trace_id[LATTICE_TRACE_ID_LEN]);
+
 #endif /* INC_0X02C1B_H_ */

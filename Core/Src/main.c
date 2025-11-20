@@ -306,6 +306,9 @@ int main(void)
 
   scan_camera_sensors(scanI2cAtStart);
 
+  // Read and print TraceIDs for all connected cameras
+  read_and_print_all_traceids();
+
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 

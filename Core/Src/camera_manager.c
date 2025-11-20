@@ -765,6 +765,54 @@ void scan_camera_sensors(bool scanI2cAtStart){
   }
 }
 
+void read_and_print_all_traceids(void)
+{
+	printf("\r\nReading Lattice FPGA TraceIDs...\r\n");
+	
+	for (int i = 0; i < CAMERA_COUNT; i++)
+	{
+		CameraDevice *cam = get_camera_byID(i);
+		if (cam == NULL) {
+			continue;
+		}
+		
+		// Select the I2C channel for this camera
+		if (TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+		{
+			printf("Camera %d: Failed to select I2C channel\r\n", i + 1);
+			continue;
+		}
+		
+		delay_ms(10); // Small delay for I2C mux to settle
+		
+		// Read TraceID
+		uint8_t trace_id_bytes[LATTICE_TRACE_ID_LEN];
+		HAL_StatusTypeDef status = X02C1B_ReadLatticeTraceID(cam, trace_id_bytes);
+		
+		if (status == HAL_OK)
+		{
+			uint64_t trace_id = X02C1B_LatticeTraceID_ToU64(trace_id_bytes);
+			
+			// Print TraceID in hex format
+			printf("Camera %d TraceID bytes: ", i + 1);
+			for (int j = 0; j < LATTICE_TRACE_ID_LEN; j++)
+			{
+				printf("%02X", trace_id_bytes[j]);
+				if (j < LATTICE_TRACE_ID_LEN - 1) printf(":");
+			}
+			printf("\r\n");
+			printf("Camera %d TraceID (64-bit): 0x%016llX\r\n", 
+			       i + 1, (unsigned long long)trace_id);
+		}
+		else
+		{
+			printf("Camera %d: Failed to read TraceID (HAL status: %d)\r\n", i + 1, status);
+		}
+	}
+	
+	printf("TraceID reading complete\r\n\r\n");
+}
+
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
 	printf("Configuring Camera %d...", cam_id+1);

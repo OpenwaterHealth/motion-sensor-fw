@@ -101,5 +101,6 @@ void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
 void poll_camera_temperatures(void);
 void scan_camera_sensors(bool scanI2cAtStart);
+void read_and_print_all_traceids(void);
 
 #endif /* INC_CAMERA_MANAGER_H_ */

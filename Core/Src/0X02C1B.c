@@ -319,3 +319,75 @@ int X02C1B_FSIN_EXT_disable()
     ext_fsin_enabled = false;
     return HAL_OK;
 }
+
+// Lattice CrossLink TraceID reading implementation
+// TraceID command opcode and operand for Lattice config engine
+// 
+// Example usage:
+//   uint8_t trace_id_bytes[LATTICE_TRACE_ID_LEN];
+//   HAL_StatusTypeDef st = X02C1B_ReadLatticeTraceID(cam, trace_id_bytes);
+//   if (st == HAL_OK) {
+//       uint64_t trace_id = X02C1B_LatticeTraceID_ToU64(trace_id_bytes);
+//       printf("Lattice TraceID: 0x%016llX\r\n", (unsigned long long)trace_id);
+//   }
+//
+#define LATTICE_CMD_TRACE_ID   0x19U
+
+HAL_StatusTypeDef X02C1B_ReadLatticeTraceID(CameraDevice *cam, uint8_t trace_id[LATTICE_TRACE_ID_LEN])
+{
+    HAL_StatusTypeDef status;
+
+    if (cam == NULL || cam->pI2c == NULL || trace_id == NULL) {
+        return HAL_ERROR;
+    }
+
+    // Command + 24-bit operand (all zeros for TraceID)
+    uint8_t cmd_buf[4] = {
+        LATTICE_CMD_TRACE_ID,  // command 0x19
+        0x00,                  // operand[23:16]
+        0x00,                  // operand[15:8]
+        0x00                   // operand[7:0]
+    };
+
+    // 1) Send command + operand (write phase)
+    status = HAL_I2C_Master_Transmit(cam->pI2c,
+                                     LATTICE_CFG_I2C_ADDR,
+                                     cmd_buf,
+                                     sizeof(cmd_buf),
+                                     I2C_TIMEOUT);
+    if (status != HAL_OK)
+    {
+        printf("Camera %d Failed to send TraceID command, HAL status = %d\r\n", cam->id+1, status);
+        return status;
+    }
+
+    // 2) Read back 8-byte TraceID (read phase)
+    status = HAL_I2C_Master_Receive(cam->pI2c,
+                                    LATTICE_CFG_I2C_ADDR,
+                                    trace_id,
+                                    LATTICE_TRACE_ID_LEN,
+                                    I2C_TIMEOUT);
+    if (status != HAL_OK)
+    {
+        printf("Camera %d Failed to read TraceID, HAL status = %d\r\n", cam->id+1, status);
+    }
+
+    return status;
+}
+
+uint64_t X02C1B_LatticeTraceID_ToU64(const uint8_t trace_id[LATTICE_TRACE_ID_LEN])
+{
+    uint64_t value = 0;
+
+    if (trace_id == NULL) {
+        return 0;
+    }
+
+    // Treat trace_id[0] as MSB, trace_id[7] as LSB
+    for (uint8_t i = 0; i < LATTICE_TRACE_ID_LEN; i++)
+    {
+        value = (value << 8) | trace_id[i];
+    }
+
+    return value;
+}
