@@ -636,7 +636,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
-	printf("\r\nProgramming FPGA Camera %d...", cam_id+1);
+	printf("Programming FPGA Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -673,7 +673,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
-	printf("\r\nProgramming FPGA Camera %d...", cam_id+1);
+	printf("Programming FPGA Camera %d...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -786,7 +786,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	// Check if camera is already configured and powered on
 	if(cam->isConfigured && cam->isPowered)
 	{
-		printf("Camera %d Sensor already configured\r\n", cam_id+1);
+		printf("sensor already configured\r\n", cam_id+1);
 		return true;
 	}
 
@@ -1072,7 +1072,7 @@ _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active){
-		printf("Streaming started\r\n\r\n");
+		printf("Streaming started\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 	}
