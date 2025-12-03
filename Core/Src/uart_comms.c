@@ -152,10 +152,8 @@ void comms_host_check_received(void) {
 	UartPacket cmd;
 	UartPacket resp;
 	uint16_t calculated_crc;
-
 	if (!rx_flag)
 		return;
-//	printf("Packet recieved\r\n");
 	int bufferIndex = 0;
 
 	if (rxBuffer[bufferIndex++] != OW_START_BYTE) {

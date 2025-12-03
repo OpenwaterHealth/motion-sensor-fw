@@ -58,6 +58,11 @@ volatile uint32_t most_recent_frame_time = 0;
 volatile uint32_t streaming_start_time = 0;
 bool streaming_active = false;
 
+// Camera failure detection
+#define CAMERA_FAILURE_THRESHOLD_CYCLES 3  // Number of consecutive cycles before reporting failure
+static uint8_t camera_failure_counters[CAMERA_COUNT] = {0};  // Track consecutive cycles without event bits
+static bool camera_failure_detected[CAMERA_COUNT] = {false};  // Track if failure has been detected
+
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
 
 
@@ -1027,11 +1032,47 @@ _Bool capture_single_histogram(uint8_t cam_id)
 	return ret;
 }
 
+// Check for cameras that have stopped posting data
+static void check_camera_failures(void) {
+	// Check each camera that is supposed to be enabled
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; cam_id++) {
+		bool is_enabled = (event_bits_enabled & (1 << cam_id)) != 0;
+		
+		if (is_enabled) {
+			bool has_event_bit = (event_bits & (1 << cam_id)) != 0;
+			
+			if (has_event_bit) {
+				// Camera set its event bit, reset failure counter
+				camera_failure_counters[cam_id] = 0;
+				if(camera_failure_detected[cam_id]){
+					camera_failure_detected[cam_id] = false;
+					printf("Camera %d has recovered from failure\r\n", cam_id + 1);
+				}
+			} else {
+				// Camera didn't set its event bit, increment failure counter
+				camera_failure_counters[cam_id]++;
+				
+				// Check if threshold reached
+				if (camera_failure_counters[cam_id] >= CAMERA_FAILURE_THRESHOLD_CYCLES) {
+					// Only print once per failure (when threshold is exactly reached)
+					if (camera_failure_counters[cam_id] == CAMERA_FAILURE_THRESHOLD_CYCLES) {
+						camera_failure_detected[cam_id] = true;
+						printf("Camera %d has stopped posting data\r\n", cam_id + 1);
+					}
+				}
+			}
+		} else {
+			// Camera is not enabled, reset its counter
+			camera_failure_counters[cam_id] = 0;
+		}
+	}
+}
+
 _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active){
-		printf("Streaming started\r\n");
+		printf("Streaming started\r\n\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 	}
@@ -1044,6 +1085,10 @@ _Bool send_data(void) {
 
 	most_recent_frame_time = get_timestamp_ms();
 	// printf("%lu\r\n", most_recent_frame_time);
+	
+	// Check for camera failures before clearing event_bits
+	check_camera_failures();
+	
 	bool success = false;
 	if (fake_data_gen) // Call FAKE data sender if enabled)
     {
@@ -1392,6 +1437,9 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	event_bits_enabled |= (1 << cam_id);
 	cam->streaming_enabled = true;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
+	
+	// Reset failure counter when enabling camera
+	camera_failure_counters[cam_id] = 0;
 
 	printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
 	return true;
@@ -1426,6 +1474,10 @@ _Bool disable_camera_stream(uint8_t cam_id){
 
 	cam->streaming_enabled = false;
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_RESET); // Set GPIO1 low
+	
+	// Reset failure counter when disabling camera
+	camera_failure_counters[cam_id] = 0;
+	
 	printf("done\r\n");
 	return true;
 }
