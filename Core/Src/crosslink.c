@@ -806,10 +806,10 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
         return -1;
     }
 
-    printf("Starting NVCM programming sequence...\n");
+    printf("Starting NVCM programming sequence...\r\n");
 
     // Step 1: Verify IDCODE
-    printf("Step 1: Verifying IDCODE...\n");
+    printf("Step 1: Verifying IDCODE...\r\n");
     ret = fpga_verify_idcode(hi2c, DevAddress, GPIOx, GPIO_Pin);
     if (ret != 0) {
         printf("ERROR: IDCODE verification failed\n");
@@ -817,7 +817,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 2: Program Trim Parameters
-    printf("Step 2: Programming trim parameters...\n");
+    printf("Step 2: Programming trim parameters...\r\n");
     ret = fpga_nvcm_program_trim(hi2c, DevAddress, trim_params);
     if (ret != 0) {
         printf("ERROR: Trim programming failed\n");
@@ -825,7 +825,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 3: Enter ISC Access Mode
-    printf("Step 3: Entering ISC access mode...\n");
+    printf("Step 3: Entering ISC access mode...\r\n");
     ret = fpga_nvcm_enter_prog_mode(hi2c, DevAddress);
     if (ret != 0) {
         printf("ERROR: Failed to enter programming mode\n");
@@ -833,7 +833,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 4: Erase NVCM Array
-    printf("Step 4: Erasing NVCM array...\n");
+    printf("Step 4: Erasing NVCM array...\r\n");
     ret = fpga_nvcm_erase(hi2c, DevAddress);
     if (ret != 0) {
         printf("ERROR: NVCM erase failed\n");
@@ -841,7 +841,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 5: Initialize Address
-    printf("Step 5: Initializing address...\n");
+    printf("Step 5: Initializing address...\r\n");
     ret = fpga_nvcm_init_address(hi2c, DevAddress);
     if (ret != 0) {
         printf("ERROR: Address initialization failed\n");
@@ -849,7 +849,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 6: Program NVCM Array
-    printf("Step 6: Programming NVCM array (%lu bytes)...\n", data_size);
+    printf("Step 6: Programming NVCM array (%lu bytes)...\r\n", data_size);
     ret = fpga_nvcm_program_array(hi2c, DevAddress, (uint8_t*)config_data, data_size);
     if (ret != 0) {
         printf("ERROR: NVCM array programming failed\n");
@@ -857,15 +857,15 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 7: Verify NVCM Array
-    printf("Step 7: Verifying NVCM array...\n");
+    printf("Step 7: Verifying NVCM array...\r\n");
     ret = fpga_nvcm_verify_array(hi2c, DevAddress, (uint8_t*)config_data, data_size);
     if (ret != 0) {
-        printf("ERROR: NVCM array verification failed\n");
+        printf("ERROR: NVCM array verification failed\r\n");
         goto exit_prog_mode;
     }
 
     // Step 8: Program Usercode
-    printf("Step 8: Programming usercode (0x%08lX)...\n", usercode);
+    printf("Step 8: Programming usercode (0x%08lX)...\r\n", usercode);
     ret = fpga_nvcm_program_usercode(hi2c, DevAddress, usercode);
     if (ret != 0) {
         printf("ERROR: Usercode programming failed\n");
@@ -873,7 +873,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 9: Verify Usercode
-    printf("Step 9: Verifying usercode...\n");
+    printf("Step 9: Verifying usercode...\r\n");
     ret = fpga_nvcm_verify_usercode(hi2c, DevAddress, usercode);
     if (ret != 0) {
         printf("ERROR: Usercode verification failed\n");
@@ -881,7 +881,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 10: Program Feature Bits
-    printf("Step 10: Programming feature bits (0x%02X)...\n", feature_bits);
+    printf("Step 10: Programming feature bits (0x%02X)...\r\n", feature_bits);
     ret = fpga_nvcm_program_feature_bits(hi2c, DevAddress, feature_bits);
     if (ret != 0) {
         printf("ERROR: Feature bits programming failed\n");
@@ -889,7 +889,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 11: Verify Feature Bits
-    printf("Step 11: Verifying feature bits...\n");
+    printf("Step 11: Verifying feature bits...\r\n");
     ret = fpga_nvcm_verify_feature_bits(hi2c, DevAddress, feature_bits);
     if (ret != 0) {
         printf("ERROR: Feature bits verification failed\n");
@@ -897,7 +897,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 12: Program Done Bit
-    printf("Step 12: Programming done bit...\n");
+    printf("Step 12: Programming done bit...\r\n");
     ret = fpga_nvcm_program_done_bit(hi2c, DevAddress);
     if (ret != 0) {
         printf("ERROR: Done bit programming failed\n");
@@ -905,7 +905,7 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
     }
 
     // Step 13: Verify Done Bit
-    printf("Step 13: Verifying done bit...\n");
+    printf("Step 13: Verifying done bit...\r\n");
     ret = fpga_nvcm_verify_done_bit(hi2c, DevAddress);
     if (ret != 0) {
         printf("ERROR: Done bit verification failed\n");
@@ -914,13 +914,13 @@ int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeD
 
 exit_prog_mode:
     // Step 14: Exit ISC Access Mode
-    printf("Step 14: Exiting ISC access mode...\n");
+    printf("Step 14: Exiting ISC access mode...\r\n");
     fpga_nvcm_exit_prog_mode(hi2c, DevAddress);
 
     if (ret == 0) {
-        printf("NVCM programming completed successfully!\n");
+        printf("NVCM programming completed successfully!\r\n");
     } else {
-        printf("NVCM programming failed with error code: %d\n", ret);
+        printf("NVCM programming failed with error code: %d\r\n", ret);
     }
 
     return ret;

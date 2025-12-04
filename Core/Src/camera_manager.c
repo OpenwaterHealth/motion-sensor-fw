@@ -668,7 +668,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 
 _Bool program_fpga_nvcm(uint8_t cam_id)
 {
-	printf("\r\nProgramming FPGA NVCM Camera %d...", cam_id+1);
+	printf("\r\nProgramming FPGA NVCM Camera %d...\r\n", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
