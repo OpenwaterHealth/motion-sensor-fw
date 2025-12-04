@@ -19,7 +19,7 @@
 #define SPI_PACKET_LENGTH 4100
 #define USART_PACKET_LENGTH 4100
 
-#define verbose_on false
+#define verbose_on true
 
 #define CAM_TEMP_INTERVAL_MS   1000u          // 1 Hz
 
