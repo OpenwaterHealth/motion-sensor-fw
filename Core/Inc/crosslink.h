@@ -37,6 +37,6 @@ int fpga_nvcm_program_done_bit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress);
 int fpga_nvcm_verify_done_bit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress);
 int fpga_nvcm_check_busy(I2C_HandleTypeDef *hi2c, uint16_t DevAddress);
 int fpga_nvcm_exit_prog_mode(I2C_HandleTypeDef *hi2c, uint16_t DevAddress);
-int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, const uint8_t *config_data, uint32_t data_size, uint32_t usercode, uint8_t feature_bits);
+int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, const uint8_t *config_data, uint32_t data_size, uint32_t usercode, uint16_t feature_bits);
 
 #endif /* INC_CROSSLINK_H_ */

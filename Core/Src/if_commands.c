@@ -308,6 +308,20 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	        }
 	    }
 		break;
+	case OW_FPGA_PROG_NVCM:
+		uartResp->command = OW_FPGA_PROG_NVCM;
+		uartResp->packet_type = OW_RESP;
+
+			for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+	        	_Bool func_ret = program_fpga_nvcm(i);
+	    		if(!func_ret)
+	    		{
+	    			uartResp->packet_type = OW_ERROR;
+	    			printf("Failed to Program NVCM FPGA on camera %d\r\n", i+1);
+	    		}
+	        }
+	    }
 	case OW_FPGA_USERCODE:
 		uartResp->command = OW_FPGA_USERCODE;
 		uartResp->packet_type = OW_RESP;

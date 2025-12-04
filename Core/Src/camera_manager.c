@@ -666,6 +666,46 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 	return true;
 }
 
+_Bool program_fpga_nvcm(uint8_t cam_id)
+{
+	printf("\r\nProgramming FPGA NVCM Camera %d...", cam_id+1);
+	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}
+
+	// printf("Program FPGA Camera %d Started\r\n", cam_id+1);
+	_active_cam_idx = cam_id;
+	CameraDevice *cam = &cam_array[_active_cam_idx];
+
+	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
+	{
+		printf("failed to select Camera %d channel\r\n", cam_id+1);
+		return false;
+	}
+	// int fpga_nvcm_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, 
+	//      GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, 
+	//      const uint8_t *config_data, uint32_t data_size, 
+	// 		uint32_t usercode, uint8_t feature_bits)	
+
+	uint32_t usercode = 0x12345678;
+	uint16_t feature_bits = 0x0200; // default features
+	if(fpga_nvcm_configure(cam->pI2c, cam->device_address, 
+							cam->cresetb_port, cam->cresetb_pin,
+							(uint8_t*)0x081A0000, (size_t)163489,
+							usercode, feature_bits) == 1)
+
+	{
+		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
+		return false;
+	}else{
+
+	}
+	printf("done\r\n");
+	return true;
+}
+
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
 	printf("\r\nProgramming FPGA Camera %d...", cam_id+1);
@@ -1074,7 +1114,6 @@ _Bool check_streaming(void){
 			return streaming_active;
 		}
 		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
-			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
