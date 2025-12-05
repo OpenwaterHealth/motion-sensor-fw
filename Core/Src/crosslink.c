@@ -650,6 +650,7 @@ int fpga_verify_idcode(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDe
 
 	    // Check if IDCODE matches expected
 	    if (memcmp(read_buf, expected_idcode, 4) == 0) {
+            if(verbose_on) printf("IDCODE matches expected\r\n");
 	        idcode_match = true;
 	        break;
 	    }
