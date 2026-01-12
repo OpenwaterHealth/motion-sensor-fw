@@ -1074,7 +1074,6 @@ _Bool check_streaming(void){
 			return streaming_active;
 		}
 		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
-			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
