@@ -26,7 +26,6 @@ volatile size_t usart_tx_dma_current_len;
 #define TX_TIMEOUT 500  // Timeout in milliseconds for USB transmission
 static uint8_t log_msg_buffer[LOG_MSG_BUFFER_SIZE];
 static size_t log_msg_buffer_index = 0;
-static uint16_t log_packet_id = 0;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 extern volatile uint8_t tx_flag;  // Transmit flag from uart_comms.c
 

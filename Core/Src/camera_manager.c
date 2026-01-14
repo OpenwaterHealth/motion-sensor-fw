@@ -786,7 +786,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	// Check if camera is already configured and powered on
 	if(cam->isConfigured && cam->isPowered)
 	{
-		printf("sensor already configured\r\n", cam_id+1);
+		printf("sensor already configured\r\n");
 		return true;
 	}
 
@@ -1119,7 +1119,7 @@ _Bool check_streaming(void){
 			return streaming_active;
 		}
 		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
-			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
+//			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
