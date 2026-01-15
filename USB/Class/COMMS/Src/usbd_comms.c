@@ -235,9 +235,29 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
   {
     rxIndex += rx_len;
 
-    /* Handle immediate completion for short packets */
-    if(rx_len < packet_size)
+    /* Detect end-of-packet even when rx_len == packet_size */
+    uint16_t end_idx = 0xFFFF;
+    for (uint16_t i = 0; i < rxIndex; i++) {
+      if (buf[i] == OW_END_BYTE) {
+        end_idx = i;
+        break;
+      }
+    }
+
+    if (end_idx != 0xFFFF)
     {
+      uint16_t captured_len = end_idx + 1;
+      rxIndex = 0;
+
+      USBD_COMMS_RxCpltCallback(buf, captured_len, COMMSOutEpAdd);
+      current_rx_buf_index ^= 1; // switch buffer
+
+      next_buffer = rx_buffers[current_rx_buf_index];
+      memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
+    }
+    else if(rx_len < packet_size)
+    {
+      /* Fallback: short packet indicates end */
       uint16_t captured_len = rxIndex;
       rxIndex = 0;
 
