@@ -42,6 +42,12 @@
 
 /* USER CODE END Includes */
 
+/* External references to USB endpoint status variables */
+extern volatile uint8_t tx_flag;  // From uart_comms.c
+extern volatile uint8_t comms_ep_data;  // From usbd_comms.c (__IO is volatile)
+extern volatile uint8_t histo_ep_data;  // From usbd_histo.c (__IO is volatile)
+extern volatile uint8_t imu_ep_data;    // From usbd_imu.c (__IO is volatile)
+
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -1750,6 +1756,60 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
+/**
+ * @brief Wait for all USB data queues to finish sending
+ * @note This function polls USB endpoint status flags until all transmissions complete
+ *       or a timeout occurs. This ensures error messages and diagnostic data are
+ *       transmitted before the system halts.
+ */
+static void wait_for_usb_queues_to_finish(void)
+{
+  const uint32_t timeout_ms = 1000;  // Maximum wait time: 1 second
+  uint32_t start_time = get_timestamp_ms();
+  uint32_t elapsed = 0;
+  
+  printf("Waiting for USB queues to finish...\r\n");
+  fflush(stdout);
+  
+  // Poll until all endpoints are idle or timeout
+  while (elapsed < timeout_ms) {
+    _Bool all_idle = true;
+    
+    // Check COMMS endpoint (tx_flag: 1 = idle, 0 = busy)
+    if (tx_flag == 0) {
+      all_idle = false;
+    }
+    
+    // Check COMMS bulk endpoint (comms_ep_data: 0 = idle, 1 = transmitting)
+    if (comms_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check HISTO endpoint (histo_ep_data: 0 = idle, 1 = transmitting)
+    if (histo_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check IMU endpoint (imu_ep_data: 0 = idle, 1 = transmitting)
+    if (imu_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    if (all_idle) {
+      printf("All USB queues finished.\r\n");
+      fflush(stdout);
+      return;
+    }
+    
+    // Small delay to avoid busy-waiting
+    delay_ms(1);
+    elapsed = get_timestamp_ms() - start_time;
+  }
+  
+  printf("USB queue wait timeout after %lu ms (some data may not have been sent).\r\n", elapsed);
+  fflush(stdout);
+}
+
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -1776,6 +1836,9 @@ void Error_Handler(void)
   printf("PC : 0x%08lX (Program Counter)\r\n", stack_ptr[6]);
   printf("xPSR: 0x%08lX\r\n", stack_ptr[7]);
   fflush(stdout);
+
+  // Wait for all USB data queues to finish sending before halting
+  wait_for_usb_queues_to_finish();
 
   delay_ms(100);
   __disable_irq();
