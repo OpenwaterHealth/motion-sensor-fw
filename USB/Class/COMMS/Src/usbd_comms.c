@@ -270,6 +270,11 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 {
 	uint8_t ret = USBD_OK;
 
+	if (length > USB_COMMS_MAX_SIZE)
+	{
+		return USBD_FAIL;
+	}
+
 	if(comms_ep_enabled == 1 && comms_ep_data==0)
 	{
 #ifdef USE_USBD_COMPOSITE
