@@ -23,11 +23,11 @@ volatile size_t usart_tx_dma_current_len;
 
 /* Buffer for accumulating printf messages to send over command and control endpoint */
 #define LOG_MSG_BUFFER_SIZE 512
-#define TX_TIMEOUT 500  // Timeout in milliseconds for USB transmission
 static uint8_t log_msg_buffer[LOG_MSG_BUFFER_SIZE];
 static size_t log_msg_buffer_index = 0;
-extern USBD_HandleTypeDef hUsbDeviceHS;
-extern volatile uint8_t tx_flag;  // Transmit flag from uart_comms.c
+
+// External reference to tx_flag to check if transmission is in progress
+extern volatile uint8_t tx_flag;
 
 /* Forward declarations */
 static void send_log_message_over_comms(void);
@@ -136,6 +136,17 @@ static void send_log_message_over_comms(void) {
 		return; // Nothing to send
 	}
 
+	// Check if a transmission is already in progress
+	// tx_flag == 1 means previous transmission is complete and we can send
+	// tx_flag == 0 means a transmission is in progress, so queue the message
+	// by keeping it in the buffer and returning (don't clear the buffer)
+	if (tx_flag == 0) {
+		// Transmission in progress, keep the message in the buffer (queue it)
+		// The message will be sent the next time this function is called when tx_flag == 1
+		// Note: If buffer is full, we'll need to handle that in add_char_to_log_buffer
+		return;
+	}
+
 	// Prepare packet
 	UartPacket log_packet;
 	log_packet.id = 0; // ensure that every packet like this has a zero id to avoid confusion with the packet id
@@ -145,71 +156,51 @@ static void send_log_message_over_comms(void) {
 	log_packet.reserved = 0;
 	log_packet.data_len = log_msg_buffer_index;
 	log_packet.data = log_msg_buffer;
+	log_packet.crc = 0; // CRC will be calculated by comms_interface_send
 
-	// Send via comms interface (non-blocking, will use existing txBuffer)
-	// We need to build the packet manually to avoid using the shared txBuffer
-	// which might be in use. Instead, we'll use a local buffer.
-	static uint8_t log_tx_buffer[COMMAND_MAX_SIZE];
-	int bufferIndex = 0;
-
-	// Build the packet header
-	log_tx_buffer[bufferIndex++] = OW_START_BYTE;
-	log_tx_buffer[bufferIndex++] = log_packet.id >> 8;
-	log_tx_buffer[bufferIndex++] = log_packet.id & 0xFF;
-	log_tx_buffer[bufferIndex++] = log_packet.packet_type;
-	log_tx_buffer[bufferIndex++] = log_packet.command;
-	log_tx_buffer[bufferIndex++] = log_packet.addr;
-	log_tx_buffer[bufferIndex++] = log_packet.reserved;
-	log_tx_buffer[bufferIndex++] = (log_packet.data_len) >> 8;
-	log_tx_buffer[bufferIndex++] = (log_packet.data_len) & 0xFF;
-
-	// Add data payload
-	if (log_packet.data_len > 0) {
-		memcpy(&log_tx_buffer[bufferIndex], log_packet.data, log_packet.data_len);
-		bufferIndex += log_packet.data_len;
-	}
-
-	// Compute CRC over the packet from index 1 for (data_len + 8) bytes
-	uint16_t crc = util_crc16(&log_tx_buffer[1], log_packet.data_len + 8);
-	log_tx_buffer[bufferIndex++] = crc >> 8;
-	log_tx_buffer[bufferIndex++] = crc & 0xFF;
-
-	// Add the end byte
-	log_tx_buffer[bufferIndex++] = OW_END_BYTE;
-
-	// Clear the transmit flag before starting transmission
-	tx_flag = 0;
-
-	// Send via USB CDC (non-blocking)
+	// Send via comms interface using the shared txBuffer
 	// Note: This may fail silently if USB is not initialized, which is acceptable
-	USBD_COMMS_Transmit(&hUsbDeviceHS, log_tx_buffer, bufferIndex);
-	
-	// Wait for the transmit complete flag with a timeout to avoid infinite loop.
-	uint32_t start_time = get_timestamp_ms();
-	while (!tx_flag) {
-		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
-			// Timeout handling: Log error and break out
-			// Note: Don't reset tx_flag here as it may be set asynchronously
-			break;
-		}
+	// comms_interface_send handles packet building, CRC calculation, and transmission
+	// For logging, we use a non-blocking approach - if it times out, we just skip
+	_Bool sent = comms_interface_send(&log_packet);
+	if (!sent) {
+		// Transmission failed or timed out - keep message in buffer to retry later
+		// Don't clear the buffer, so it can be retried on next call
+		return;
 	}
 	
-	// Clear the buffer
+	// Clear the buffer only after successful transmission
 	log_msg_buffer_index = 0;
 }
 
 /* Add character to log message buffer and send if newline encountered */
 static void add_char_to_log_buffer(uint8_t ch) {
-	// If buffer is full, send what we have and reset
+	// If buffer is full, we need to handle it
+	// If transmission is ready, send what we have. Otherwise, drop oldest data.
 	if (log_msg_buffer_index >= (LOG_MSG_BUFFER_SIZE - 1)) {
-		send_log_message_over_comms();
+		// Buffer is full - try to send if transmission is ready
+		if (tx_flag == 1) {
+			// Transmission ready, send current buffer
+			send_log_message_over_comms();
+			// After sending, buffer should be cleared, so we can add the new character
+		} else {
+			// Transmission in progress and buffer full - drop oldest data by shifting
+			// Shift buffer left by half to make room (simple FIFO-like behavior)
+			size_t shift_amount = LOG_MSG_BUFFER_SIZE / 2;
+			memmove(log_msg_buffer, &log_msg_buffer[shift_amount], log_msg_buffer_index - shift_amount);
+			log_msg_buffer_index -= shift_amount;
+		}
 	}
 
 	// Add character to buffer
 	log_msg_buffer[log_msg_buffer_index++] = ch;
 
 	// Send message when we encounter a newline
+	// If transmission is not ready, the message stays in buffer (queued) and will be sent later
+	// when send_log_message_over_comms is called again (on next newline or when buffer is full)
 	if (ch == '\n') {
 		send_log_message_over_comms();
+		// After attempting to send, if there's still data in buffer (transmission was busy),
+		// it will be sent on the next call when transmission becomes available
 	}
 }
