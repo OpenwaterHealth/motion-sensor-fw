@@ -278,6 +278,10 @@ CameraDevice* get_camera_byID(int id) {
 	return &cam_array[id];
 }
 
+uint8_t get_cameras_present(void) {
+	return cameras_present;
+}
+
 // Get SPI/USART status for the specified camera ID
 // Returns a bitfield where each bit indicates a specific status:
 //

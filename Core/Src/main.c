@@ -306,6 +306,33 @@ int main(void)
 
   scan_camera_sensors(scanI2cAtStart);
 
+  // Read and print security UID for all connected cameras at startup
+  printf("\r\n=== Reading security UIDs for all connected cameras ===\r\n");
+  uint8_t cameras_present = get_cameras_present();
+  for (int i = 0; i < CAMERA_COUNT; i++) {
+    if (cameras_present & (1 << i)) {
+      CameraDevice *cam = get_camera_byID(i);
+      if (cam != NULL) {
+        // Select I2C channel for this camera
+        if (TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) == HAL_OK) {
+          delay_ms(10);  // Small delay after channel selection
+          
+          uint8_t uid_bytes[6] = {0};
+          uint64_t uid_value = 0;
+          
+          // Read security UID (X02C1B_read_security_uid already prints the UID)
+          int ret = X02C1B_read_security_uid(cam, uid_bytes, &uid_value);
+          if (ret != 0) {
+            printf("Camera %d: Failed to read security UID (error: %d)\r\n", i + 1, ret);
+          }
+        } else {
+          printf("Camera %d: Failed to select I2C channel\r\n", i + 1);
+        }
+      }
+    }
+  }
+  printf("=== Security UID read complete ===\r\n\r\n");
+
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);
 

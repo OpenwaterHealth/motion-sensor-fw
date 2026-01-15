@@ -730,6 +730,71 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    uartResp->data_len = 1;
 		break;
 
+	case OW_CAMERA_READ_SECURITY_UID:
+		// Read security UID for a single camera
+		// cmd.addr contains the camera ID (0-7)
+		uartResp->command = OW_CAMERA_READ_SECURITY_UID;
+		uartResp->packet_type = OW_RESP;
+		
+		// Validate camera ID
+		if (cmd.addr >= CAMERA_COUNT) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Invalid camera ID: %d\r\n", cmd.addr);
+			break;
+		}
+		
+		// Get camera device
+		CameraDevice *cam = get_camera_byID(cmd.addr);
+		if (cam == NULL) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Failed to get camera device for ID: %d\r\n", cmd.addr);
+			break;
+		}
+		
+		// Check if camera is powered on (cameras might be powered on after startup scan)
+		if (!cam->isPowered) {
+			// Camera not powered, return 0 (all zeros)
+			static uint8_t zero_uid[6] = {0, 0, 0, 0, 0, 0};
+			uartResp->data = zero_uid;
+			uartResp->data_len = 6;
+			printf("Camera %d not powered, returning 0 for UID\r\n", cmd.addr + 1);
+			break;
+		}
+		
+		// Select I2C channel for this camera
+		if (TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Failed to select I2C channel for camera %d\r\n", cmd.addr + 1);
+			break;
+		}
+		
+		delay_ms(10);  // Small delay after channel selection
+		
+		// Read security UID - try to read regardless of cameras_present flag
+		// since cameras might be powered on after startup scan
+		static uint8_t uid_buffer[6] = {0};
+		uint64_t uid_value = 0;
+		int ret = X02C1B_read_security_uid(cam, uid_buffer, &uid_value);
+		
+		if (ret != 0) {
+			// Read failed - return zeros to indicate camera not accessible
+			memset(uid_buffer, 0, 6);
+			uartResp->data = uid_buffer;
+			uartResp->data_len = 6;
+			printf("Failed to read security UID for camera %d (error: %d), returning 0\r\n", cmd.addr + 1, ret);
+		} else {
+			uartResp->data = uid_buffer;
+			uartResp->data_len = 6;
+			printf("Camera %d security UID read successfully\r\n", cmd.addr + 1);
+		}
+		break;
+
 	default:
 		uartResp->data_len = 0;
 		uartResp->command = cmd.command;
