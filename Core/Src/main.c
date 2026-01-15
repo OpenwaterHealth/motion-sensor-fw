@@ -1492,6 +1492,25 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 // Error handling callback for USART
 void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 {
+  int8_t cam_id = -1;
+
+  if (husart->Instance == USART1)
+  {
+    cam_id = 4;
+  }
+  else if (husart->Instance == USART2)
+  {
+    cam_id = 0;
+  }
+  else if (husart->Instance == USART3)
+  {
+    cam_id = 2;
+  }
+  else if (husart->Instance == USART6)
+  {
+    cam_id = 3;
+  }
+
   // Print which USART instance caused the error
   if (husart->Instance == USART1)
   {
@@ -1530,6 +1549,7 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   if (husart->ErrorCode & HAL_USART_ERROR_ORE)
   {
     printf("Overrun error ");
+    __HAL_USART_CLEAR_OREFLAG(husart);
   }
   if (husart->ErrorCode & HAL_USART_ERROR_DMA)
   {
@@ -1537,12 +1557,38 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   }
   printf("\r\n");
 
+  if ((husart->ErrorCode & HAL_USART_ERROR_ORE) != 0U && cam_id >= 0)
+  {
+    abort_data_reception((uint8_t)cam_id);
+    start_data_reception((uint8_t)cam_id);
+    return;
+  }
+
   Error_Handler();
 }
 
 // Error handling callback for SPI
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
+  int8_t cam_id = -1;
+
+  if (hspi->Instance == SPI2)
+  {
+    cam_id = 6;
+  }
+  else if (hspi->Instance == SPI3)
+  {
+    cam_id = 5;
+  }
+  else if (hspi->Instance == SPI4)
+  {
+    cam_id = 7;
+  }
+  else if (hspi->Instance == SPI6)
+  {
+    cam_id = 1;
+  }
+
   // Print which SPI instance caused the error
   if (hspi->Instance == SPI2)
   {
@@ -1569,6 +1615,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   if (hspi->ErrorCode & HAL_SPI_ERROR_OVR)
   {
     printf("Overrun error ");
+    __HAL_SPI_CLEAR_OVRFLAG(hspi);
   }
   if (hspi->ErrorCode & HAL_SPI_ERROR_MODF)
   {
@@ -1606,6 +1653,13 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
       printf("HAL_DMA_ERROR_BUSY");
   }
   printf("\r\n");
+
+  if ((hspi->ErrorCode & HAL_SPI_ERROR_OVR) != 0U && cam_id >= 0)
+  {
+    abort_data_reception((uint8_t)cam_id);
+    start_data_reception((uint8_t)cam_id);
+    return;
+  }
 
   Error_Handler(); // Handle any error during re-enabling
 }

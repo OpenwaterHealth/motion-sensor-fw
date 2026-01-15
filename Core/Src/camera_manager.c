@@ -1101,7 +1101,6 @@ _Bool send_data(void) {
     else {
        success = send_histogram_data();
     }
-	event_bits = 0x00;
 	poll_camera_temperatures();
 
     if (success) {
@@ -1138,10 +1137,16 @@ _Bool check_streaming(void){
 _Bool send_histogram_data(void) {
 	_Bool status = true;
 	int offset = 0;
+	uint8_t ready_bits = 0;
+
+	__disable_irq();
+	ready_bits = event_bits;
+	event_bits = 0x00;
+	__enable_irq();
 
 	uint8_t count = 0;
 	for (int i = 0; i < CAMERA_COUNT ; ++i) {
-		if (event_bits & (1 << i)) {
+		if (ready_bits & (1 << i)) {
 			count++;
 		}
 	}
@@ -1176,7 +1181,7 @@ _Bool send_histogram_data(void) {
 
 	// --- Data ---
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
-		if((event_bits & (0x01 << cam_id)) != 0) {
+		if((ready_bits & (0x01 << cam_id)) != 0) {
 			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
 		    packet_buffer[offset++] = HISTO_SOH;
 			packet_buffer[offset++] = cam_id;
@@ -1193,6 +1198,8 @@ _Bool send_histogram_data(void) {
 
 			packet_buffer[offset++] = HISTO_EOH;
 			
+			// Re-arm reception as soon as data is copied
+			start_data_reception(cam_id);
 		}
 	}
 
@@ -1210,11 +1217,6 @@ _Bool send_histogram_data(void) {
 	}
 
 
-	// kick off the next frame reception
-	for(int i = 0;i<CAMERA_COUNT;i++){
-		if((event_bits & (0x01 << i)) != 0)
-			start_data_reception(i);
-	}
 	frame_id++;
 
 	return status;
