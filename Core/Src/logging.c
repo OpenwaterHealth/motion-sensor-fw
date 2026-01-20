@@ -13,6 +13,7 @@
 
 static bool bInit_dma = false;
 volatile bool bPrintfTransferComplete = false;
+static volatile uint32_t debug_flags = DEBUG_FLAG_USB_PRINTF;
 
 static uint8_t usart_start_tx_dma_transfer(void);
 
@@ -64,9 +65,11 @@ int _write(int fd, const void *buf, size_t count){
 		}
 	}
 
-	// Also send to command and control endpoint
-	for (size_t i = 0; i < count; i++) {
-		add_char_to_log_buffer(src[i]);
+	// Also send to command and control endpoint (USB) if enabled
+	if ((debug_flags & DEBUG_FLAG_USB_PRINTF) != 0u) {
+		for (size_t i = 0; i < count; i++) {
+			add_char_to_log_buffer(src[i]);
+		}
 	}
 
 	return count;
@@ -92,6 +95,18 @@ void init_dma_logging()
 
 bool is_using_dma(){
 	return bInit_dma;
+}
+
+void logging_set_debug_flags(uint32_t flags) {
+	debug_flags = flags;
+	if ((debug_flags & DEBUG_FLAG_USB_PRINTF) == 0u) {
+		// Drop any buffered log data so it doesn't flush later.
+		log_msg_buffer_index = 0;
+	}
+}
+
+uint32_t logging_get_debug_flags(void) {
+	return debug_flags;
 }
 
 static uint8_t usart_start_tx_dma_transfer(void) {

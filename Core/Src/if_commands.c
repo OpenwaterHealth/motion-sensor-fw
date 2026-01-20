@@ -14,6 +14,7 @@
 #include "ICM20948.h"
 #include "0X02C1B.h"
 #include "histo_fake.h"
+#include "logging.h"
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
@@ -90,6 +91,34 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
 		printf("Fan control status: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
+	case OW_CMD_SET_DEBUG_FLAGS: {
+		uartResp->command = OW_CMD_SET_DEBUG_FLAGS;
+		if (cmd.data_len != sizeof(uint32_t)) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Invalid data length for debug flags\r\n");
+			break;
+		}
+		uint32_t new_flags = 0;
+		memcpy(&new_flags, cmd.data, sizeof(new_flags));
+		logging_set_debug_flags(new_flags);
+		uartResp->packet_type = OW_RESP;
+		static uint32_t debug_flags_resp;
+		debug_flags_resp = logging_get_debug_flags();
+		uartResp->data_len = sizeof(debug_flags_resp);
+		uartResp->data = (uint8_t *)&debug_flags_resp;
+		break;
+	}
+	case OW_CMD_GET_DEBUG_FLAGS: {
+		uartResp->command = OW_CMD_GET_DEBUG_FLAGS;
+		uartResp->packet_type = OW_RESP;
+		static uint32_t debug_flags_get_resp;
+		debug_flags_get_resp = logging_get_debug_flags();
+		uartResp->data_len = sizeof(debug_flags_get_resp);
+		uartResp->data = (uint8_t *)&debug_flags_get_resp;
+		break;
+	}
 	case OW_CMD_I2C_BROADCAST:
 		printf("Broadcasting I2C on all channels\r\n");
 		uartResp->command = OW_CMD_I2C_BROADCAST;
