@@ -235,37 +235,29 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
   {
     rxIndex += rx_len;
 
-    /* Detect end-of-packet even when rx_len == packet_size */
-    uint16_t end_idx = 0xFFFF;
-    for (uint16_t i = 0; i < rxIndex; i++) {
-      if (buf[i] == OW_END_BYTE) {
-        end_idx = i;
-        break;
+    /* Determine packet completion based on length field */
+    if (rxIndex >= 9)
+    {
+      uint16_t data_len = (uint16_t)((buf[7] << 8) | buf[8]);
+      uint32_t total_packet_size = 9U + data_len + 3U;  // header + data + CRC(2) + END(1)
+
+      if (total_packet_size > USB_COMMS_MAX_SIZE)
+      {
+        /* Invalid length, reset */
+        rxIndex = 0;
+        current_rx_buf_index ^= 1;
+        next_buffer = rx_buffers[current_rx_buf_index];
+        memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
       }
-    }
-
-    if (end_idx != 0xFFFF)
-    {
-      uint16_t captured_len = end_idx + 1;
-      rxIndex = 0;
-
-      USBD_COMMS_RxCpltCallback(buf, captured_len, COMMSOutEpAdd);
-      current_rx_buf_index ^= 1; // switch buffer
-
-      next_buffer = rx_buffers[current_rx_buf_index];
-      memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
-    }
-    else if(rx_len < packet_size)
-    {
-      /* Fallback: short packet indicates end */
-      uint16_t captured_len = rxIndex;
-      rxIndex = 0;
-
-      USBD_COMMS_RxCpltCallback(buf, captured_len, COMMSOutEpAdd);
-      current_rx_buf_index ^= 1; // switch buffer
-
-      next_buffer = rx_buffers[current_rx_buf_index];
-      memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
+      else if (rxIndex >= total_packet_size)
+      {
+        /* Complete packet received */
+        USBD_COMMS_RxCpltCallback(buf, (uint16_t)total_packet_size, COMMSOutEpAdd);
+        rxIndex = 0;
+        current_rx_buf_index ^= 1; // switch buffer
+        next_buffer = rx_buffers[current_rx_buf_index];
+        memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
+      }
     }
   }
   else
@@ -277,7 +269,7 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
     memset((uint32_t*)next_buffer, 0, USB_COMMS_MAX_SIZE/4);
   }
 
-  status = USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, next_buffer, packet_size);
+  status = USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, &next_buffer[rxIndex], packet_size);
   return status;
 }
 
