@@ -241,7 +241,7 @@ void comms_host_check_received(void) {
 NextDataPacket:
 	comms_interface_send(&resp);
 	// Debug: Print command/response info after sending
-	printf("[CMD] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
+	printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
 		   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
 	// ClearBuffer_DMA();
