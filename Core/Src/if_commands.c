@@ -883,7 +883,7 @@ static UartPacket uartReturn;
 UartPacket process_if_command(UartPacket cmd)
 {
 	// Print packet information when received, before processing
-	printf("[CMD] ID:0x%04X Type:0x%02X Cmd:0x%02X Addr:0x%02X Len:%d\r\n",
+	printf("[CMD]  ID:0x%04X Cmd:0x%02X Type:0x%02X Addr:0x%02X Len:%d\r\n",
 		   cmd.id, cmd.packet_type, cmd.command, cmd.addr, cmd.data_len);
 	
 	I2C_TX_Packet i2c_packet;
