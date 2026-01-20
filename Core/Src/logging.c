@@ -13,7 +13,7 @@
 
 static bool bInit_dma = false;
 volatile bool bPrintfTransferComplete = false;
-static volatile uint32_t debug_flags = DEBUG_FLAG_USB_PRINTF;
+static volatile uint32_t debug_flags = 0x00000000;
 
 static uint8_t usart_start_tx_dma_transfer(void);
 
