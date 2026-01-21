@@ -820,7 +820,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		} else {
 			uartResp->data = uid_buffer;
 			uartResp->data_len = 6;
-			printf("Camera %d security UID read successfully\r\n", cmd.addr + 1);
+			// printf("Camera %d security UID read successfully\r\n", cmd.addr + 1);
 		}
 		break;
 
