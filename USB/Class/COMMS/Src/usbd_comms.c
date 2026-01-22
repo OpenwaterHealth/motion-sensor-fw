@@ -317,9 +317,7 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 
 uint8_t USBD_COMMS_Transmit(USBD_HandleTypeDef *pdev, uint8_t* Buf, uint16_t Len)
 {
-	USBD_COMMS_SetTxBuffer(pdev, Buf, Len);
-
-	return (uint8_t)USBD_OK;
+	return USBD_COMMS_SetTxBuffer(pdev, Buf, Len);
 }
 
 void USBD_COMMS_FlushRxBuffer()

@@ -357,10 +357,10 @@ int X02C1B_read_security_uid(CameraDevice *cam, uint8_t uid_bytes[6], uint64_t *
         *uid_value = v;
     }
 
-    printf("Camera %d UID: %02X%02X%02X%02X%02X%02X\r\n",
-           cam->id + 1,
-           uid_bytes[0], uid_bytes[1], uid_bytes[2],
-           uid_bytes[3], uid_bytes[4], uid_bytes[5]);
+    // printf("Camera %d UID: %02X%02X%02X%02X%02X%02X\r\n",
+    //        cam->id + 1,
+    //        uid_bytes[0], uid_bytes[1], uid_bytes[2],
+    //        uid_bytes[3], uid_bytes[4], uid_bytes[5]);
 
     return 0;
 }
