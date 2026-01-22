@@ -1213,7 +1213,7 @@ _Bool send_histogram_data(void) {
 	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
 	if(tx_status != USBD_OK){
 		status = false;
-		printf("failed to enqueue, fid: %d\r\n",frame_id);
+		printf("USBD_HISTO_SendData failed: %d\r\n", tx_status);
 	}
 
 
