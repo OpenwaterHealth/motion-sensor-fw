@@ -99,7 +99,14 @@ bool is_using_dma(){
 }
 
 void logging_set_debug_flags(uint32_t flags) {
+	uint32_t prev_flags = debug_flags;
 	debug_flags = flags;
+	if (prev_flags != debug_flags) {
+		printf("Debug flags changed: 0x%08lX -> 0x%08lX%s\r\n",
+		       (unsigned long)prev_flags,
+		       (unsigned long)debug_flags,
+		       (debug_flags & DEBUG_FLAG_USB_PRINTF) ? " (USB printf ON)" : " (USB printf OFF)");
+	}
 	if ((debug_flags & DEBUG_FLAG_USB_PRINTF) == 0u) {
 		// Drop any buffered log data so it doesn't flush later.
 		if (log_msg_rb_initialized) {
