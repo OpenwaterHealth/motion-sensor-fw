@@ -119,14 +119,14 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	uint8_t tx_status = USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
 	if (tx_status != USBD_OK) {
 		// Transmission not started (e.g., endpoint busy); don't block on tx_flag
-		printf("USB TX failed: id=0x%04X cmd=0x%02X type=0x%02X len=%d dev_state=0x%02X\r\n",
+		printf("COMM USB TX failed: id=0x%04X cmd=0x%02X type=0x%02X len=%d dev_state=0x%02X\r\n",
 			   pResp->id, pResp->command, pResp->packet_type, bufferIndex, hUsbDeviceHS.dev_state);
 		if (tx_status == USBD_BUSY) {
-			printf("USB TX failed: endpoint busy\r\n");
+			printf("COMM USB TX failed: endpoint busy\r\n");
 		} else if (tx_status == USBD_FAIL) {
-			printf("USB TX failed: USBD_FAIL\r\n");
+			printf("COMM USB TX failed: USBD_FAIL\r\n");
 		} else {
-			printf("USB TX failed: status=0x%02X\r\n", tx_status);
+			printf("COMM USB TX failed: status=0x%02X\r\n", tx_status);
 		}
 		tx_flag = 1;
 		return false;
@@ -143,7 +143,10 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	while (!tx_flag) {
 		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
-			printf("TX Timeout\r\n");
+			printf("COMM USB TX Timeout\r\n");
+			
+
+
 			return false;
 		}
 	}

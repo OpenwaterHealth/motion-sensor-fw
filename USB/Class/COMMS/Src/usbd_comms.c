@@ -310,6 +310,7 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 	else
 	{
 		ret = USBD_BUSY;
+    printf("comms_ep_enabled: %d comms_ep_data: %d\r\n", comms_ep_enabled, comms_ep_data);
 	}
   return ret;
 }
