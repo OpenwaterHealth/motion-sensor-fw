@@ -1075,7 +1075,7 @@ static void check_camera_failures(void) {
 _Bool send_data(void) {
 
 	// Take care of statistics
-	if(!streaming_active){
+	if(!streaming_active && event_bits_enabled != 0x00){
 		printf("Streaming started\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
@@ -1139,6 +1139,9 @@ _Bool send_histogram_data(void) {
 	int offset = 0;
 	uint8_t ready_bits = 0;
 
+	if(event_bits_enabled == 0x00){
+		return true;
+	}
 	__disable_irq();
 	ready_bits = event_bits;
 	event_bits = 0x00;
