@@ -686,7 +686,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_FSIN_EXTERNAL:
-		printf("FSIN_EXT %s\r\n", cmd.reserved == 0 ? "disable" : "enable");
+		// printf("FSIN_EXT %s\r\n", cmd.reserved == 0 ? "disable" : "enable");
 		uartResp->command = OW_CAMERA_FSIN_EXTERNAL;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){

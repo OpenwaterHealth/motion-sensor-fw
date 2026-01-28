@@ -184,6 +184,7 @@ void comms_host_check_received(void) {
 
 	cmd.id = (rxBuffer[bufferIndex] << 8 | (rxBuffer[bufferIndex + 1] & 0xFF));
 	bufferIndex += 2;
+	printf("0x%04X\r\n", cmd.id);
 	cmd.packet_type = rxBuffer[bufferIndex++];
 	cmd.command = rxBuffer[bufferIndex++];
 	cmd.addr = rxBuffer[bufferIndex++];
@@ -262,6 +263,7 @@ NextDataPacket:
 	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
 	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
+	printf(".\r\n");
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;
@@ -270,6 +272,15 @@ NextDataPacket:
 
 // Callback functions
 void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
+	static volatile uint32_t rx_overrun_count = 0;
+
+	if (rx_flag) {
+		rx_overrun_count++;
+		printf("COMM RX OVERRUN: count=%lu len=%lu\r\n",
+			   (unsigned long)rx_overrun_count,
+			   (unsigned long)Len);
+	}
+
 	memcpy(rxBuffer, Buf, Len);
 	rx_flag = 1;
 }

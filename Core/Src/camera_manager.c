@@ -678,7 +678,7 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
-	printf("C%d: programming...", cam_id+1);
+	// printf("C%d: programming...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -699,7 +699,7 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 	if(!force_update)
 	{
 		if(cam->isProgrammed){
-			printf("already programmed\r\n");
+			// printf("already programmed\r\n");
 			return true;
 		} 
 	} else {
@@ -730,7 +730,7 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 		cam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
 		cam->pUart->Instance->CR1 |= USART_CR1_UE;
 	}
-	printf("done\r\n");
+	// printf("done\r\n");
 
 	return true;
 }
@@ -776,7 +776,7 @@ void scan_camera_sensors(bool scanI2cAtStart){
 
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
-	printf("C%d: configuring...", cam_id+1);
+	// printf("C%d: configuring...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
@@ -790,7 +790,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	// Check if camera is already configured and powered on
 	if(cam->isConfigured && cam->isPowered)
 	{
-		printf("already configured\r\n");
+		// printf("already configured\r\n");
 		return true;
 	}
 
@@ -815,7 +815,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 		return false;
 	}else{
 		cam->isConfigured = true;
-		printf("done\r\n");
+		// printf("done\r\n");
 
 	}
 	return true;
@@ -1419,7 +1419,7 @@ _Bool abort_data_reception(uint8_t cam_id){
 }
 
 _Bool enable_camera_stream(uint8_t cam_id){
-	printf("C%d: enable...", cam_id+1);
+	// printf("C%d: enable...", cam_id+1);
 
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
@@ -1464,12 +1464,12 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	// Reset failure counter when enabling camera
 	camera_failure_counters[cam_id] = 0;
 
-	printf("done\r\n");
+	// printf("done\r\n");
 	return true;
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("C%d: disable...", cam_id+1);
+	// printf("C%d: disable...", cam_id+1);
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("already done\r\n");
@@ -1501,7 +1501,7 @@ _Bool disable_camera_stream(uint8_t cam_id){
 	// Reset failure counter when disabling camera
 	camera_failure_counters[cam_id] = 0;
 	
-	printf("done\r\n");
+	// printf("done\r\n");
 	return true;
 }
 
