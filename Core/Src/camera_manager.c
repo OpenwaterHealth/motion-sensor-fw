@@ -57,6 +57,7 @@ volatile uint32_t total_frames_failed = 0;
 volatile uint32_t most_recent_frame_time = 0;
 volatile uint32_t streaming_start_time = 0;
 bool streaming_active = false;
+bool streaming_first_frame = false;
 
 // Camera failure detection
 #define CAMERA_FAILURE_THRESHOLD_CYCLES 3  // Number of consecutive cycles before reporting failure
@@ -1079,6 +1080,7 @@ _Bool send_data(void) {
 		printf("Streaming started\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
+		streaming_first_frame = true;
 	}
 
 	// Sometimes the frame sync fires 4ms after the previous frame due to electrical noise. Ignore these.
@@ -1150,13 +1152,17 @@ _Bool send_histogram_data(void) {
 	__enable_irq();
 
 	uint8_t count = 0;
+	bool skip_no_data_log = streaming_first_frame;
+	streaming_first_frame = false;
 	for (int i = 0; i < CAMERA_COUNT ; ++i) {
 		if (ready_bits & (1 << i)) {
 			count++;
 		}
 	}
 	if(count == 0){
-		printf("No cameras have data to send\r\n");
+		if(!skip_no_data_log){
+			printf("No cameras have data to send\r\n");
+		}
 		return false;
 	}
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
