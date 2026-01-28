@@ -641,7 +641,7 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
-	printf("Programming FPGA Camera %d...", cam_id+1);
+	printf("C%d: programming...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
@@ -678,14 +678,13 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
-	printf("Programming FPGA Camera %d...", cam_id+1);
+	printf("C%d: programming...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
 
-	// printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
 
@@ -777,7 +776,7 @@ void scan_camera_sensors(bool scanI2cAtStart){
 
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
-	printf("Configuring Camera %d...", cam_id+1);
+	printf("C%d: configuring...", cam_id+1);
 	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
 	{
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
@@ -791,7 +790,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 	// Check if camera is already configured and powered on
 	if(cam->isConfigured && cam->isPowered)
 	{
-		printf("sensor already configured\r\n");
+		printf("already configured\r\n");
 		return true;
 	}
 
@@ -1077,7 +1076,7 @@ _Bool send_data(void) {
 
 	// Take care of statistics
 	if(!streaming_active && event_bits_enabled != 0x00){
-		printf("Streaming started\r\n");
+		printf("Scan started\r\n");
 		streaming_start_time = get_timestamp_ms();
 		streaming_active = true;
 		streaming_first_frame = true;
@@ -1128,7 +1127,10 @@ _Bool check_streaming(void){
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			total_frames_failed = total_frames_failed - 1; // subtract one from the total frames failed because the first frame is a skip and the last frame is an extra
-			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
+			printf("Scan finished (%lu ms, %lu frames)\r\n", elapsed, total_frames_sent);
+			if(total_frames_failed > 0){
+				printf("%lu frames failed\r\n", total_frames_failed);
+			}
 			pulse_count = 0;
 			total_frames_sent = 0;
 			total_frames_failed = 0;
@@ -1417,6 +1419,8 @@ _Bool abort_data_reception(uint8_t cam_id){
 }
 
 _Bool enable_camera_stream(uint8_t cam_id){
+	printf("C%d: enable...", cam_id+1);
+
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(enabled){
@@ -1460,15 +1464,15 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	// Reset failure counter when enabling camera
 	camera_failure_counters[cam_id] = 0;
 
-	printf("Enabled cam %d stream (%02X)\r\n", cam_id+1, event_bits_enabled);
+	printf("done\r\n");
 	return true;
 }
 
 _Bool disable_camera_stream(uint8_t cam_id){
-	printf("Disable camera %d... ",cam_id);
+	printf("C%d: disable...", cam_id+1);
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
-		printf("Camera %d already disabled\r\n", cam_id+1);
+		printf("already done\r\n");
 		return true;
 	}
 

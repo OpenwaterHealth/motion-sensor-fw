@@ -89,7 +89,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data_len = 1;
 		uartResp->data = (uint8_t *)&uartResp->reserved;
 		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
-		printf("Fan control status: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
+		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
 	case OW_CMD_SET_DEBUG_FLAGS: {
 		uartResp->command = OW_CMD_SET_DEBUG_FLAGS;
