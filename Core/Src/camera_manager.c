@@ -1125,6 +1125,7 @@ _Bool check_streaming(void){
 //			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
+			total_frames_failed = total_frames_failed - 1; // subtract one from the total frames failed because the first frame is a skip and the last frame is an extra
 			printf("\r\nScan finished after %lu ms, %lu pulses, %lu frames sent, %lu frames failed\r\n", elapsed, pulse_count, total_frames_sent, total_frames_failed);
 			pulse_count = 0;
 			total_frames_sent = 0;
@@ -1154,8 +1155,10 @@ _Bool send_histogram_data(void) {
 			count++;
 		}
 	}
-	if(count == 0)
+	if(count == 0){
 		printf("No cameras have data to send\r\n");
+		return false;
+	}
 	uint32_t payload_size = count*(HISTO_SIZE_32B*4+7); // 7 = SOH + CAM_ID + TEMPx4 + EOH
     uint32_t total_size = HISTO_HEADER_SIZE + 4 + payload_size + HISTO_TRAILER_SIZE; // +4 for timestamp
     if (HISTO_JSON_BUFFER_SIZE < total_size) {
