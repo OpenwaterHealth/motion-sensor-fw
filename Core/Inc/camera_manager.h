@@ -89,9 +89,6 @@ uint32_t read_status_fpga(uint8_t cam_id);
 uint32_t read_usercode_fpga(uint8_t cam_id);
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update);
 
-void switch_frame_buffer(void);
-uint8_t* get_active_frame_buffer(void);
-uint8_t* get_inactive_frame_buffer(void);
 void fill_frame_buffers(void);
 void print_active_cameras(uint8_t cameras_present);
 

@@ -87,7 +87,12 @@ static uint16_t rxIndex = 0;
 static void (*CommsRxCallback)(uint8_t *buf, uint16_t len) = NULL;
 static uint8_t read_to_idle_enabled = 0;
 
-static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE];
+#ifndef USB_RAM_D2
+#define USB_RAM_D2 __attribute__((section(".ram_d2")))
+#endif
+
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t comms_tx_buffer[USB_COMMS_MAX_SIZE] __ALIGN_END;
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE] __ALIGN_END;
 static uint8_t current_rx_buf_index = 0;
 
 /* Private functions */
@@ -103,10 +108,7 @@ static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     printf("COMMS_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", COMMSInEpAdd, (uint8_t)pdev->classId);
     printf("COMMS_Init DATA OUT EP: 0x%02X ClassID: 0x%02X\r\n", COMMSOutEpAdd, (uint8_t)pdev->classId);
 
-    pTxCommsBuff = (uint8_t*)malloc(USB_COMMS_MAX_SIZE);
-    if(pTxCommsBuff == NULL){
-    	Error_Handler();
-    }
+    pTxCommsBuff = comms_tx_buffer;
 
     if (pdev->dev_speed == USBD_SPEED_HIGH)
     {
@@ -153,8 +155,7 @@ static uint8_t USBD_Comms_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   comms_ep_enabled = 0;
 
   if(pTxCommsBuff){
-	free(pTxCommsBuff);
-	pTxCommsBuff = 0;
+    pTxCommsBuff = 0;
   }
 #ifdef USE_USBD_COMPOSITE
   if (pdev->pClassDataCmsit[pdev->classId] != NULL)

@@ -14,7 +14,7 @@ typedef struct {
   uint16_t length;
 } histo_queue_entry_t;
 
-#define HISTO_QUEUE_SIZE 2  /* Reduced from 8 to save memory (8 * 36KB = 288KB was too much) */
+#define HISTO_QUEUE_SIZE 4  /* Reduced from 8 to save memory (8 * 36KB = 288KB was too much) */
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -93,6 +93,13 @@ static __IO uint8_t histo_ep_enabled = 0;
 __IO uint8_t histo_ep_data = 0;
 static uint8_t HISTOInEpAdd = HISTO_IN_EP;
 
+#ifndef USB_RAM_D2
+#define USB_RAM_D2 __attribute__((section(".ram_d2")))
+#endif
+
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t histo_tx_buffer[USB_HISTO_MAX_SIZE] __ALIGN_END;
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t histo_queue_buffers[HISTO_QUEUE_SIZE][USB_HISTO_MAX_SIZE] __ALIGN_END;
+
 /* Private functions */
 static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
@@ -104,24 +111,11 @@ static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
   #endif /* USE_USBD_COMPOSITE */
     printf("HISTO_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", HISTOInEpAdd, (uint8_t)pdev->classId);
-    pTxHistoBuff = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
-    if(pTxHistoBuff == NULL){
-    	Error_Handler();
-    }
+    pTxHistoBuff = histo_tx_buffer;
 
     /* Allocate buffers for queue entries */
     for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
-      histo_queue[i].buffer = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
-      if(histo_queue[i].buffer == NULL){
-        /* Free any buffers we already allocated */
-        for (uint8_t j = 0; j < i; j++) {
-          if(histo_queue[j].buffer != NULL){
-            free(histo_queue[j].buffer);
-            histo_queue[j].buffer = NULL;
-          }
-        }
-        Error_Handler();
-      }
+      histo_queue[i].buffer = histo_queue_buffers[i];
       histo_queue[i].length = 0;
     }
 
@@ -170,16 +164,12 @@ static uint8_t USBD_Histo_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   histo_ep_enabled = 0;
 
   if(pTxHistoBuff){
-	free(pTxHistoBuff);
-	pTxHistoBuff = 0;
+    pTxHistoBuff = 0;
   }
 
   /* Free queue entry buffers */
   for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
-    if(histo_queue[i].buffer){
-      free(histo_queue[i].buffer);
-      histo_queue[i].buffer = NULL;
-    }
+    histo_queue[i].buffer = NULL;
   }
 
   histo_queue_head = 0;

@@ -37,7 +37,7 @@ static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
 
-__ALIGN_BEGIN volatile uint8_t frame_buffer[2][CAMERA_COUNT * HISTOGRAM_DATA_SIZE] __ALIGN_END; // Double buffer
+__ALIGN_BEGIN volatile uint8_t frame_buffer[1][CAMERA_COUNT * HISTOGRAM_DATA_SIZE] __ALIGN_END; // Double buffer
 __ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END; 
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
@@ -885,22 +885,7 @@ void poll_camera_temperatures(void)
     }
 }
 /* -------- END CAMERA I2C FUNCTIONS -------- */
-/* -------- START FRAME BUFFER FUNCTIONS -------- */
-void switch_frame_buffer(void) {
-    _active_buffer = 1 - _active_buffer; // Toggle between 0 and 1
-    // Reassign each camera’s buffer pointer
-    for (int i = 0; i < CAMERA_COUNT; i++) {
-        cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
-    }
-}
 
-uint8_t* get_active_frame_buffer(void) {
-    return (uint8_t*)frame_buffer[_active_buffer];
-}
-
-uint8_t* get_inactive_frame_buffer(void) {
-    return (uint8_t*)frame_buffer[1 - _active_buffer];
-}
 
 static void generate_fake_histogram(uint8_t *histogram_data) {
     // Cast the byte buffer to uint32_t pointer to store histogram data
