@@ -220,10 +220,14 @@ static uint8_t histo_queue_is_full(void)
 static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
 {
   if (histo_queue_is_full()) {
+    printf("HISTO enqueue fail: queue full (count=%u size=%u)\r\n",
+           histo_queue_count, (uint8_t)HISTO_QUEUE_SIZE);
     return USBD_FAIL;
   }
 
   if (length > USB_HISTO_MAX_SIZE) {
+    printf("HISTO enqueue fail: length too large (%u > %u)\r\n",
+           length, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
   }
 
@@ -328,7 +332,24 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 {
   UNUSED(ep_idx);
   
-  if (pdev == NULL || data == NULL || len == 0) {
+  if (pdev == NULL) {
+    printf("HISTO SendData fail: pdev NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (data == NULL) {
+    printf("HISTO SendData fail: data NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len == 0) {
+    printf("HISTO SendData fail: len=0\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len > USB_HISTO_MAX_SIZE) {
+    printf("HISTO SendData fail: len too large (%u > %u)\r\n",
+           len, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
   }
 
@@ -339,7 +360,12 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 
   /* If queue is empty and not currently sending, send directly */
   if (histo_queue_is_empty() && histo_ep_data == 0) {
-    return USBD_HISTO_SetTxBuffer(pdev, data, len);
+    uint8_t ret = USBD_HISTO_SetTxBuffer(pdev, data, len);
+    if (ret != USBD_OK) {
+      printf("HISTO SendData fail: SetTxBuffer ret=%u (ep_data=%u enabled=%u)\r\n",
+             ret, histo_ep_data, histo_ep_enabled);
+    }
+    return ret;
   }
   
   /* Otherwise, add to queue */
