@@ -1123,7 +1123,6 @@ _Bool check_streaming(void){
 			return streaming_active;
 		}
 		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
-//			uint32_t time_since_last_frame = current_time - most_recent_frame_time_local;
 			uint32_t elapsed = current_time - streaming_start_time;
 			send_data(); // send data one last frame to finish the buffers 
 			total_frames_failed = total_frames_failed - 1; // subtract one from the total frames failed because the first frame is a skip and the last frame is an extra

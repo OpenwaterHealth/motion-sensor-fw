@@ -56,3 +56,7 @@ build.ninja
 # Miscellaneous
 .DS_Store
 Thumbs.db
+
+.vscode/
+build/
+platform.json
