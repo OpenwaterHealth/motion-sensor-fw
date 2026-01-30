@@ -42,14 +42,14 @@
 
 /* USER CODE END Includes */
 
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
 /* External references to USB endpoint status variables */
 extern volatile uint8_t tx_flag;  // From uart_comms.c
 extern volatile uint8_t comms_ep_data;  // From usbd_comms.c (__IO is volatile)
 extern volatile uint8_t histo_ep_data;  // From usbd_histo.c (__IO is volatile)
 extern volatile uint8_t imu_ep_data;    // From usbd_imu.c (__IO is volatile)
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
 
@@ -84,6 +84,7 @@ TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim14;
+TIM_HandleTypeDef htim15;
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart4;
@@ -161,6 +162,7 @@ static void MX_USART3_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM16_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_TIM15_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -242,6 +244,7 @@ int main(void)
   MX_TIM14_Init();
   MX_TIM16_Init();
   MX_TIM5_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
   
   if (HAL_TIM_Base_Start(&htim5) != HAL_OK)
@@ -957,6 +960,52 @@ static void MX_TIM14_Init(void)
   /* USER CODE BEGIN TIM14_Init 2 */
 
   /* USER CODE END TIM14_Init 2 */
+
+}
+
+/**
+  * @brief TIM15 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 240-1;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 65535;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
 
 }
 
@@ -1707,6 +1756,59 @@ void ExitRun0Mode(void) {
     // Temporary stub for ExitRun0Mode
 }
 
+/**
+ * @brief Wait for all USB data queues to finish sending
+ * @note This function polls USB endpoint status flags until all transmissions complete
+ *       or a timeout occurs. This ensures error messages and diagnostic data are
+ *       transmitted before the system halts.
+ */
+static void wait_for_usb_queues_to_finish(void)
+{
+  const uint32_t timeout_ms = 1000;  // Maximum wait time: 1 second
+  uint32_t start_time = get_timestamp_ms();
+  uint32_t elapsed = 0;
+  
+  printf("Waiting for USB queues to finish...\r\n");
+  fflush(stdout);
+  
+  // Poll until all endpoints are idle or timeout
+  while (elapsed < timeout_ms) {
+    _Bool all_idle = true;
+    
+    // Check COMMS endpoint (tx_flag: 1 = idle, 0 = busy)
+    if (tx_flag == 0) {
+      all_idle = false;
+    }
+    
+    // Check COMMS bulk endpoint (comms_ep_data: 0 = idle, 1 = transmitting)
+    if (comms_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check HISTO endpoint (histo_ep_data: 0 = idle, 1 = transmitting)
+    if (histo_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check IMU endpoint (imu_ep_data: 0 = idle, 1 = transmitting)
+    if (imu_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    if (all_idle) {
+      printf("All USB queues finished.\r\n");
+      fflush(stdout);
+      return;
+    }
+    
+    // Small delay to avoid busy-waiting
+    delay_ms(1);
+    elapsed = get_timestamp_ms() - start_time;
+  }
+  
+  printf("USB queue wait timeout after %lu ms (some data may not have been sent).\r\n", elapsed);
+  fflush(stdout);
+}
 /* USER CODE END 4 */
 
  /* MPU Configuration */
@@ -1787,59 +1889,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
-/**
- * @brief Wait for all USB data queues to finish sending
- * @note This function polls USB endpoint status flags until all transmissions complete
- *       or a timeout occurs. This ensures error messages and diagnostic data are
- *       transmitted before the system halts.
- */
-static void wait_for_usb_queues_to_finish(void)
-{
-  const uint32_t timeout_ms = 1000;  // Maximum wait time: 1 second
-  uint32_t start_time = get_timestamp_ms();
-  uint32_t elapsed = 0;
-  
-  printf("Waiting for USB queues to finish...\r\n");
-  fflush(stdout);
-  
-  // Poll until all endpoints are idle or timeout
-  while (elapsed < timeout_ms) {
-    _Bool all_idle = true;
-    
-    // Check COMMS endpoint (tx_flag: 1 = idle, 0 = busy)
-    if (tx_flag == 0) {
-      all_idle = false;
-    }
-    
-    // Check COMMS bulk endpoint (comms_ep_data: 0 = idle, 1 = transmitting)
-    if (comms_ep_data != 0) {
-      all_idle = false;
-    }
-    
-    // Check HISTO endpoint (histo_ep_data: 0 = idle, 1 = transmitting)
-    if (histo_ep_data != 0) {
-      all_idle = false;
-    }
-    
-    // Check IMU endpoint (imu_ep_data: 0 = idle, 1 = transmitting)
-    if (imu_ep_data != 0) {
-      all_idle = false;
-    }
-    
-    if (all_idle) {
-      printf("All USB queues finished.\r\n");
-      fflush(stdout);
-      return;
-    }
-    
-    // Small delay to avoid busy-waiting
-    delay_ms(1);
-    elapsed = get_timestamp_ms() - start_time;
-  }
-  
-  printf("USB queue wait timeout after %lu ms (some data may not have been sent).\r\n", elapsed);
-  fflush(stdout);
-}
 
 void Error_Handler(void)
 {
