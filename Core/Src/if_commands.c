@@ -14,6 +14,7 @@
 #include "ICM20948.h"
 #include "0X02C1B.h"
 #include "histo_fake.h"
+#include "logging.h"
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
@@ -88,8 +89,36 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data_len = 1;
 		uartResp->data = (uint8_t *)&uartResp->reserved;
 		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
-		printf("Fan control status: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
+		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
+	case OW_CMD_SET_DEBUG_FLAGS: {
+		uartResp->command = OW_CMD_SET_DEBUG_FLAGS;
+		if (cmd.data_len != sizeof(uint32_t)) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Invalid data length for debug flags\r\n");
+			break;
+		}
+		uint32_t new_flags = 0;
+		memcpy(&new_flags, cmd.data, sizeof(new_flags));
+		logging_set_debug_flags(new_flags);
+		uartResp->packet_type = OW_RESP;
+		static uint32_t debug_flags_resp;
+		debug_flags_resp = logging_get_debug_flags();
+		uartResp->data_len = sizeof(debug_flags_resp);
+		uartResp->data = (uint8_t *)&debug_flags_resp;
+		break;
+	}
+	case OW_CMD_GET_DEBUG_FLAGS: {
+		uartResp->command = OW_CMD_GET_DEBUG_FLAGS;
+		uartResp->packet_type = OW_RESP;
+		static uint32_t debug_flags_get_resp;
+		debug_flags_get_resp = logging_get_debug_flags();
+		uartResp->data_len = sizeof(debug_flags_get_resp);
+		uartResp->data = (uint8_t *)&debug_flags_get_resp;
+		break;
+	}
 	case OW_CMD_I2C_BROADCAST:
 		printf("Broadcasting I2C on all channels\r\n");
 		uartResp->command = OW_CMD_I2C_BROADCAST;
@@ -730,6 +759,71 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    uartResp->data_len = 1;
 		break;
 
+	case OW_CAMERA_READ_SECURITY_UID:
+		// Read security UID for a single camera
+		// cmd.addr contains the camera ID (0-7)
+		uartResp->command = OW_CAMERA_READ_SECURITY_UID;
+		uartResp->packet_type = OW_RESP;
+		
+		// Validate camera ID
+		if (cmd.addr >= CAMERA_COUNT) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Invalid camera ID: %d\r\n", cmd.addr);
+			break;
+		}
+		
+		// Get camera device
+		CameraDevice *cam = get_camera_byID(cmd.addr);
+		if (cam == NULL) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Failed to get camera device for ID: %d\r\n", cmd.addr);
+			break;
+		}
+		
+		// Check if camera is powered on (cameras might be powered on after startup scan)
+		if (!cam->isPowered) {
+			// Camera not powered, return 0 (all zeros)
+			static uint8_t zero_uid[6] = {0, 0, 0, 0, 0, 0};
+			uartResp->data = zero_uid;
+			uartResp->data_len = 6;
+			printf("Camera %d not powered, returning 0 for UID\r\n", cmd.addr + 1);
+			break;
+		}
+		
+		// Select I2C channel for this camera
+		if (TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+			uartResp->packet_type = OW_ERROR;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+			printf("Failed to select I2C channel for camera %d\r\n", cmd.addr + 1);
+			break;
+		}
+		
+		delay_ms(10);  // Small delay after channel selection
+		
+		// Read security UID - try to read regardless of cameras_present flag
+		// since cameras might be powered on after startup scan
+		static uint8_t uid_buffer[6] = {0};
+		uint64_t uid_value = 0;
+		int ret = X02C1B_read_security_uid(cam, uid_buffer, &uid_value);
+		
+		if (ret != 0) {
+			// Read failed - return zeros to indicate camera not accessible
+			memset(uid_buffer, 0, 6);
+			uartResp->data = uid_buffer;
+			uartResp->data_len = 6;
+			printf("Failed to read security UID for camera %d (error: %d), returning 0\r\n", cmd.addr + 1, ret);
+		} else {
+			uartResp->data = uid_buffer;
+			uartResp->data_len = 6;
+			// printf("Camera %d security UID read successfully\r\n", cmd.addr + 1);
+		}
+		break;
+
 	default:
 		uartResp->data_len = 0;
 		uartResp->command = cmd.command;
@@ -788,6 +882,10 @@ static void print_uart_packet(const UartPacket* packet) {
 static UartPacket uartReturn;
 UartPacket process_if_command(UartPacket cmd)
 {
+	// Print packet information when received, before processing
+	// printf("[CMD]  ID:0x%04X Cmd:0x%02X Type:0x%02X Addr:0x%02X Len:%d\r\n",
+	// 	   cmd.id, cmd.packet_type, cmd.command, cmd.addr, cmd.data_len);
+	
 	I2C_TX_Packet i2c_packet;
 	CameraDevice* pCam = get_active_cam();
 	uartReturn.id = cmd.id;

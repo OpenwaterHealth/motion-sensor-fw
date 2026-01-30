@@ -9,6 +9,7 @@
 #include "uart_comms.h"
 #include "if_commands.h"
 #include "usbd_comms.h"
+#include "usbd_def.h"
 #include "utils.h"
 
 #include <string.h>
@@ -115,7 +116,21 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_END_BYTE;
 
 	// Initiate transmission via USB CDC
-	USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
+	uint8_t tx_status = USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
+	if (tx_status != USBD_OK) {
+		// Transmission not started (e.g., endpoint busy); don't block on tx_flag
+		printf("COMM USB TX failed: id=0x%04X cmd=0x%02X type=0x%02X len=%d dev_state=0x%02X\r\n",
+			   pResp->id, pResp->command, pResp->packet_type, bufferIndex, hUsbDeviceHS.dev_state);
+		if (tx_status == USBD_BUSY) {
+			printf("COMM USB TX failed: endpoint busy\r\n");
+		} else if (tx_status == USBD_FAIL) {
+			printf("COMM USB TX failed: USBD_FAIL\r\n");
+		} else {
+			printf("COMM USB TX failed: status=0x%02X\r\n", tx_status);
+		}
+		tx_flag = 1;
+		return false;
+	}
 
 	if(pResp->command == OW_CAMERA_GET_HISTOGRAM && verbose_on)
 	{
@@ -128,7 +143,10 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	while (!tx_flag) {
 		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
-			printf("TX Timeout\r\n");
+			printf("COMM USB TX Timeout\r\n");
+			
+
+
 			return false;
 		}
 	}
@@ -152,10 +170,8 @@ void comms_host_check_received(void) {
 	UartPacket cmd;
 	UartPacket resp;
 	uint16_t calculated_crc;
-
 	if (!rx_flag)
 		return;
-//	printf("Packet recieved\r\n");
 	int bufferIndex = 0;
 
 	if (rxBuffer[bufferIndex++] != OW_START_BYTE) {
@@ -242,6 +258,9 @@ void comms_host_check_received(void) {
 
 NextDataPacket:
 	comms_interface_send(&resp);
+	// Debug: Print command/response info after sending
+	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
+	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
 	// ClearBuffer_DMA();
 	ptrReceive = 0;

@@ -42,6 +42,12 @@
 
 /* USER CODE END Includes */
 
+/* External references to USB endpoint status variables */
+extern volatile uint8_t tx_flag;  // From uart_comms.c
+extern volatile uint8_t comms_ep_data;  // From usbd_comms.c (__IO is volatile)
+extern volatile uint8_t histo_ep_data;  // From usbd_histo.c (__IO is volatile)
+extern volatile uint8_t imu_ep_data;    // From usbd_imu.c (__IO is volatile)
+
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -95,7 +101,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 3};
+uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 4};
 
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
@@ -1459,6 +1465,25 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 // Error handling callback for USART
 void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
 {
+  int8_t cam_id = -1;
+
+  if (husart->Instance == USART1)
+  {
+    cam_id = 4;
+  }
+  else if (husart->Instance == USART2)
+  {
+    cam_id = 0;
+  }
+  else if (husart->Instance == USART3)
+  {
+    cam_id = 2;
+  }
+  else if (husart->Instance == USART6)
+  {
+    cam_id = 3;
+  }
+
   // Print which USART instance caused the error
   if (husart->Instance == USART1)
   {
@@ -1497,6 +1522,7 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   if (husart->ErrorCode & HAL_USART_ERROR_ORE)
   {
     printf("Overrun error ");
+    __HAL_USART_CLEAR_OREFLAG(husart);
   }
   if (husart->ErrorCode & HAL_USART_ERROR_DMA)
   {
@@ -1504,12 +1530,38 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   }
   printf("\r\n");
 
+  if ((husart->ErrorCode & HAL_USART_ERROR_ORE) != 0U && cam_id >= 0)
+  {
+    abort_data_reception((uint8_t)cam_id);
+    start_data_reception((uint8_t)cam_id);
+    return;
+  }
+
   Error_Handler();
 }
 
 // Error handling callback for SPI
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
+  int8_t cam_id = -1;
+
+  if (hspi->Instance == SPI2)
+  {
+    cam_id = 6;
+  }
+  else if (hspi->Instance == SPI3)
+  {
+    cam_id = 5;
+  }
+  else if (hspi->Instance == SPI4)
+  {
+    cam_id = 7;
+  }
+  else if (hspi->Instance == SPI6)
+  {
+    cam_id = 1;
+  }
+
   // Print which SPI instance caused the error
   if (hspi->Instance == SPI2)
   {
@@ -1536,6 +1588,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   if (hspi->ErrorCode & HAL_SPI_ERROR_OVR)
   {
     printf("Overrun error ");
+    __HAL_SPI_CLEAR_OVRFLAG(hspi);
   }
   if (hspi->ErrorCode & HAL_SPI_ERROR_MODF)
   {
@@ -1573,6 +1626,13 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
       printf("HAL_DMA_ERROR_BUSY");
   }
   printf("\r\n");
+
+  if ((hspi->ErrorCode & HAL_SPI_ERROR_OVR) != 0U && cam_id >= 0)
+  {
+    abort_data_reception((uint8_t)cam_id);
+    start_data_reception((uint8_t)cam_id);
+    return;
+  }
 
   Error_Handler(); // Handle any error during re-enabling
 }
@@ -1723,6 +1783,60 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
+/**
+ * @brief Wait for all USB data queues to finish sending
+ * @note This function polls USB endpoint status flags until all transmissions complete
+ *       or a timeout occurs. This ensures error messages and diagnostic data are
+ *       transmitted before the system halts.
+ */
+static void wait_for_usb_queues_to_finish(void)
+{
+  const uint32_t timeout_ms = 1000;  // Maximum wait time: 1 second
+  uint32_t start_time = get_timestamp_ms();
+  uint32_t elapsed = 0;
+  
+  printf("Waiting for USB queues to finish...\r\n");
+  fflush(stdout);
+  
+  // Poll until all endpoints are idle or timeout
+  while (elapsed < timeout_ms) {
+    _Bool all_idle = true;
+    
+    // Check COMMS endpoint (tx_flag: 1 = idle, 0 = busy)
+    if (tx_flag == 0) {
+      all_idle = false;
+    }
+    
+    // Check COMMS bulk endpoint (comms_ep_data: 0 = idle, 1 = transmitting)
+    if (comms_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check HISTO endpoint (histo_ep_data: 0 = idle, 1 = transmitting)
+    if (histo_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    // Check IMU endpoint (imu_ep_data: 0 = idle, 1 = transmitting)
+    if (imu_ep_data != 0) {
+      all_idle = false;
+    }
+    
+    if (all_idle) {
+      printf("All USB queues finished.\r\n");
+      fflush(stdout);
+      return;
+    }
+    
+    // Small delay to avoid busy-waiting
+    delay_ms(1);
+    elapsed = get_timestamp_ms() - start_time;
+  }
+  
+  printf("USB queue wait timeout after %lu ms (some data may not have been sent).\r\n", elapsed);
+  fflush(stdout);
+}
+
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -1749,6 +1863,9 @@ void Error_Handler(void)
   printf("PC : 0x%08lX (Program Counter)\r\n", stack_ptr[6]);
   printf("xPSR: 0x%08lX\r\n", stack_ptr[7]);
   fflush(stdout);
+
+  // Wait for all USB data queues to finish sending before halting
+  wait_for_usb_queues_to_finish();
 
   delay_ms(100);
   __disable_irq();

@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 #include "usbd_ioreq.h"
+#include "common.h"
 
 
 #ifndef COMMS_IN_EP
@@ -24,7 +25,9 @@ extern "C" {
 
 #define COMMS_FS_MAX_PACKET_SIZE         64U    /* Full-speed USB */
 #define COMMS_HS_MAX_PACKET_SIZE         512U   /* High-speed USB */
-#define USB_COMMS_MAX_SIZE 				 1024U
+#ifndef USB_COMMS_MAX_SIZE
+#define USB_COMMS_MAX_SIZE                COMMAND_MAX_SIZE
+#endif
 #define USB_RX_BUFFER_COUNT     		 2U
 extern USBD_ClassTypeDef USBD_COMMS;
 #define USBD_COMMS_CLASS &USBD_COMMS

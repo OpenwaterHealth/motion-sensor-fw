@@ -45,4 +45,5 @@ int X02C1B_fsin_off();
 float X02C1B_read_temp(CameraDevice *cam);
 int X02C1B_FSIN_EXT_enable();
 int X02C1B_FSIN_EXT_disable();
+int X02C1B_read_security_uid(CameraDevice *cam, uint8_t uid_bytes[6], uint64_t *uid_value);
 #endif /* INC_0X02C1B_H_ */

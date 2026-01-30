@@ -319,3 +319,48 @@ int X02C1B_FSIN_EXT_disable()
     ext_fsin_enabled = false;
     return HAL_OK;
 }
+
+// Reads the 48-bit security UID from the OX02C1B cybersecurity registers.
+// uid_bytes[0] = UID[47:40] (MSB), uid_bytes[5] = UID[7:0] (LSB)
+int X02C1B_read_security_uid(CameraDevice *cam, uint8_t uid_bytes[6], uint64_t *uid_value)
+{
+    static const uint16_t uid_regs[6] = {
+        0x7C20, // UID_5: UID[47:40]
+        0x7C21, // UID_4: UID[39:32] (listed as RSVD, but read it to keep full 48 bits)
+        0x7C22, // UID_3: UID[31:24]
+        0x7C23, // UID_2: UID[23:16]
+        0x7C24, // UID_1: UID[15:8]
+        0x7C25  // UID_0: UID[7:0]
+    };
+
+    if (uid_bytes == NULL) {
+        printf("Camera %d: uid_bytes buffer is NULL\r\n", cam->id + 1);
+        return -1;
+    }
+
+    int ret;
+    for (int i = 0; i < 6; i++) {
+        ret = X02C1B_read(cam->pI2c, uid_regs[i], &uid_bytes[i]);
+        if (ret < 0) {
+            printf("Camera %d: Failed to read UID register 0x%04X\r\n",
+                   cam->id + 1, uid_regs[i]);
+            return ret;
+        }
+    }
+
+    // Optionally pack into a 64-bit value if caller provided a pointer
+    if (uid_value != NULL) {
+        uint64_t v = 0;
+        for (int i = 0; i < 6; i++) {
+            v = (v << 8) | (uint64_t)uid_bytes[i];
+        }
+        *uid_value = v;
+    }
+
+    // printf("Camera %d UID: %02X%02X%02X%02X%02X%02X\r\n",
+    //        cam->id + 1,
+    //        uid_bytes[0], uid_bytes[1], uid_bytes[2],
+    //        uid_bytes[3], uid_bytes[4], uid_bytes[5]);
+
+    return 0;
+}
