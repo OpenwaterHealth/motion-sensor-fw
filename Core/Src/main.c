@@ -113,7 +113,7 @@ volatile uint8_t event_bits = 0x00;         // holds the event bits to be flippe
 volatile uint8_t event_bits_enabled = 0x00; // holds the event bits for the cameras to be enabled
 volatile uint16_t pulse_count = 0;
 extern uint32_t imu_frame_counter;
-
+volatile bool _enter_dfu = false;
 
 ICM_Axis3D a;
 ICM_Axis3D m;
@@ -1882,6 +1882,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  USBD_IMU_SetTxBuffer(&hUsbDeviceHS, (uint8_t *)usb_buf, len);
 	  }
   }
+
+  if (htim->Instance == TIM15) {
+    HAL_TIM_Base_Stop_IT(htim);
+    if(_enter_dfu) {
+      *((uint32_t *)0x38000000) = 0xDEADBEEF; 
+    }
+
+
+    // De-initialize other specific modules
+    HAL_RNG_DeInit(&hrng);
+    HAL_CRC_DeInit(&hcrc);
+    
+    MX_USB_DEVICE_DeInit();
+    delay_ms(300);
+    // Reset the board
+    NVIC_SystemReset();
+
+  }
+  
   /* USER CODE END Callback 1 */
 }
 

@@ -63,6 +63,24 @@ uint8_t COMMS_InstID = 0, HISTO_InstID = 0, IMU_InstID = 0;
  */
 /* USER CODE BEGIN 1 */
 
+
+void MX_USB_DEVICE_DeInit(void)
+{
+
+    /* Stop USB Device */
+    if (USBD_Stop(&hUsbDeviceHS) != USBD_OK)
+    {
+        Error_Handler();
+    }
+
+    /* De-initialize the USB Device Library */
+    if (USBD_DeInit(&hUsbDeviceHS) != USBD_OK)
+    {
+        Error_Handler();
+    }
+
+}
+
 /* USER CODE END 1 */
 
 /**
