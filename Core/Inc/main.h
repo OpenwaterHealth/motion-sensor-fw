@@ -144,6 +144,7 @@ extern USART_HandleTypeDef husart6;
 
 extern TIM_HandleTypeDef htim12;
 extern TIM_HandleTypeDef htim14;
+extern TIM_HandleTypeDef htim15;
 extern TIM_HandleTypeDef htim8;
 extern CRC_HandleTypeDef   hcrc;
 extern UART_HandleTypeDef huart4;

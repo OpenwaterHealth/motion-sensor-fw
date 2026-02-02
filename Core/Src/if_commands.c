@@ -28,6 +28,8 @@ volatile float imu_temp = 0;
 static ICM_Axis3D accel;
 static ICM_Axis3D gyro;
 volatile uint32_t imu_frame_counter = 0;
+
+extern bool _enter_dfu;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
@@ -185,6 +187,27 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
 		// softreset
+		uartResp->data_len = 0;
+
+		__HAL_TIM_CLEAR_FLAG(&htim15, TIM_FLAG_UPDATE);
+		__HAL_TIM_SET_COUNTER(&htim15, 0);
+		if(HAL_TIM_Base_Start_IT(&htim15) != HAL_OK){
+			uartResp->packet_type = OW_ERROR;
+		}
+		break;
+	case OW_CMD_DFU:
+		printf("Enter DFU\r\n");
+		uartResp->command = OW_CMD_DFU;
+		uartResp->packet_type = OW_RESP;
+		uartResp->data_len = 0;
+
+		_enter_dfu = true;
+
+		__HAL_TIM_CLEAR_FLAG(&htim15, TIM_FLAG_UPDATE);
+		__HAL_TIM_SET_COUNTER(&htim15, 0);
+		if(HAL_TIM_Base_Start_IT(&htim15) != HAL_OK){
+			uartResp->packet_type = OW_ERROR;
+		}
 		break;
 	default:
 		uartResp->data_len = 0;
