@@ -92,6 +92,10 @@ static uint16_t tx_histo_ptr = 0;
 static __IO uint8_t histo_ep_enabled = 0;
 __IO uint8_t histo_ep_data = 0;
 static uint8_t HISTOInEpAdd = HISTO_IN_EP;
+static volatile uint32_t histo_enq_count = 0;
+static volatile uint32_t histo_deq_count = 0;
+static volatile uint32_t histo_datain_count = 0;
+static volatile uint32_t histo_tx_fail_count = 0;
 
 #ifndef USB_RAM_D2
 #define USB_RAM_D2 __attribute__((section(".ram_d2")))
@@ -210,8 +214,12 @@ static uint8_t histo_queue_is_full(void)
 static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
 {
   if (histo_queue_is_full()) {
-    printf("HISTO enqueue fail: queue full (count=%u size=%u)\r\n",
-           histo_queue_count, (uint8_t)HISTO_QUEUE_SIZE);
+    printf("HISTO enqueue fail: queue full (count=%u size=%u enq=%lu deq=%lu datain=%lu txfail=%lu)\r\n",
+           histo_queue_count, (uint8_t)HISTO_QUEUE_SIZE,
+           (unsigned long)histo_enq_count,
+           (unsigned long)histo_deq_count,
+           (unsigned long)histo_datain_count,
+           (unsigned long)histo_tx_fail_count);
     return USBD_FAIL;
   }
 
@@ -228,6 +236,7 @@ static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
   /* Update queue pointers */
   histo_queue_tail = (histo_queue_tail + 1) % HISTO_QUEUE_SIZE;
   histo_queue_count++;
+  histo_enq_count++;
 
   return USBD_OK;
 }
@@ -244,6 +253,7 @@ static uint8_t histo_queue_dequeue(uint8_t **data, uint16_t *length)
   /* Update queue pointers */
   histo_queue_head = (histo_queue_head + 1) % HISTO_QUEUE_SIZE;
   histo_queue_count--;
+  histo_deq_count++;
 
   return USBD_OK;
 }
@@ -284,6 +294,7 @@ static uint8_t USBD_Histo_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *
 static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
 	uint8_t ret = USBD_OK;
+  histo_datain_count++;
 
 #ifdef USE_USBD_COMPOSITE
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
@@ -299,6 +310,10 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
 
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
+          if (ret != USBD_OK) {
+            histo_tx_fail_count++;
+            histo_ep_data = 0;
+          }
       }
       else
       {
@@ -358,6 +373,10 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
     return ret;
   }
   
+  if (histo_ep_data == 0 && !histo_queue_is_empty()) {
+    (void)histo_process_queue();
+  }
+
   /* Otherwise, add to queue */
   return histo_queue_enqueue(data, len);
 }
@@ -383,9 +402,14 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
         uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, tx_histo_total_len);
 
 		pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = tx_histo_total_len;
-		histo_ep_data = 1;
 
 		ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, pTxHistoBuff, pkt_len);
+		if (ret == USBD_OK) {
+			histo_ep_data = 1;
+		} else {
+			histo_tx_fail_count++;
+			histo_ep_data = 0;
+		}
 	}
 	else
 	{
