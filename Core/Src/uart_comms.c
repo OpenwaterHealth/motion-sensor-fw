@@ -250,20 +250,18 @@ void comms_host_check_received(void) {
 		goto NextDataPacket;
 	}
 
-	// printf("COMMAND Packet:\r\n");
-	// print_uart_packet(&cmd);
 	resp = process_if_command(cmd);
-	// printf("RESPONSE Packet:\r\n");
-	// print_uart_packet(&resp);
-	// printf("\r\n\r\n");
 
 NextDataPacket:
-	comms_interface_send(&resp);
-	// Debug: Print command/response info after sending
+	if(comms_interface_send(&resp)){
+		printf(".\r\n");
+	}
+	else {
+		printf("!\r\n");
+	}
 	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
 	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
-	printf(".\r\n");
 	// ClearBuffer_DMA();
 	ptrReceive = 0;
 	rx_flag = 0;
