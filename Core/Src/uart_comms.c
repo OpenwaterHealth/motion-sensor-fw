@@ -25,7 +25,7 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 
 volatile uint32_t ptrReceive;
 volatile uint8_t rx_flag = 0;
-volatile uint8_t tx_flag = 0;
+volatile uint8_t tx_flag = 1; // Start in idle state
 const uint32_t zero_val = 0;
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
@@ -78,7 +78,10 @@ void ClearBuffer_DMA(void)
 }
 
 _Bool comms_interface_send(UartPacket *pResp) {
-	tx_flag = 0;  // Clear the flag before starting transmission
+	if(!tx_flag){
+		printf("Comm tx not complete from last time");
+		return false;
+	}
 
 //    memset(txBuffer, 0, sizeof(txBuffer));
 	int bufferIndex = 0;
@@ -116,6 +119,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_END_BYTE;
 
 	// Initiate transmission via USB CDC
+	tx_flag = 0;  // Set the flag before starting transmission
 	uint8_t tx_status = USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
 	if (tx_status != USBD_OK) {
 		// Transmission not started (e.g., endpoint busy); don't block on tx_flag
@@ -128,7 +132,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 		} else {
 			printf("COMM USB TX failed: status=0x%02X\r\n", tx_status);
 		}
-		tx_flag = 1;
+		tx_flag = 1; // reset to idle on failure
 		return false;
 	}
 
@@ -144,9 +148,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
 			printf("COMM USB TX Timeout\r\n");
-			
-
-
+			tx_flag = 1; // reset to idle on timeout
 			return false;
 		}
 	}
@@ -161,7 +163,7 @@ void comms_host_start(void) {
 	USBD_COMMS_FlushRxBuffer();
 
 	rx_flag = 0;
-	tx_flag = 0;
+	tx_flag = 1;
 
 }
 
