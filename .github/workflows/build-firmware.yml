@@ -32,3 +32,4 @@ jobs:
           path: |
             build/Debug/*.hex
             build/Debug/*.bin
+
