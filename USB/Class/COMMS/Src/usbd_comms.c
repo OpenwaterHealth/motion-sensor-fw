@@ -186,9 +186,6 @@ static uint8_t USBD_Comms_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *
 static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
 	uint8_t ret = USBD_OK;
-	uint16_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH)
-			? COMMS_HS_MAX_PACKET_SIZE
-			: COMMS_FS_MAX_PACKET_SIZE;
 
   /* Get the Endpoints addresses allocated for this CDC class instance */
 	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
@@ -196,7 +193,7 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
   USBD_LL_FlushEP(pdev, COMMSInEpAdd);
   if(comms_ep_data==1){
     // first, advance the pointer from last transmission
-    tx_comms_ptr += packet_size;
+    tx_comms_ptr += COMMS_HS_MAX_PACKET_SIZE;
 
     // cases:
     // 1 there is one more full packet of data to send
@@ -204,9 +201,9 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
     // 3 all data sent, need to send ZLP
 
     // case 1 and 2:
-    int32_t remaining = (int32_t)tx_comms_total_len - (int32_t)tx_comms_ptr;
+    int32_t remaining = tx_comms_total_len - tx_comms_ptr;
     if (remaining > 0) {
-      uint16_t pkt_len = MIN(packet_size, (uint16_t)remaining);
+      uint16_t pkt_len = MIN(COMMS_HS_MAX_PACKET_SIZE, remaining);
       ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
       if (ret != USBD_OK) {
           comms_ep_data = 0;
@@ -300,9 +297,6 @@ uint8_t USBD_COMMS_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_t length)
 {
 	uint8_t ret = USBD_OK;
-	uint16_t packet_size = (pdev->dev_speed == USBD_SPEED_HIGH)
-			? COMMS_HS_MAX_PACKET_SIZE
-			: COMMS_FS_MAX_PACKET_SIZE;
 
 	if (pdev == NULL) {
 		printf("USBD_COMMS_SetTxBuffer: pdev NULL\r\n");
@@ -317,10 +311,10 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 
 	if(comms_ep_enabled == 1 && comms_ep_data==0)
   {
-    memset(pTxCommsBuff, 0, USB_COMMS_MAX_SIZE);
+    memset((uint32_t*)pTxCommsBuff,0,USB_COMMS_MAX_SIZE/4);
     memcpy(pTxCommsBuff,pbuff,length);
 
-    tx_comms_total_len = USB_COMMS_MAX_SIZE;
+    tx_comms_total_len = length;
     tx_comms_ptr = 0;
     comms_ep_data = 1;
     pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
@@ -328,7 +322,7 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
     // start the first tx
     COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
     USBD_LL_FlushEP(pdev, COMMSInEpAdd);
-    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, packet_size);
+    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, MIN(COMMS_HS_MAX_PACKET_SIZE, tx_comms_total_len));
     if (ret != USBD_OK) {
         comms_ep_data = 0;
         tx_comms_ptr = 0;
