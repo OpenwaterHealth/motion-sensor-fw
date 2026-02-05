@@ -303,34 +303,29 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 		return USBD_FAIL;
 	}
 
-  if(length == 0 || length > USB_COMMS_MAX_SIZE)
-  {
-    printf("USBD_COMMS_SetTxBuffer: invalid length %d\r\n", length);
-    return USBD_FAIL;
-  }
-
 	if(comms_ep_enabled == 1 && comms_ep_data==0)
   {
+    COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
+
+    USBD_LL_FlushEP(pdev, COMMSInEpAdd); // TODO: why do i need to do this?
     memset((uint32_t*)pTxCommsBuff,0,USB_COMMS_MAX_SIZE/4);
     memcpy(pTxCommsBuff,pbuff,length);
 
     tx_comms_total_len = length;
     tx_comms_ptr = 0;
-    comms_ep_data = 1;
+
+    uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, tx_comms_total_len);
+
     pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
-
-    // start the first tx
-    COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
-    USBD_LL_FlushEP(pdev, COMMSInEpAdd);
-    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, MIN(COMMS_HS_MAX_PACKET_SIZE, tx_comms_total_len));
+    comms_ep_data = 1;
+    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, pkt_len);
     if (ret != USBD_OK) {
-        comms_ep_data = 0;
-        tx_comms_ptr = 0;
-        tx_comms_total_len = 0;
-        printf("USBD_COMMS_SetTxBuffer: USBD_LL_Transmit failed %d\r\n", ret);
-        return ret;
-    }
-
+      comms_ep_data = 0;
+      tx_comms_ptr = 0;
+      tx_comms_total_len = 0;
+      comms_tx_start_ms = 0u;
+      return ret;
+		}
 		comms_tx_start_ms = get_timestamp_ms();
 	}
 	else
@@ -339,6 +334,7 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 	}
   return ret;
 }
+
 
 uint8_t USBD_COMMS_Transmit(USBD_HandleTypeDef *pdev, uint8_t* Buf, uint16_t Len)
 {

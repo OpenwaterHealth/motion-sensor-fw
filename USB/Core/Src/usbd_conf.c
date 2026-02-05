@@ -631,10 +631,7 @@ USBD_StatusTypeDef USBD_LL_Transmit(USBD_HandleTypeDef *pdev, uint8_t ep_addr, u
   USBD_StatusTypeDef usb_status = USBD_OK;
 
   hal_status = HAL_PCD_EP_Transmit(pdev->pData, ep_addr, pbuf, size);
-  if(hal_status != HAL_OK)
-  {
-    printf("USBD_LL_Transmit Error %d on EP 0x%02X Size %lu\r\n", hal_status, ep_addr, size);
-  }
+
   usb_status =  USBD_Get_USB_Status(hal_status);
 
   return usb_status;
