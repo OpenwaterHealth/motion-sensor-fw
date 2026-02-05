@@ -24,8 +24,8 @@ extern uint8_t txBuffer[COMMAND_MAX_SIZE];
 extern DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 
 volatile uint32_t ptrReceive;
-volatile uint8_t rx_flag = 0;
-volatile uint8_t tx_flag = 0;
+volatile uint8_t rx_flag = 0; // start in idle state (0)
+volatile uint8_t tx_flag = 1; // Start in idle state (1)
 const uint32_t zero_val = 0;
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
@@ -78,7 +78,10 @@ void ClearBuffer_DMA(void)
 }
 
 _Bool comms_interface_send(UartPacket *pResp) {
-	tx_flag = 0;  // Clear the flag before starting transmission
+	if(!tx_flag){
+		printf("Comm tx not complete from last time");
+		return false;
+	}
 
 //    memset(txBuffer, 0, sizeof(txBuffer));
 	int bufferIndex = 0;
@@ -95,8 +98,9 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = (pResp->data_len) & 0xFF;
 
 	// Check for possible buffer overflow (optional)
-	if ((bufferIndex + pResp->data_len + 4) > sizeof(txBuffer)) {
-		printf("Packet too large to send\r\n");
+	uint32_t pkt_size = (bufferIndex + pResp->data_len + 4);
+	if (pkt_size > sizeof(txBuffer)) {
+		printf("Packet too large to send, len=%d\r\n", pkt_size);
 		// Handle error: packet too large for txBuffer
 		return false;
 	}
@@ -116,6 +120,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = OW_END_BYTE;
 
 	// Initiate transmission via USB CDC
+	tx_flag = 0;  // Set the flag before starting transmission
 	uint8_t tx_status = USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
 	if (tx_status != USBD_OK) {
 		// Transmission not started (e.g., endpoint busy); don't block on tx_flag
@@ -128,7 +133,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 		} else {
 			printf("COMM USB TX failed: status=0x%02X\r\n", tx_status);
 		}
-		tx_flag = 1;
+		tx_flag = 1; // reset to idle on failure
 		return false;
 	}
 
@@ -144,9 +149,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 		if ((get_timestamp_ms() - start_time) >= TX_TIMEOUT) {
 			// Timeout handling: Log error and break out or reset the flag.
 			printf("COMM USB TX Timeout\r\n");
-			
-
-
+			tx_flag = 1; // reset to idle on timeout
 			return false;
 		}
 	}
@@ -161,7 +164,7 @@ void comms_host_start(void) {
 	USBD_COMMS_FlushRxBuffer();
 
 	rx_flag = 0;
-	tx_flag = 0;
+	tx_flag = 1;
 
 }
 
@@ -184,6 +187,7 @@ void comms_host_check_received(void) {
 
 	cmd.id = (rxBuffer[bufferIndex] << 8 | (rxBuffer[bufferIndex + 1] & 0xFF));
 	bufferIndex += 2;
+	printf("0x%04X\r\n", cmd.id);
 	cmd.packet_type = rxBuffer[bufferIndex++];
 	cmd.command = rxBuffer[bufferIndex++];
 	cmd.addr = rxBuffer[bufferIndex++];
@@ -249,16 +253,15 @@ void comms_host_check_received(void) {
 		goto NextDataPacket;
 	}
 
-	// printf("COMMAND Packet:\r\n");
-	// print_uart_packet(&cmd);
 	resp = process_if_command(cmd);
-	// printf("RESPONSE Packet:\r\n");
-	// print_uart_packet(&resp);
-	// printf("\r\n\r\n");
 
 NextDataPacket:
-	comms_interface_send(&resp);
-	// Debug: Print command/response info after sending
+	if(comms_interface_send(&resp)){
+		printf(".\r\n");
+	}
+	else {
+		printf("!\r\n");
+	}
 	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
 	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	memset(rxBuffer, 0, sizeof(rxBuffer));
@@ -270,6 +273,15 @@ NextDataPacket:
 
 // Callback functions
 void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
+	static volatile uint32_t rx_overrun_count = 0;
+
+	if (rx_flag) {
+		rx_overrun_count++;
+		printf("COMM RX OVERRUN: count=%lu len=%lu\r\n",
+			   (unsigned long)rx_overrun_count,
+			   (unsigned long)Len);
+	}
+
 	memcpy(rxBuffer, Buf, Len);
 	rx_flag = 1;
 }

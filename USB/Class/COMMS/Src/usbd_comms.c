@@ -87,7 +87,12 @@ static uint16_t rxIndex = 0;
 static void (*CommsRxCallback)(uint8_t *buf, uint16_t len) = NULL;
 static uint8_t read_to_idle_enabled = 0;
 
-static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE];
+#ifndef USB_RAM_D2
+#define USB_RAM_D2 __attribute__((section(".ram_d2")))
+#endif
+
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t comms_tx_buffer[USB_COMMS_MAX_SIZE] __ALIGN_END;
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE] __ALIGN_END;
 static uint8_t current_rx_buf_index = 0;
 
 /* Private functions */
@@ -103,10 +108,7 @@ static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     printf("COMMS_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", COMMSInEpAdd, (uint8_t)pdev->classId);
     printf("COMMS_Init DATA OUT EP: 0x%02X ClassID: 0x%02X\r\n", COMMSOutEpAdd, (uint8_t)pdev->classId);
 
-    pTxCommsBuff = (uint8_t*)malloc(USB_COMMS_MAX_SIZE);
-    if(pTxCommsBuff == NULL){
-    	Error_Handler();
-    }
+    pTxCommsBuff = comms_tx_buffer;
 
     if (pdev->dev_speed == USBD_SPEED_HIGH)
     {
@@ -153,8 +155,7 @@ static uint8_t USBD_Comms_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   comms_ep_enabled = 0;
 
   if(pTxCommsBuff){
-	free(pTxCommsBuff);
-	pTxCommsBuff = 0;
+    pTxCommsBuff = 0;
   }
 #ifdef USE_USBD_COMPOSITE
   if (pdev->pClassDataCmsit[pdev->classId] != NULL)
@@ -186,47 +187,49 @@ static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
 	uint8_t ret = USBD_OK;
 
-#ifdef USE_USBD_COMPOSITE
-	  /* Get the Endpoints addresses allocated for this CDC class instance */
+  /* Get the Endpoints addresses allocated for this CDC class instance */
 	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
-#endif /* USE_USBD_COMPOSITE */
 
   USBD_LL_FlushEP(pdev, COMMSInEpAdd);
-
   if(comms_ep_data==1){
-      tx_comms_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE;
+    // first, advance the pointer from last transmission
+    tx_comms_ptr += COMMS_HS_MAX_PACKET_SIZE;
 
-      if (tx_comms_ptr < tx_comms_total_len)
-      {
-          uint16_t remaining = tx_comms_total_len - tx_comms_ptr;
-          uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, remaining);
+    // cases:
+    // 1 there is one more full packet of data to send
+    // 2 there is a partial packet of data to send
+    // 3 all data sent, need to send ZLP
 
-  		  //printf("Cont TX data: %d size: %d\r\n", tx_comms_total_len, pkt_len);
-          ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
-          if (ret != USBD_OK) {
-              comms_ep_data = 0;
-              tx_comms_ptr = 0;
-              tx_comms_total_len = 0;
-              comms_tx_start_ms = 0u;
-              return ret;
-          }
-          comms_tx_start_ms = get_timestamp_ms();
-      }
-      else
-      {
-          // Transfer complete
+    // case 1 and 2:
+    int32_t remaining = tx_comms_total_len - tx_comms_ptr;
+    if (remaining > 0) {
+      uint16_t pkt_len = MIN(COMMS_HS_MAX_PACKET_SIZE, remaining);
+      ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
+      if (ret != USBD_OK) {
           comms_ep_data = 0;
+          tx_comms_ptr = 0;
+          tx_comms_total_len = 0;
           comms_tx_start_ms = 0u;
-          USBD_COMMS_TxCpltCallback(pTxCommsBuff, tx_comms_total_len, COMMSInEpAdd);
-          // Send ZLP to indicate completion
-          ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
+          return ret;
       }
-  }else{
-	pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
-	/* Send ZLP */
-	ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+      comms_tx_start_ms = get_timestamp_ms();
+    }
+    else
+    {
+        // Transfer complete
+        comms_ep_data = 0;
+        comms_tx_start_ms = 0u;
+        USBD_COMMS_TxCpltCallback(pTxCommsBuff, tx_comms_total_len, COMMSInEpAdd);
+        // Send ZLP to indicate completion
+        ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
+    }
   }
-
+  else
+  {
+    pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
+    /* Send ZLP */
+    ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+  }
   return ret;
 }
 
@@ -295,43 +298,33 @@ uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
 {
 	uint8_t ret = USBD_OK;
 
-	if (length > USB_COMMS_MAX_SIZE)
-	{
+	if (pdev == NULL) {
+		printf("USBD_COMMS_SetTxBuffer: pdev NULL\r\n");
 		return USBD_FAIL;
 	}
 
-	if (comms_ep_data == 1 && comms_tx_start_ms != 0u) {
-		uint32_t elapsed = get_timestamp_ms() - comms_tx_start_ms;
-		if (elapsed >= COMMS_TX_TIMEOUT_MS) {
-			USBD_COMMS_RecoverFromError();
-		}
-	}
-
 	if(comms_ep_enabled == 1 && comms_ep_data==0)
-	{
-#ifdef USE_USBD_COMPOSITE
-		/* Get the Endpoints addresses allocated for this CDC class instance */
-		COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
-#endif /* USE_USBD_COMPOSITE */
+  {
+    COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
 
-		USBD_LL_FlushEP(pdev, COMMSInEpAdd);
-		memset((uint32_t*)pTxCommsBuff,0,USB_COMMS_MAX_SIZE/4);
-		memcpy(pTxCommsBuff,pbuff,length);
+    USBD_LL_FlushEP(pdev, COMMSInEpAdd); // TODO: why do i need to do this?
+    memset((uint32_t*)pTxCommsBuff,0,USB_COMMS_MAX_SIZE/4);
+    memcpy(pTxCommsBuff,pbuff,length);
 
-        tx_comms_total_len = length;
-        tx_comms_ptr = 0;
+    tx_comms_total_len = length;
+    tx_comms_ptr = 0;
 
-        uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, tx_comms_total_len);
+    uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, tx_comms_total_len);
 
-		pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
-		comms_ep_data = 1;
-		ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, pkt_len);
-		if (ret != USBD_OK) {
-			comms_ep_data = 0;
-			tx_comms_ptr = 0;
-			tx_comms_total_len = 0;
-			comms_tx_start_ms = 0u;
-			return ret;
+    pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
+    comms_ep_data = 1;
+    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, pkt_len);
+    if (ret != USBD_OK) {
+      comms_ep_data = 0;
+      tx_comms_ptr = 0;
+      tx_comms_total_len = 0;
+      comms_tx_start_ms = 0u;
+      return ret;
 		}
 		comms_tx_start_ms = get_timestamp_ms();
 	}

@@ -166,6 +166,14 @@ SECTIONS
     . = ALIGN(8);
   } >RAM_D1
 
+/* Place USB buffers in RAM_D2 */
+.ram_d2 (NOLOAD) :
+{
+  . = ALIGN(4);
+  *(.ram_d2)
+  . = ALIGN(4);
+} >RAM_D2
+
   /* Remove information from the standard libraries */
   /DISCARD/ :
   {

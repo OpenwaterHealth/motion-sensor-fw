@@ -168,6 +168,12 @@ __IO uint8_t imu_ep_data = 0;
 static uint16_t tx_imu_total_len = 0;
 static uint16_t tx_imu_ptr = 0;
 
+#ifndef USB_RAM_D2
+#define USB_RAM_D2 __attribute__((section(".ram_d2")))
+#endif
+
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t imu_tx_buffer[USB_IMU_MAX_SIZE] __ALIGN_END;
+
 /**
   * @}
   */
@@ -192,10 +198,7 @@ static uint8_t USBD_IMU_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   IMUInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
 #endif /* USE_USBD_COMPOSITE */
   printf("IMU_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", IMUInEpAdd, (uint8_t)pdev->classId);
-  pTxIMUBuff = (uint8_t*)malloc(USB_IMU_MAX_SIZE);
-  if(pTxIMUBuff == NULL){
-  	Error_Handler();
-  }
+  pTxIMUBuff = imu_tx_buffer;
 
   if (pdev->dev_speed == USBD_SPEED_HIGH)
   {
@@ -240,8 +243,7 @@ static uint8_t USBD_IMU_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   imu_ep_enabled = 0;
 
   if(pTxIMUBuff){
-	free(pTxIMUBuff);
-	pTxIMUBuff = 0;
+    pTxIMUBuff = 0;
   }
 #ifdef USE_USBD_COMPOSITE
   if (pdev->pClassDataCmsit[pdev->classId] != NULL)

@@ -14,7 +14,7 @@ typedef struct {
   uint16_t length;
 } histo_queue_entry_t;
 
-#define HISTO_QUEUE_SIZE 2  /* Reduced from 8 to save memory (8 * 36KB = 288KB was too much) */
+#define HISTO_QUEUE_SIZE 4  /* Reduced from 8 to save memory (8 * 36KB = 288KB was too much) */
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -92,6 +92,17 @@ static uint16_t tx_histo_ptr = 0;
 static __IO uint8_t histo_ep_enabled = 0;
 __IO uint8_t histo_ep_data = 0;
 static uint8_t HISTOInEpAdd = HISTO_IN_EP;
+static volatile uint32_t histo_enq_count = 0;
+static volatile uint32_t histo_deq_count = 0;
+static volatile uint32_t histo_datain_count = 0;
+static volatile uint32_t histo_tx_fail_count = 0;
+
+#ifndef USB_RAM_D2
+#define USB_RAM_D2 __attribute__((section(".ram_d2")))
+#endif
+
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t histo_tx_buffer[USB_HISTO_MAX_SIZE] __ALIGN_END;
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t histo_queue_buffers[HISTO_QUEUE_SIZE][USB_HISTO_MAX_SIZE] __ALIGN_END;
 
 /* Private functions */
 static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
@@ -104,24 +115,11 @@ static uint8_t USBD_Histo_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     HISTOInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
   #endif /* USE_USBD_COMPOSITE */
     printf("HISTO_Init DATA IN EP: 0x%02X ClassID: 0x%02X\r\n", HISTOInEpAdd, (uint8_t)pdev->classId);
-    pTxHistoBuff = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
-    if(pTxHistoBuff == NULL){
-    	Error_Handler();
-    }
+    pTxHistoBuff = histo_tx_buffer;
 
     /* Allocate buffers for queue entries */
     for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
-      histo_queue[i].buffer = (uint8_t*)malloc(USB_HISTO_MAX_SIZE);
-      if(histo_queue[i].buffer == NULL){
-        /* Free any buffers we already allocated */
-        for (uint8_t j = 0; j < i; j++) {
-          if(histo_queue[j].buffer != NULL){
-            free(histo_queue[j].buffer);
-            histo_queue[j].buffer = NULL;
-          }
-        }
-        Error_Handler();
-      }
+      histo_queue[i].buffer = histo_queue_buffers[i];
       histo_queue[i].length = 0;
     }
 
@@ -170,16 +168,12 @@ static uint8_t USBD_Histo_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   histo_ep_enabled = 0;
 
   if(pTxHistoBuff){
-	free(pTxHistoBuff);
-	pTxHistoBuff = 0;
+    pTxHistoBuff = 0;
   }
 
   /* Free queue entry buffers */
   for (uint8_t i = 0; i < HISTO_QUEUE_SIZE; i++) {
-    if(histo_queue[i].buffer){
-      free(histo_queue[i].buffer);
-      histo_queue[i].buffer = NULL;
-    }
+    histo_queue[i].buffer = NULL;
   }
 
   histo_queue_head = 0;
@@ -220,10 +214,18 @@ static uint8_t histo_queue_is_full(void)
 static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
 {
   if (histo_queue_is_full()) {
+    printf("HISTO enqueue fail: queue full (count=%u size=%u enq=%lu deq=%lu datain=%lu txfail=%lu)\r\n",
+           histo_queue_count, (uint8_t)HISTO_QUEUE_SIZE,
+           (unsigned long)histo_enq_count,
+           (unsigned long)histo_deq_count,
+           (unsigned long)histo_datain_count,
+           (unsigned long)histo_tx_fail_count);
     return USBD_FAIL;
   }
 
   if (length > USB_HISTO_MAX_SIZE) {
+    printf("HISTO enqueue fail: length too large (%u > %u)\r\n",
+           length, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
   }
 
@@ -234,6 +236,7 @@ static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
   /* Update queue pointers */
   histo_queue_tail = (histo_queue_tail + 1) % HISTO_QUEUE_SIZE;
   histo_queue_count++;
+  histo_enq_count++;
 
   return USBD_OK;
 }
@@ -250,6 +253,7 @@ static uint8_t histo_queue_dequeue(uint8_t **data, uint16_t *length)
   /* Update queue pointers */
   histo_queue_head = (histo_queue_head + 1) % HISTO_QUEUE_SIZE;
   histo_queue_count--;
+  histo_deq_count++;
 
   return USBD_OK;
 }
@@ -290,6 +294,7 @@ static uint8_t USBD_Histo_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *
 static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
 	uint8_t ret = USBD_OK;
+  histo_datain_count++;
 
 #ifdef USE_USBD_COMPOSITE
 	  /* Get the Endpoints addresses allocated for this CDC class instance */
@@ -305,6 +310,10 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
           uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
 
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
+          if (ret != USBD_OK) {
+            histo_tx_fail_count++;
+            histo_ep_data = 0;
+          }
       }
       else
       {
@@ -328,7 +337,24 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 {
   UNUSED(ep_idx);
   
-  if (pdev == NULL || data == NULL || len == 0) {
+  if (pdev == NULL) {
+    printf("HISTO SendData fail: pdev NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (data == NULL) {
+    printf("HISTO SendData fail: data NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len == 0) {
+    printf("HISTO SendData fail: len=0\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len > USB_HISTO_MAX_SIZE) {
+    printf("HISTO SendData fail: len too large (%u > %u)\r\n",
+           len, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
   }
 
@@ -339,9 +365,18 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 
   /* If queue is empty and not currently sending, send directly */
   if (histo_queue_is_empty() && histo_ep_data == 0) {
-    return USBD_HISTO_SetTxBuffer(pdev, data, len);
+    uint8_t ret = USBD_HISTO_SetTxBuffer(pdev, data, len);
+    if (ret != USBD_OK) {
+      printf("HISTO SendData fail: SetTxBuffer ret=%u (ep_data=%u enabled=%u)\r\n",
+             ret, histo_ep_data, histo_ep_enabled);
+    }
+    return ret;
   }
   
+  if (histo_ep_data == 0 && !histo_queue_is_empty()) {
+    (void)histo_process_queue();
+  }
+
   /* Otherwise, add to queue */
   return histo_queue_enqueue(data, len);
 }
@@ -367,9 +402,14 @@ uint8_t  USBD_HISTO_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint1
         uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, tx_histo_total_len);
 
 		pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = tx_histo_total_len;
-		histo_ep_data = 1;
 
 		ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, pTxHistoBuff, pkt_len);
+		if (ret == USBD_OK) {
+			histo_ep_data = 1;
+		} else {
+			histo_tx_fail_count++;
+			histo_ep_data = 0;
+		}
 	}
 	else
 	{
