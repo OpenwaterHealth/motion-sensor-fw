@@ -14,7 +14,7 @@
 #include "stm32h7xx_hal.h"
 
 #define MAX_BITSTREAM_SIZE 200 * 1024
-#define COMMAND_MAX_SIZE 512
+#define COMMAND_MAX_SIZE 8192
 
 #define SPI_PACKET_LENGTH 4100
 #define USART_PACKET_LENGTH 4100

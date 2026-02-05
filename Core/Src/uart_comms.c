@@ -24,8 +24,8 @@ extern uint8_t txBuffer[COMMAND_MAX_SIZE];
 extern DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 
 volatile uint32_t ptrReceive;
-volatile uint8_t rx_flag = 0;
-volatile uint8_t tx_flag = 1; // Start in idle state
+volatile uint8_t rx_flag = 0; // start in idle state (0)
+volatile uint8_t tx_flag = 1; // Start in idle state (1)
 const uint32_t zero_val = 0;
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
@@ -98,8 +98,9 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	txBuffer[bufferIndex++] = (pResp->data_len) & 0xFF;
 
 	// Check for possible buffer overflow (optional)
-	if ((bufferIndex + pResp->data_len + 4) > sizeof(txBuffer)) {
-		printf("Packet too large to send\r\n");
+	uint32_t pkt_size = (bufferIndex + pResp->data_len + 4);
+	if (pkt_size > sizeof(txBuffer)) {
+		printf("Packet too large to send, len=%d\r\n", pkt_size);
 		// Handle error: packet too large for txBuffer
 		return false;
 	}
