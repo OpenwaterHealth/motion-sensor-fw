@@ -100,7 +100,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 	// Check for possible buffer overflow (optional)
 	uint32_t pkt_size = (bufferIndex + pResp->data_len + 4);
 	if (pkt_size > sizeof(txBuffer)) {
-		printf("Packet too large to send, len=%d\r\n", pkt_size);
+		printf("Packet too large to send, len=%lu\r\n", pkt_size);
 		// Handle error: packet too large for txBuffer
 		return false;
 	}
