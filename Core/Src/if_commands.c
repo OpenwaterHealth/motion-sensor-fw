@@ -74,25 +74,24 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 		break;
-	case OW_CMD_SET_FAN_CTL:
-		uartResp->command = OW_CMD_SET_FAN_CTL;
+	case OW_CMD_FAN_CTL: {
+		uartResp->command = OW_CMD_FAN_CTL;
 		uartResp->packet_type = OW_RESP;
-		if (cmd.reserved == 1) {
-			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
-			printf("Fan control set to HIGH (ON)\r\n");
-		} else {
-			HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
-			printf("Fan control set to LOW (OFF)\r\n");
+		// reserved bit0: 0 = get, 1 = set
+		// reserved bit1 (only for set): 0 = OFF, 1 = ON
+		if (cmd.reserved & 0x01) {
+			if (cmd.reserved & 0x02) {
+				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
+			} else {
+				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
+			}
 		}
-		break;
-	case OW_CMD_GET_FAN_CTL:
-		uartResp->command = OW_CMD_GET_FAN_CTL;
-		uartResp->packet_type = OW_RESP;
 		uartResp->data_len = 1;
 		uartResp->data = (uint8_t *)&uartResp->reserved;
 		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
 		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
+	}
 	case OW_CMD_DEBUG_FLAGS: {
 		uartResp->command = OW_CMD_DEBUG_FLAGS;
 		// reserved bit0: 0 = get, 1 = set
@@ -121,62 +120,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
-	case OW_CMD_SET_CAMERA_STREAM:
-		uartResp->command = OW_CMD_SET_CAMERA_STREAM;
-		uartResp->packet_type = OW_RESP;
-		uint8_t status = 0;
 
-		for (uint8_t i = 0; i < 8; i++) {
-	        if ((cmd.addr >> i) & 0x01) {
-				if(cmd.reserved == 1)
-					status |= (enable_camera_stream(i)<<i);
-				else {
-					status |= (disable_camera_stream(i)<<i);
-				}
-	        }
-	    }
-		if(status != cmd.addr) // if the status bits are not true for all the cameras addressed, error
-		{
-			uartResp->packet_type = OW_ERROR;
-			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
-
-		}
-		else uartResp->packet_type = OW_ACK;
-		break;
-	case OW_CMD_HISTO_ON:
-		uartResp->command = OW_CMD_HISTO_ON;
-		uartResp->packet_type = OW_RESP;
-	    uartResp->addr = cmd.addr;
-	    uartResp->data_len = 0;
-	    uartResp->data = NULL;
-
-	    // Initialize fake histogram generator
-	    HistoFake_Init(cmd.addr);
-	    HistoFake_GenerateAndSend(&hUsbDeviceHS);
-
-		if(HAL_TIM_Base_Start_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
-		{
-			uartResp->packet_type = OW_ERROR;
-			printf("Failed to turn on FAKE HISTO data\r\n");
-		}
-	    printf("Histo ON\r\n");
-		break;
-	case OW_CMD_HISTO_OFF:
-		uartResp->command = OW_CMD_HISTO_OFF;
-		uartResp->packet_type = OW_RESP;
-	    uartResp->data_len = 0;
-	    uartResp->data = NULL;
-
-		if(HAL_TIM_Base_Stop_IT(&HISTO_FAKE_TIMER)!= HAL_OK)
-		{
-			uartResp->packet_type = OW_ERROR;
-			printf("Failed to turn off FAKE HISTO data\r\n");
-		}
-
-	    // De-initialize fake histogram generator
-	    HistoFake_Deinit();
-	    printf("Histo OFF\r\n");
-		break;
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
