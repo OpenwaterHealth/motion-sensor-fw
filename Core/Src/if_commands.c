@@ -74,24 +74,6 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 		break;
-	case OW_CMD_FAN_CTL: {
-		uartResp->command = OW_CMD_FAN_CTL;
-		uartResp->packet_type = OW_RESP;
-		// reserved bit0: 0 = get, 1 = set
-		// reserved bit1 (only for set): 0 = OFF, 1 = ON
-		if (cmd.reserved & 0x01) {
-			if (cmd.reserved & 0x02) {
-				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
-			} else {
-				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
-			}
-		}
-		uartResp->data_len = 1;
-		uartResp->data = (uint8_t *)&uartResp->reserved;
-		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
-		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
-		break;
-	}
 	case OW_CMD_DEBUG_FLAGS: {
 		uartResp->command = OW_CMD_DEBUG_FLAGS;
 		// reserved bit0: 0 = get, 1 = set
@@ -147,6 +129,35 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
+	default:
+		uartResp->data_len = 0;
+		uartResp->packet_type = OW_UNKNOWN;
+		break;
+	}
+}
+
+static void process_sensor_command(UartPacket *uartResp, UartPacket cmd)
+{
+	switch (cmd.command)
+	{
+	case OW_CMD_FAN_CTL: {
+		uartResp->command = OW_CMD_FAN_CTL;
+		uartResp->packet_type = OW_RESP;
+		// reserved bit0: 0 = get, 1 = set
+		// reserved bit1 (only for set): 0 = OFF, 1 = ON
+		if (cmd.reserved & 0x01) {
+			if (cmd.reserved & 0x02) {
+				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_SET);
+			} else {
+				HAL_GPIO_WritePin(FAN_CTL_GPIO_Port, FAN_CTL_Pin, GPIO_PIN_RESET);
+			}
+		}
+		uartResp->data_len = 1;
+		uartResp->data = (uint8_t *)&uartResp->reserved;
+		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
+		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
+		break;
+	}
 	default:
 		uartResp->data_len = 0;
 		uartResp->packet_type = OW_UNKNOWN;
@@ -863,6 +874,9 @@ UartPacket process_if_command(UartPacket cmd)
 		break;
 	case OW_CMD:
 		process_basic_command(&uartReturn, cmd);
+		break;
+	case OW_CONTROLLER:
+		process_sensor_command(&uartReturn, cmd);
 		break;
 	case OW_FPGA:
 		process_fpga_commands(&uartReturn, cmd);
