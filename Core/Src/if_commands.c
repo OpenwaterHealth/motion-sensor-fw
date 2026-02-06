@@ -502,7 +502,6 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_STREAM:
-		printf("Setting Camera %d Stream %s\r\n", pCam->id+1, cmd.reserved ? "on" : "off");
 		uartResp->command = OW_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
 		uint8_t status = 0;
