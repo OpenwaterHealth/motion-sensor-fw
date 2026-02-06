@@ -126,6 +126,7 @@ typedef enum {
 	OW_CAMERA_SCAN = 0x20,
 	OW_CAMERA_ON = 0x21,
 	OW_CAMERA_OFF = 0x22,
+	OW_CAMERA_STREAM = 0x07,
 	OW_CAMERA_READ_TEMP = 0x24,
 	OW_CAMERA_FSIN = 0x26,
 	OW_CAMERA_SWITCH = 0x28,
@@ -144,7 +145,7 @@ typedef enum {
 } MotionCameraCommands;
 
 typedef enum {
-	OW_CMD_FAN_CTL = 0x0A,
+	OW_CTRL_FAN_CTL = 0x0A,
 
 } MotionSensorCommands;
 

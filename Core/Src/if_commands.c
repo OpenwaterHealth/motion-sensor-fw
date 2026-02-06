@@ -140,8 +140,8 @@ static void process_sensor_command(UartPacket *uartResp, UartPacket cmd)
 {
 	switch (cmd.command)
 	{
-	case OW_CMD_FAN_CTL: {
-		uartResp->command = OW_CMD_FAN_CTL;
+	case OW_CTRL_FAN_CTL: {
+		uartResp->command = OW_CTRL_FAN_CTL;
 		uartResp->packet_type = OW_RESP;
 		// reserved bit0: 0 = get, 1 = set
 		// reserved bit1 (only for set): 0 = OFF, 1 = ON
@@ -500,6 +500,28 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	}
 	        }
 	    }
+		break;
+	case OW_CAMERA_STREAM:
+		printf("Setting Camera %d Stream %s\r\n", pCam->id+1, cmd.reserved ? "on" : "off");
+		uartResp->command = OW_CAMERA_STREAM;
+		uartResp->packet_type = OW_RESP;
+		uint8_t status = 0;
+		for (uint8_t i = 0; i < 8; i++) {
+	        if ((cmd.addr >> i) & 0x01) {
+				if(cmd.reserved == 1)
+					status |= (enable_camera_stream(i)<<i);
+				else {
+					status |= (disable_camera_stream(i)<<i);
+				}
+	        }
+	    }
+		if(status != cmd.addr) // if the status bits are not true for all the cameras addressed, error
+		{
+			uartResp->packet_type = OW_ERROR;
+			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
+
+		}
+		else uartResp->packet_type = OW_ACK;
 		break;
 	case OW_CAMERA_SINGLE_HISTOGRAM:
 		// printf("Capture single histogram frame\r\n");
