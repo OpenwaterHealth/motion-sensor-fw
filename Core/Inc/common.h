@@ -50,7 +50,7 @@
 typedef enum {
 	OW_START_BYTE = 0xAA,
 	OW_END_BYTE = 0xDD,
-} USTX_ProtocolTypes;
+} MotionProtocolTypes;
 
 
 typedef enum {
@@ -64,6 +64,7 @@ typedef enum {
 	OW_CAMERA = 0xE7,
 	OW_IMU = 0xE8,
 	OW_I2C_PASSTHRU = 0xE9,
+	OW_CONTROLLER = 0xEA,
 	OW_BAD_PARSE = 0xEC,
 	OW_BAD_CRC = 0xED,
 	OW_UNKNOWN = 0xEE,
@@ -76,7 +77,7 @@ typedef enum {
 	OW_CODE_IDENT_ERROR = 0xFD,
 	OW_CODE_DATA_ERROR = 0xFE,
 	OW_CODE_ERROR = 0xFF,
-} UstxErrorCodes;
+} MotionErrorCodes;
 
 typedef enum {
 	OW_CMD_PING = 0x00,
@@ -85,16 +86,11 @@ typedef enum {
 	OW_CMD_TOGGLE_LED = 0x04,
 	OW_CMD_HWID = 0x05,
 	OW_CMD_I2C_BROADCAST = 0x06,
-	OW_CMD_SET_CAMERA_STREAM = 0x07,
-	OW_CMD_HISTO_ON = 0x08,
-	OW_CMD_HISTO_OFF = 0x09,
-	OW_CMD_SET_FAN_CTL = 0x0A,
-	OW_CMD_GET_FAN_CTL = 0x0B,
 	OW_CMD_DEBUG_FLAGS = 0x0C,
 	OW_CMD_DFU = 0x0D,
 	OW_CMD_NOP = 0x0E,
 	OW_CMD_RESET = 0x0F
-} UstxGlobalCommands;
+} MotionGlobalCommands;
 
 typedef enum {
 	OW_FPGA_SCAN = 0x10,
@@ -130,6 +126,7 @@ typedef enum {
 	OW_CAMERA_SCAN = 0x20,
 	OW_CAMERA_ON = 0x21,
 	OW_CAMERA_OFF = 0x22,
+	OW_CAMERA_STREAM = 0x07,
 	OW_CAMERA_READ_TEMP = 0x24,
 	OW_CAMERA_FSIN = 0x26,
 	OW_CAMERA_SWITCH = 0x28,
@@ -145,7 +142,12 @@ typedef enum {
 	OW_CAMERA_POWER_STATUS = 0x52,
 	OW_CAMERA_READ_SECURITY_UID = 0x53,
 
-} MotionCAMERACommands;
+} MotionCameraCommands;
+
+typedef enum {
+	OW_CTRL_FAN_CTL = 0x0A,
+
+} MotionSensorCommands;
 
 typedef struct  {
 	uint16_t id;
