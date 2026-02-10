@@ -70,6 +70,21 @@ jobs:
           else
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
+          # Compute release display name:
+          if [[ "$TAG_NAME" == pre-* ]]; then
+            BASE=${TAG_NAME#pre-}
+            if [[ "$BASE" == v* ]]; then
+              RELEASE_NAME="pre-${BASE}"
+            else
+              RELEASE_NAME="pre-v${BASE}"
+            fi
+          elif [[ "$TAG_NAME" == v* ]]; then
+            RELEASE_NAME="$TAG_NAME"
+          else
+            RELEASE_NAME="v${TAG_NAME}"
+          fi
+
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
           
       - name: Capture build metadata
         id: buildmeta
@@ -104,6 +119,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
+          draft: false
           prerelease: ${{ steps.reltype.outputs.prerelease }}
           allow_updates: ${{ steps.reltype.outputs.prerelease }}
           replace_existing_artifacts: ${{ steps.reltype.outputs.prerelease }}
