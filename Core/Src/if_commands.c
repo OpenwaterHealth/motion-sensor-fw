@@ -19,7 +19,6 @@
 #include <inttypes.h>
 #include <string.h>
 
-extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
 static uint8_t camera_power_status = 0;
@@ -47,10 +46,8 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_VERSION:
-		uartResp->command = OW_CMD_VERSION;
-		uartResp->packet_type = OW_RESP;
-		uartResp->data_len = sizeof(FIRMWARE_VERSION_DATA);
-		uartResp->data = FIRMWARE_VERSION_DATA;
+		uartResp->data_len = sizeof(FW_VERSION_STRING);
+		uartResp->data = (uint8_t*)FW_VERSION_STRING;
 		break;
 	case OW_CMD_HWID:
 		uartResp->command = OW_CMD_HWID;
