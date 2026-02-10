@@ -6,7 +6,10 @@ on:
     branches: [ "main", "next" ]
     tags:
       - "*.*.*"
+      - "v*.*.*"
       - "pre-*"
+  release:
+    types: [created]
 
 permissions:
   contents: write 
@@ -54,7 +57,13 @@ jobs:
       - name: Detect release type
         id: reltype
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            TAG_NAME=$(python -c "import json,sys;print(json.load(open('$GITHUB_EVENT_PATH'))['release']['tag_name'])")
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
           if [[ "$TAG_NAME" == pre-* ]] || [[ "$TAG_NAME" == *"-rc"* ]] || [[ "$TAG_NAME" == *"-beta"* ]]; then
             echo "prerelease=true" >> $GITHUB_OUTPUT
@@ -69,7 +78,7 @@ jobs:
           echo "datetime=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         run: |
           : > notes.md
 
@@ -92,7 +101,7 @@ jobs:
           echo "**Build Time:** ${{ steps.buildmeta.outputs.datetime }}" >> notes.md
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ steps.reltype.outputs.prerelease }}
