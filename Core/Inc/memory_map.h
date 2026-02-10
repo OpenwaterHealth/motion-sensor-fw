@@ -35,8 +35,9 @@
 #define ADDR_FLASH_SECTOR_6_BANK2     ((uint32_t)0x081C0000) /* Base @ of Sector 6, 128 Kbytes */
 #define ADDR_FLASH_SECTOR_7_BANK2     ((uint32_t)0x081E0000) /* Base @ of Sector 7, 128 Kbytes */
 
-#define ADDR_FLASH_END_ADDRESS     ((uint32_t)0x08200000) 
-#define FLASH_USER_START_ADDR ADDR_FLASH_SECTOR_7_BANK2
+#define ADDR_CAMERA_BITSTREAM       ADDR_FLASH_SECTOR_5_BANK2
+#define ADDR_FLASH_END_ADDRESS      ((uint32_t)0x08200000) 
+#define FLASH_USER_START_ADDR       ADDR_FLASH_SECTOR_7_BANK2
 
 #ifdef __cplusplus
 }

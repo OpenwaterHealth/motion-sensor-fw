@@ -7,6 +7,7 @@
 
 #include "crosslink.h"
 #include "common.h"
+#include "memory_map.h"
 #include "main.h"
 #include "utils.h"
 
@@ -335,7 +336,7 @@ int fpga_configure(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, GPIO_TypeDef *G
 
     // Send Bitstream
     memcpy(write_buf, (uint8_t[]){0x7A,0x00,0x00,0x00}, 4);
-    xi2c_write_long(hi2c, DevAddress, write_buf, 4, (uint8_t*)0x081A0000, (size_t)163489);
+    xi2c_write_long(hi2c, DevAddress, write_buf, 4, (uint8_t*)ADDR_CAMERA_BITSTREAM, (size_t)163489);
     delay_ms(1);
 
     // USERCODE (optional)
