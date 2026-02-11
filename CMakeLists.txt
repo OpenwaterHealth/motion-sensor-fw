@@ -174,7 +174,7 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
 
     # Merge firmware + FPGA bitstream into a single hex file
     COMMAND ${CMAKE_COMMAND} -E echo "Merging firmware + FPGA bitstream hex files..."
-    COMMAND python ${CMAKE_SOURCE_DIR}/merge_hex.py
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/merge_hex.py
         ${CMAKE_PROJECT_NAME}.hex
         ${CMAKE_PROJECT_NAME}-fw.hex
         openmotion-camera-fpga.hex

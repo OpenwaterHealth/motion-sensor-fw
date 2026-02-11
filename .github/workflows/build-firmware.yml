@@ -58,7 +58,7 @@ jobs:
         id: reltype
         run: |
           if [ "$GITHUB_EVENT_NAME" = "release" ]; then
-            TAG_NAME=$(python -c "import json,sys;print(json.load(open('$GITHUB_EVENT_PATH'))['release']['tag_name'])")
+            TAG_NAME=$(python3 -c "import json,sys;print(json.load(open('$GITHUB_EVENT_PATH'))['release']['tag_name'])")
           else
             TAG_NAME="${GITHUB_REF_NAME}"
           fi
