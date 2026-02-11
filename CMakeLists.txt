@@ -163,8 +163,8 @@ message(STATUS "FPGA bitstream downloaded to ${FPGA_BITSTREAM_BIN}")
 # Generate hex and bin files after build
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     # Generate firmware hex and bin
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.hex
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.bin
+    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}-fw.hex
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}-fw.bin
 
     # Convert FPGA bitstream to hex at the target flash address
     COMMAND ${CMAKE_OBJCOPY} -I binary -O ihex
@@ -175,14 +175,14 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     # Merge firmware + FPGA bitstream into a single hex file
     COMMAND ${CMAKE_COMMAND} -E echo "Merging firmware + FPGA bitstream hex files..."
     COMMAND python ${CMAKE_SOURCE_DIR}/merge_hex.py
-        motion-sensor.hex
         ${CMAKE_PROJECT_NAME}.hex
+        ${CMAKE_PROJECT_NAME}-fw.hex
         openmotion-camera-fpga.hex
 
     # Generate combined bin from merged hex (for DFU flashing)
     COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary
-        motion-sensor.hex
-        motion-sensor.bin
+        ${CMAKE_PROJECT_NAME}.hex
+        ${CMAKE_PROJECT_NAME}.bin
 
     COMMENT "Generating .hex/.bin and merging FPGA bitstream at ${FPGA_BITSTREAM_ADDR}"
 )
