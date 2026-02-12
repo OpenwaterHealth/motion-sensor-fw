@@ -102,8 +102,6 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_memtomem_dma2_stream1;
 /* USER CODE BEGIN PV */
 
-uint8_t FIRMWARE_VERSION_DATA[3] = {1, 4, 7};
-
 uint8_t rxBuffer[COMMAND_MAX_SIZE]  __attribute__((aligned(4)));
 uint8_t txBuffer[COMMAND_MAX_SIZE];
 uint32_t bitstream_len;
@@ -265,9 +263,11 @@ int main(void)
   printf("\033c");
   fflush(stdout);
   delay_ms(500);
-  printf("Openwater open-MOTION Aggregator FW v%d.%d.%d\r\n\r\n",
-         FIRMWARE_VERSION_DATA[0], FIRMWARE_VERSION_DATA[1],
-         FIRMWARE_VERSION_DATA[2]);
+  printf("Openwater open-MOTION Aggregator\r\n\r\n");
+  printf("FW: %s (%s)\r\nDate: %s\r\n",
+       FW_VERSION_STRING,
+       FW_SHA_STRING,
+       FW_BUILD_TIME_STRING);
   printf("CPU Clock Frequency: %lu MHz\r\n",
          HAL_RCC_GetSysClockFreq() / 1000000);
   printf("Initializing, please wait ...\r\n");

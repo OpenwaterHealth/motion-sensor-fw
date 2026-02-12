@@ -12,11 +12,51 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
-
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
+
+# Generate version.h at configure time (initial)
+find_package(Git QUIET)
+
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --dirty --always
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE FW_GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_DESCRIBE_RESULT
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE FW_GIT_SHA
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_SHA_RESULT
+    )
+    if(NOT GIT_DESCRIBE_RESULT EQUAL 0)
+        set(FW_GIT_DESCRIBE "unknown")
+    endif()
+    if(NOT GIT_SHA_RESULT EQUAL 0)
+        set(FW_GIT_SHA "unknown")
+    endif()
+else()
+    set(FW_GIT_DESCRIBE "unknown")
+    set(FW_GIT_SHA "unknown")
+endif()
+
+string(TIMESTAMP FW_BUILD_TIME_UTC "%Y-%m-%d %H:%M:%S UTC" UTC)
+
+message(STATUS "FW version   : ${FW_GIT_DESCRIBE}")
+message(STATUS "FW git sha   : ${FW_GIT_SHA}")
+message(STATUS "FW build time: ${FW_BUILD_TIME_UTC}")
+
+configure_file(
+    ${CMAKE_SOURCE_DIR}/version.h.in
+    ${CMAKE_BINARY_DIR}/generated/version.h
+    @ONLY
+)
 
 # Set the project name
 set(CMAKE_PROJECT_NAME motion-sensor-fw)
@@ -61,6 +101,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/jsmn.c
     Core/Src/logging.c
     Core/Src/uart_comms.c
+    Core/Src/flash_eeprom.c
+    Core/Src/motion_config.c
     Core/Src/utils.c
     USB/Core/Src/usbd_ioreq.c
     USB/Core/Src/usbd_desc.c
@@ -73,6 +115,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_BINARY_DIR}/generated
     USB/Core/Inc
     USB/Class/CompositeBuilder/Inc
     USB/Class/COMMS/Inc
@@ -97,10 +140,50 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
 )
 
+# FPGA bitstream binary (always fetch latest from GitHub releases)
+set(FPGA_BITSTREAM_BIN ${CMAKE_SOURCE_DIR}/fpga/openmotion-camera-fpga.bin)
+set(FPGA_BITSTREAM_URL "https://github.com/OpenwaterHealth/openmotion-camera-fpga/releases/latest/download/openmotion-camera-fpga.bin")
+set(FPGA_BITSTREAM_ADDR 0x081A0000)
+
+message(STATUS "Downloading latest FPGA bitstream from ${FPGA_BITSTREAM_URL} ...")
+file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/fpga)
+file(DOWNLOAD
+    ${FPGA_BITSTREAM_URL}
+    ${FPGA_BITSTREAM_BIN}
+    SHOW_PROGRESS
+    STATUS FPGA_DOWNLOAD_STATUS
+)
+list(GET FPGA_DOWNLOAD_STATUS 0 FPGA_DOWNLOAD_ERROR)
+if(NOT FPGA_DOWNLOAD_ERROR EQUAL 0)
+    list(GET FPGA_DOWNLOAD_STATUS 1 FPGA_DOWNLOAD_MSG)
+    message(FATAL_ERROR "Failed to download FPGA bitstream: ${FPGA_DOWNLOAD_MSG}")
+endif()
+message(STATUS "FPGA bitstream downloaded to ${FPGA_BITSTREAM_BIN}")
+
 # Generate hex and bin files after build
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.hex
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.bin
-    COMMENT "Generating .hex and .bin files"
+    # Generate firmware hex and bin
+    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}-raw.hex
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}-raw.bin
+
+    # Convert FPGA bitstream to hex at the target flash address
+    COMMAND ${CMAKE_OBJCOPY} -I binary -O ihex
+        --change-addresses ${FPGA_BITSTREAM_ADDR}
+        ${FPGA_BITSTREAM_BIN}
+        openmotion-camera-fpga.hex
+
+    # Merge firmware + FPGA bitstream into a single hex file
+    COMMAND ${CMAKE_COMMAND} -E echo "Merging firmware + FPGA bitstream hex files..."
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/merge_hex.py
+        ${CMAKE_PROJECT_NAME}.hex
+        ${CMAKE_PROJECT_NAME}-raw.hex
+        openmotion-camera-fpga.hex
+
+    # Generate combined bin from merged hex (for DFU flashing)
+    COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary
+        ${CMAKE_PROJECT_NAME}.hex
+        ${CMAKE_PROJECT_NAME}.bin
+
+    COMMENT "Generating .hex/.bin and merging FPGA bitstream at ${FPGA_BITSTREAM_ADDR}"
 )
 

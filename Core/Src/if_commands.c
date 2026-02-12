@@ -5,6 +5,7 @@
  *      Author: GeorgeVigelette
  */
 
+#include "version.h"
 #include "main.h"
 #include "if_commands.h"
 #include "common.h"
@@ -14,12 +15,12 @@
 #include "ICM20948.h"
 #include "0X02C1B.h"
 #include "histo_fake.h"
+#include "motion_config.h"
 #include "logging.h"
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
 
-extern uint8_t FIRMWARE_VERSION_DATA[3];
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
 static uint8_t camera_power_status = 0;
@@ -47,10 +48,8 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_VERSION:
-		uartResp->command = OW_CMD_VERSION;
-		uartResp->packet_type = OW_RESP;
-		uartResp->data_len = sizeof(FIRMWARE_VERSION_DATA);
-		uartResp->data = FIRMWARE_VERSION_DATA;
+		uartResp->data_len = sizeof(FW_VERSION_STRING);
+		uartResp->data = (uint8_t*)FW_VERSION_STRING;
 		break;
 	case OW_CMD_HWID:
 		uartResp->command = OW_CMD_HWID;
@@ -103,6 +102,58 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
 
+	case OW_CMD_USR_CFG:
+		// reserved == 0: READ
+		// reserved == 1: WRITE (cmd->data is JSON text)
+		if (cmd.reserved == 0) {
+			const uint8_t *wire_buf = NULL;
+			uint16_t wire_len = 0;
+			const uint16_t max_payload = (uint16_t)(COMMAND_MAX_SIZE - 12U); // framing overhead in txBuffer
+			if (motion_cfg_wire_read(&wire_buf, &wire_len, max_payload) != HAL_OK || wire_buf == NULL) {
+				uartResp->packet_type = OW_ERROR;
+				uartResp->data_len = 0;
+				uartResp->data = NULL;
+				break;
+			}
+
+			uartResp->data_len = wire_len;
+			uartResp->data = (uint8_t *)wire_buf;
+		}
+		else if (cmd.reserved == 1) {
+			if (cmd.data == NULL || cmd.data_len == 0) {
+				uartResp->packet_type = OW_ERROR;
+				uartResp->data_len = 0;
+				uartResp->data = NULL;
+				break;
+			}
+
+			if (motion_cfg_wire_write(cmd.data, cmd.data_len) != HAL_OK) {
+				uartResp->packet_type = OW_ERROR;
+				uartResp->data_len = 0;
+				uartResp->data = NULL;
+				break;
+			}
+
+			// Return the updated header as an ACK payload.
+			const uint8_t *wire_buf = NULL;
+			uint16_t wire_len = 0;
+			const uint16_t max_payload = (uint16_t)(COMMAND_MAX_SIZE - 12U);
+			if (motion_cfg_wire_read(&wire_buf, &wire_len, max_payload) != HAL_OK || wire_buf == NULL) {
+				uartResp->packet_type = OW_ERROR;
+				uartResp->data_len = 0;
+				uartResp->data = NULL;
+				break;
+			}
+			uartResp->data_len = (uint16_t)sizeof(motion_cfg_wire_hdr_t);
+			uartResp->data = (uint8_t *)wire_buf;
+		}
+		else {
+			uartResp->packet_type = OW_UNKNOWN;
+			uartResp->data_len = 0;
+			uartResp->data = NULL;
+		}
+		break;
+		
 	case OW_CMD_RESET:
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
