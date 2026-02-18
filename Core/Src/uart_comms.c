@@ -121,7 +121,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 
 	// Initiate transmission via USB CDC
 	tx_flag = 0;  // Set the flag before starting transmission
-	uint8_t tx_status = USBD_COMMS_Transmit(&hUsbDeviceHS, txBuffer, bufferIndex);
+	uint8_t tx_status = USBD_COMMS_SendData(&hUsbDeviceHS, txBuffer, bufferIndex, 0);
 	if (tx_status != USBD_OK) {
 		// Transmission not started (e.g., endpoint busy); don't block on tx_flag
 		printf("COMM USB TX failed: id=0x%04X cmd=0x%02X type=0x%02X len=%d dev_state=0x%02X\r\n",
