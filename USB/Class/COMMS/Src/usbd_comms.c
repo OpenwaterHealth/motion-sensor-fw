@@ -10,6 +10,12 @@
 #include "utils.h"
 
 /* Private typedef */
+typedef struct {
+  uint8_t *buffer;
+  uint16_t length;
+} comms_queue_entry_t;
+
+#define COMMS_QUEUE_SIZE 4
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -18,6 +24,18 @@
 #define COMMS_TX_TIMEOUT_MS 250u
 
 /* Private variables */
+static comms_queue_entry_t comms_queue[COMMS_QUEUE_SIZE];
+static uint8_t comms_queue_head = 0;
+static uint8_t comms_queue_tail = 0;
+static uint8_t comms_queue_count = 0;
+static USBD_HandleTypeDef *comms_pdev = NULL;
+
+static uint8_t comms_queue_enqueue(uint8_t *data, uint16_t length);
+static uint8_t comms_queue_dequeue(uint8_t **data, uint16_t *length);
+static uint8_t comms_queue_is_empty(void);
+static uint8_t comms_queue_is_full(void);
+static uint8_t comms_process_queue(void);
+
 static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t USBD_Comms_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t USBD_Comms_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *req);
@@ -81,6 +99,10 @@ static uint32_t comms_tx_start_ms = 0u;
 
 static uint8_t COMMSInEpAdd = COMMS_IN_EP;
 static uint8_t COMMSOutEpAdd = COMMS_OUT_EP;
+static volatile uint32_t comms_enq_count = 0;
+static volatile uint32_t comms_deq_count = 0;
+static volatile uint32_t comms_datain_count = 0;
+static volatile uint32_t comms_tx_fail_count = 0;
 
 static uint16_t rxIndex = 0;
 
@@ -92,6 +114,7 @@ static uint8_t read_to_idle_enabled = 0;
 #endif
 
 USB_RAM_D2 __ALIGN_BEGIN static uint8_t comms_tx_buffer[USB_COMMS_MAX_SIZE] __ALIGN_END;
+USB_RAM_D2 __ALIGN_BEGIN static uint8_t comms_queue_buffers[COMMS_QUEUE_SIZE][USB_COMMS_MAX_SIZE] __ALIGN_END;
 USB_RAM_D2 __ALIGN_BEGIN static uint8_t rx_buffers[USB_RX_BUFFER_COUNT][USB_COMMS_MAX_SIZE] __ALIGN_END;
 static uint8_t current_rx_buf_index = 0;
 
@@ -109,6 +132,15 @@ static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     printf("COMMS_Init DATA OUT EP: 0x%02X ClassID: 0x%02X\r\n", COMMSOutEpAdd, (uint8_t)pdev->classId);
 
     pTxCommsBuff = comms_tx_buffer;
+
+    for (uint8_t i = 0; i < COMMS_QUEUE_SIZE; i++) {
+      comms_queue[i].buffer = comms_queue_buffers[i];
+      comms_queue[i].length = 0;
+    }
+    comms_queue_head = 0;
+    comms_queue_tail = 0;
+    comms_queue_count = 0;
+    comms_pdev = pdev;
 
     if (pdev->dev_speed == USBD_SPEED_HIGH)
     {
@@ -134,6 +166,10 @@ static uint8_t USBD_Comms_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     uint8_t *next_buffer = rx_buffers[current_rx_buf_index];
     rxIndex = 0;
     (void)USBD_LL_PrepareReceive(pdev, COMMSOutEpAdd, next_buffer, packet_size);
+
+    /* Send ZLP */
+    (void)USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0U);
+
     return (uint8_t)USBD_OK;
 }
 
@@ -157,6 +193,15 @@ static uint8_t USBD_Comms_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   if(pTxCommsBuff){
     pTxCommsBuff = 0;
   }
+
+  for (uint8_t i = 0; i < COMMS_QUEUE_SIZE; i++) {
+    comms_queue[i].buffer = NULL;
+  }
+  comms_queue_head = 0;
+  comms_queue_tail = 0;
+  comms_queue_count = 0;
+  comms_pdev = NULL;
+
 #ifdef USE_USBD_COMPOSITE
   if (pdev->pClassDataCmsit[pdev->classId] != NULL)
   {
@@ -177,6 +222,85 @@ static uint8_t USBD_Comms_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   return (uint8_t)USBD_OK;
 }
 
+/* Queue management functions */
+static uint8_t comms_queue_is_empty(void)
+{
+  return (comms_queue_count == 0);
+}
+
+static uint8_t comms_queue_is_full(void)
+{
+  return (comms_queue_count >= COMMS_QUEUE_SIZE);
+}
+
+static uint8_t comms_queue_enqueue(uint8_t *data, uint16_t length)
+{
+  if (comms_queue_is_full()) {
+    printf("COMMS enqueue fail: queue full (count=%u size=%u enq=%lu deq=%lu datain=%lu txfail=%lu)\r\n",
+           comms_queue_count, (uint8_t)COMMS_QUEUE_SIZE,
+           (unsigned long)comms_enq_count,
+           (unsigned long)comms_deq_count,
+           (unsigned long)comms_datain_count,
+           (unsigned long)comms_tx_fail_count);
+    return USBD_FAIL;
+  }
+
+  if (length > USB_COMMS_MAX_SIZE) {
+    printf("COMMS enqueue fail: length too large (%u > %u)\r\n",
+           length, (uint16_t)USB_COMMS_MAX_SIZE);
+    return USBD_FAIL;
+  }
+
+  memcpy(comms_queue[comms_queue_tail].buffer, data, length);
+  comms_queue[comms_queue_tail].length = length;
+
+  comms_queue_tail = (comms_queue_tail + 1) % COMMS_QUEUE_SIZE;
+  comms_queue_count++;
+  comms_enq_count++;
+
+  return USBD_OK;
+}
+
+static uint8_t comms_queue_dequeue(uint8_t **data, uint16_t *length)
+{
+  if (comms_queue_is_empty()) {
+    return USBD_FAIL;
+  }
+
+  *data = comms_queue[comms_queue_head].buffer;
+  *length = comms_queue[comms_queue_head].length;
+
+  comms_queue_head = (comms_queue_head + 1) % COMMS_QUEUE_SIZE;
+  comms_queue_count--;
+  comms_deq_count++;
+
+  return USBD_OK;
+}
+
+static uint8_t comms_process_queue(void)
+{
+  uint8_t *data;
+  uint16_t length;
+
+  if (comms_pdev == NULL) {
+    return USBD_FAIL;
+  }
+
+  if (comms_queue_is_empty()) {
+    return USBD_OK;
+  }
+
+  if (comms_ep_data != 0) {
+    return USBD_BUSY;
+  }
+
+  if (comms_queue_dequeue(&data, &length) != USBD_OK) {
+    return USBD_FAIL;
+  }
+
+  return USBD_COMMS_SetTxBuffer(comms_pdev, data, length);
+}
+
 static uint8_t USBD_Comms_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *req)
 {
   // Ignore everything, don't stall
@@ -185,50 +309,42 @@ static uint8_t USBD_Comms_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *
 
 static uint8_t USBD_Comms_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
-	uint8_t ret = USBD_OK;
+  uint8_t ret = USBD_OK;
+  comms_datain_count++;
 
-  /* Get the Endpoints addresses allocated for this CDC class instance */
-	COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
+#ifdef USE_USBD_COMPOSITE
+  COMMSInEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
+#endif /* USE_USBD_COMPOSITE */
 
-  USBD_LL_FlushEP(pdev, COMMSInEpAdd);
-  if(comms_ep_data==1){
-    // first, advance the pointer from last transmission
-    tx_comms_ptr += COMMS_HS_MAX_PACKET_SIZE;
+  if (comms_ep_data == 1) {
+    uint32_t pkt_size = (pdev->dev_speed == USBD_SPEED_HIGH) ? COMMS_HS_MAX_PACKET_SIZE : COMMS_FS_MAX_PACKET_SIZE;
+    tx_comms_ptr += (uint16_t)pkt_size;
 
-    // cases:
-    // 1 there is one more full packet of data to send
-    // 2 there is a partial packet of data to send
-    // 3 all data sent, need to send ZLP
+    if (tx_comms_ptr < tx_comms_total_len) {
+      uint16_t remaining = tx_comms_total_len - tx_comms_ptr;
+      uint16_t pkt_len = MIN((uint16_t)pkt_size, remaining);
 
-    // case 1 and 2:
-    int32_t remaining = tx_comms_total_len - tx_comms_ptr;
-    if (remaining > 0) {
-      uint16_t pkt_len = MIN(COMMS_HS_MAX_PACKET_SIZE, remaining);
-      ret =  USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
+      ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, &pTxCommsBuff[tx_comms_ptr], pkt_len);
       if (ret != USBD_OK) {
-          comms_ep_data = 0;
-          tx_comms_ptr = 0;
-          tx_comms_total_len = 0;
-          comms_tx_start_ms = 0u;
-          return ret;
-      }
-      comms_tx_start_ms = get_timestamp_ms();
-    }
-    else
-    {
-        // Transfer complete
+        comms_tx_fail_count++;
         comms_ep_data = 0;
         comms_tx_start_ms = 0u;
-        USBD_COMMS_TxCpltCallback(pTxCommsBuff, tx_comms_total_len, COMMSInEpAdd);
-        // Send ZLP to indicate completion
-        ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0);
+      } else {
+        comms_tx_start_ms = get_timestamp_ms();
+      }
+    } else {
+      /* Transfer complete */
+      comms_ep_data = 0;
+      comms_tx_start_ms = 0u;
+      USBD_COMMS_TxCpltCallback(pTxCommsBuff, tx_comms_total_len, COMMSInEpAdd);
+
+      /* Process queue to send next packet if available */
+      comms_process_queue();
     }
-  }
-  else
-  {
+  } else {
     pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = 0U;
     /* Send ZLP */
-    ret = USBD_LL_Transmit (pdev, COMMSInEpAdd, NULL, 0U);
+    ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, NULL, 0U);
   }
   return ret;
 }
@@ -291,47 +407,87 @@ static uint8_t USBD_Comms_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 uint8_t USBD_COMMS_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t len, uint8_t ep_idx)
 {
-  return (uint8_t)USBD_OK;
+  UNUSED(ep_idx);
+
+  if (pdev == NULL) {
+    printf("COMMS SendData fail: pdev NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (data == NULL) {
+    printf("COMMS SendData fail: data NULL\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len == 0) {
+    printf("COMMS SendData fail: len=0\r\n");
+    return USBD_FAIL;
+  }
+
+  if (len > USB_COMMS_MAX_SIZE) {
+    printf("COMMS SendData fail: len too large (%u > %u)\r\n",
+           len, (uint16_t)USB_COMMS_MAX_SIZE);
+    return USBD_FAIL;
+  }
+
+  if (comms_pdev == NULL) {
+    comms_pdev = pdev;
+  }
+
+  /* If queue is empty and not currently sending, send directly */
+  if (comms_queue_is_empty() && comms_ep_data == 0) {
+    uint8_t ret = USBD_COMMS_SetTxBuffer(pdev, data, len);
+    if (ret != USBD_OK) {
+      printf("COMMS SendData fail: SetTxBuffer ret=%u (ep_data=%u enabled=%u)\r\n",
+             ret, comms_ep_data, comms_ep_enabled);
+    }
+    return ret;
+  }
+
+  if (comms_ep_data == 0 && !comms_queue_is_empty()) {
+    (void)comms_process_queue();
+  }
+
+  /* Otherwise, add to queue */
+  return comms_queue_enqueue(data, len);
 }
 
 uint8_t  USBD_COMMS_SetTxBuffer(USBD_HandleTypeDef *pdev, uint8_t  *pbuff, uint16_t length)
 {
-	uint8_t ret = USBD_OK;
+  uint8_t ret = USBD_OK;
 
-	if (pdev == NULL) {
-		printf("USBD_COMMS_SetTxBuffer: pdev NULL\r\n");
-		return USBD_FAIL;
-	}
+  if (pdev == NULL) {
+    printf("USBD_COMMS_SetTxBuffer: pdev NULL\r\n");
+    return USBD_FAIL;
+  }
 
-	if(comms_ep_enabled == 1 && comms_ep_data==0)
-  {
-    COMMSInEpAdd  = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
+  if (comms_ep_enabled == 1 && comms_ep_data == 0) {
+#ifdef USE_USBD_COMPOSITE
+    COMMSInEpAdd = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, COMMS_InstID);
+#endif /* USE_USBD_COMPOSITE */
 
-    USBD_LL_FlushEP(pdev, COMMSInEpAdd); // TODO: why do i need to do this?
-    memset((uint32_t*)pTxCommsBuff,0,USB_COMMS_MAX_SIZE/4);
-    memcpy(pTxCommsBuff,pbuff,length);
+    USBD_LL_FlushEP(pdev, COMMSInEpAdd);
+    memset((uint32_t*)pTxCommsBuff, 0, USB_COMMS_MAX_SIZE / 4);
+    memcpy(pTxCommsBuff, pbuff, length);
 
     tx_comms_total_len = length;
     tx_comms_ptr = 0;
 
-    uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?COMMS_HS_MAX_PACKET_SIZE:COMMS_FS_MAX_PACKET_SIZE, tx_comms_total_len);
+    uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH) ? COMMS_HS_MAX_PACKET_SIZE : COMMS_FS_MAX_PACKET_SIZE, tx_comms_total_len);
 
     pdev->ep_in[COMMSInEpAdd & 0xFU].total_length = tx_comms_total_len;
-    comms_ep_data = 1;
+
     ret = USBD_LL_Transmit(pdev, COMMSInEpAdd, pTxCommsBuff, pkt_len);
-    if (ret != USBD_OK) {
+    if (ret == USBD_OK) {
+      comms_ep_data = 1;
+      comms_tx_start_ms = get_timestamp_ms();
+    } else {
+      comms_tx_fail_count++;
       comms_ep_data = 0;
-      tx_comms_ptr = 0;
-      tx_comms_total_len = 0;
-      comms_tx_start_ms = 0u;
-      return ret;
-		}
-		comms_tx_start_ms = get_timestamp_ms();
-	}
-	else
-	{
-		ret = USBD_BUSY;
-	}
+    }
+  } else {
+    ret = USBD_BUSY;
+  }
   return ret;
 }
 
