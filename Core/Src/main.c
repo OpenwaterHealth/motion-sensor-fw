@@ -118,9 +118,8 @@ ICM_Axis3D m;
 ICM_Axis3D g;
 float t;
 char usb_buf[128];
-// Debug flags
+// Debug flags (sensor debug and fake data are controlled via OW_CMD_DEBUG_FLAGS)
 bool uart_stream = false;
-bool fake_data_gen = false;
 bool scanI2cAtStart = false;
 
 uint16_t fail_count = 0;

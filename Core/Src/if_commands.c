@@ -21,6 +21,8 @@
 #include <inttypes.h>
 #include <string.h>
 
+extern uint8_t event_bits_enabled;
+
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
 static uint8_t camera_power_status = 0;
@@ -87,6 +89,9 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 			uint32_t new_flags = 0;
 			memcpy(&new_flags, cmd.data, sizeof(new_flags));
 			logging_set_debug_flags(new_flags);
+			if ((new_flags & DEBUG_FLAG_FAKE_DATA) != 0u) {
+				power_off_all_cameras();
+			}
 		}
 		uartResp->packet_type = OW_RESP;
 		static uint32_t debug_flags_resp;
@@ -244,6 +249,14 @@ void I2C_DisableEnableReset(I2C_HandleTypeDef *hi2c)
 
 static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 {
+	if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+		uartResp->command = cmd.command;
+		uartResp->packet_type = OW_RESP;
+		uartResp->data_len = 0;
+		uartResp->data = NULL;
+		return;
+	}
+	
 	CameraDevice* pCam = get_active_cam();
 
 	switch (cmd.command)
@@ -342,7 +355,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	case OW_FPGA_PROG_SRAM:
 		uartResp->command = OW_FPGA_PROG_SRAM;
 		uartResp->packet_type = OW_RESP;
-		// TODO: Adde parameter to force update currently defaults to false
+		// TODO: Add parameter to force update currently defaults to false
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	_Bool func_ret = false;
@@ -529,18 +542,22 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_ON:
-		// printf("Setting Camera %d Stream on\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_ON;
 		uartResp->packet_type = OW_RESP;
-		if(X02C1B_stream_on(pCam)){
-			// error
-			printf("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
-			uartResp->packet_type = OW_ERROR;
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) == 0u) {
+			if(X02C1B_stream_on(pCam)){
+				printf("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
+				uartResp->packet_type = OW_ERROR;
+			}
 		}
 		break;
 	case OW_CAMERA_SET_CONFIG:
 		uartResp->command = OW_CAMERA_SET_CONFIG;
 		uartResp->packet_type = OW_RESP;
+		/* In fake data mode, treat as no-op success and skip hardware */
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!configure_camera_sensor(i))
@@ -555,6 +572,16 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	case OW_CAMERA_STREAM:
 		uartResp->command = OW_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
+		/* In fake data mode, just update logical enable mask and skip hardware */
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			if (cmd.reserved == 1) {
+				event_bits_enabled |= cmd.addr;
+			} else {
+				event_bits_enabled &= (uint8_t)~cmd.addr;
+			}
+			uartResp->packet_type = OW_ACK;
+			break;
+		}
 		uint8_t status = 0;
 		for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
@@ -577,6 +604,10 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		// printf("Capture single histogram frame\r\n");
 		uartResp->command = OW_CAMERA_SINGLE_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			/* Not meaningful in fake data mode; report success without hardware */
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!capture_single_histogram(i))
@@ -594,6 +625,10 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		uartResp->addr = cmd.addr;
 		uartResp->reserved = 0;
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			/* Not meaningful in fake data mode; report success without hardware */
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!get_single_histogram(i, uartResp->data, &uartResp->data_len))
@@ -618,6 +653,10 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uint8_t test_pattern = cmd.data[0];
 		uartResp->command = OW_CAMERA_SET_TESTPATTERN;
 		uartResp->packet_type = OW_RESP;
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			/* Not meaningful in fake data mode; report success without hardware */
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!configure_camera_testpattern(i,test_pattern))
@@ -630,13 +669,13 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_OFF:
-		// printf("Setting Camera %d Stream off\r\n",pCam->id+1);
 		uartResp->command = OW_CAMERA_OFF;
 		uartResp->packet_type = OW_RESP;
-		if(X02C1B_stream_off(pCam)<0){
-			// error
-			printf("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
-			uartResp->packet_type = OW_ERROR;
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) == 0u) {
+			if(X02C1B_stream_off(pCam)<0){
+				printf("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
+				uartResp->packet_type = OW_ERROR;
+			}
 		}
 		break;
 	case OW_CAMERA_STATUS:
@@ -749,6 +788,15 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	case OW_CAMERA_POWER_ON:
 		uartResp->command = OW_CAMERA_POWER_ON;
 		uartResp->packet_type = OW_RESP;
+		/* In fake data mode, cameras remain powered off; treat as no-op success */
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			for (uint8_t i = 0; i < 8; i++) {
+				if ((cmd.addr >> i) & 0x01) {
+					camera_status[i] = 0x00;
+				}
+			}
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!enable_camera_power(i))
@@ -769,6 +817,15 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	case OW_CAMERA_POWER_OFF:
 		uartResp->command = OW_CAMERA_POWER_OFF;
 		uartResp->packet_type = OW_RESP;
+		/* In fake data mode, cameras are already powered off; treat as no-op success */
+		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+			for (uint8_t i = 0; i < 8; i++) {
+				if ((cmd.addr >> i) & 0x01) {
+					camera_status[i] = 0x00;
+				}
+			}
+			break;
+		}
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!disable_camera_power(i))

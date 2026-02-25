@@ -25,6 +25,7 @@
 
 #define DEBUG_FLAG_USB_PRINTF     (1u << 0)
 #define DEBUG_FLAG_HISTO_THROTTLE (1u << 1)  /* Only send histogram packet every 5s; others pretend success */
+#define DEBUG_FLAG_FAKE_DATA  (1u << 2)
 
 
 #define I2C_IRQ_PRIORITY 0
