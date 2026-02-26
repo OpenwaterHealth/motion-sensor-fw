@@ -99,7 +99,8 @@ void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
 void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
 void poll_camera_temperatures(void);
-void scan_camera_sensors(bool scanI2cAtStart);
+void scan_camera_sensor(uint8_t cam_id);  /* Scan single camera slot; sets isPresent */
+void scan_camera_sensors(void);
 uint8_t get_cameras_present(void);  // Get bitmask of present cameras (computed from cam_array[].isPresent)
 
 #endif /* INC_CAMERA_MANAGER_H_ */

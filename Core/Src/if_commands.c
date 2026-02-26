@@ -256,7 +256,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = NULL;
 		return;
 	}
-	
+
 	CameraDevice* pCam = get_active_cam();
 
 	switch (cmd.command)
@@ -797,21 +797,28 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			}
 			break;
 		}
-	    for (uint8_t i = 0; i < 8; i++) {
-	        if ((cmd.addr >> i) & 0x01) {
-	        	if(!enable_camera_power(i))
-	        	{
-	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to power on camera %d\r\n", i);
+		/* 1) Enable power for all cameras in the mask */
+		for (uint8_t i = 0; i < 8; i++) {
+			if ((cmd.addr >> i) & 0x01) {
+				if (!enable_camera_power(i)) {
+					uartResp->packet_type = OW_ERROR;
+					printf("Failed to power on camera %d\r\n", i);
+					break;
+				}
+				camera_status[i] = 0x00;
+				CameraDevice *cam = get_camera_byID(i);
+				cam->isPresent = true;
+			}
+		}
+		if (uartResp->packet_type != OW_RESP) {
+			break;
+		}
+		// /* 2) Wait 1 s for power to settle */
+		// delay_ms(1000);
+		// /* 3) Scan all camera slots to set isPresent */
+		// scan_camera_sensors();
 
-	        	}
-	        	else
-	        	{
-	        		// Clear camera status when power is turned on (camera state unknown until initialized)
-	        		camera_status[i] = 0x00;
-	        	}
-	        }
-	    }
+		//TODO due to a bug in the scan camera sensors, we will just set the isPresent for each of these to TRUE if it is powered and assume that the cameras are always OK.
 		break;
 
 	case OW_CAMERA_POWER_OFF:

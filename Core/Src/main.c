@@ -120,7 +120,6 @@ float t;
 char usb_buf[128];
 // Debug flags (sensor debug and fake data are controlled via OW_CMD_DEBUG_FLAGS)
 bool uart_stream = false;
-bool scanI2cAtStart = false;
 
 uint16_t fail_count = 0;
 
@@ -310,9 +309,6 @@ int main(void)
   HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
 
   init_camera_sensors(); // init structures and camera configs
-  delay_ms(100);
-
-  scan_camera_sensors(scanI2cAtStart);
 
   // Select default camera
   TCA9548A_SelectChannel(&hi2c1, 0x70, get_active_cam()->i2c_target);

@@ -278,6 +278,9 @@ void init_camera_sensors() {
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
 
+	/* Start with all cameras powered off; scan will power on only those needed. */
+	power_off_all_cameras();
+
 	fill_frame_buffers();
 }
 
@@ -740,54 +743,55 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 /* -------- END FPGA FUNCTIONS -------- */
 
 /* -------- START CAMERA I2C FUNCTIONS -------- */
-void scan_camera_sensors(bool scanI2cAtStart){
-  // Scan for I2C cameras
-  for (int i = 0; i < CAMERA_COUNT; i++)
-  {
+
+/** Scan a single camera slot for I2C camera (0x36) and FPGA (0x40); sets cam_array[cam_id].isPresent. */
+void scan_camera_sensor(uint8_t cam_id) {
+	if (cam_id >= CAMERA_COUNT) {
+		return;
+	}
 	uint8_t addresses_found[10];
 	uint8_t found;
 	bool camera_found = false, fpga_found = false;
 
-	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
+	TCA9548A_SelectChannel(&hi2c1, 0x70, cam_id);
 	delay_ms(10);
 
-	if (scanI2cAtStart)
-	  printf("I2C Scanning bus %d\r\n", i + 1);
-	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
+	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), true);
 
-	for (int j = 0; j < found; j++)
-	{
-	  if (addresses_found[j] == 0x36)
-		camera_found = true;
-	  else if (addresses_found[j] == 0x40)
-		fpga_found = true;
+	for (uint8_t j = 0; j < found; j++) {
+		if (addresses_found[j] == 0x36) {
+			camera_found = true;
+		} else if (addresses_found[j] == 0x40) {
+			fpga_found = true;
+		}
 	}
 
-	if (camera_found && fpga_found)
-	{
-	  cam_array[i].isPresent = true;
+	if (camera_found && fpga_found) {
+		cam_array[cam_id].isPresent = true;
+	} else {
+		cam_array[cam_id].isPresent = false;
+		printf("Camera %d not found\r\n", cam_id + 1);
 	}
-	else
-	{
-	  cam_array[i].isPresent = false;
-	  printf("Camera %d not found\r\n", i + 1);
+}
+
+void scan_camera_sensors(void) {
+	for (int i = 0; i < CAMERA_COUNT; i++) {
+		scan_camera_sensor((uint8_t)i);
 	}
-  }
 
-  bool all_present = true;
-  for (int i = 0; i < CAMERA_COUNT; ++i) {
-	  if (!cam_array[i].isPresent) {
-		  all_present = false;
-		  break;
-	  }
-  }
+	bool all_present = true;
+	for (int i = 0; i < CAMERA_COUNT; ++i) {
+		if (!cam_array[i].isPresent) {
+			all_present = false;
+			break;
+		}
+	}
 
-  if (all_present)
-  {
-	printf("All cameras found\r\n");
-  }else{
-	  print_active_cameras();
-  }
+	if (all_present) {
+		printf("All cameras found\r\n");
+	} else {
+		print_active_cameras();
+	}
 }
 
 _Bool configure_camera_sensor(uint8_t cam_id)
