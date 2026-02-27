@@ -27,6 +27,7 @@ volatile uint32_t ptrReceive;
 volatile uint8_t rx_flag = 0; // start in idle state (0)
 volatile uint8_t tx_flag = 1; // Start in idle state (1)
 const uint32_t zero_val = 0;
+static uint8_t cmd_data_buf[COMMAND_MAX_SIZE];
 
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
@@ -212,8 +213,12 @@ void comms_host_check_received(void) {
 		goto NextDataPacket;
 	}
 
-	// Extract data pointer
-	cmd.data = &rxBuffer[bufferIndex];
+	// Copy data payload out of rxBuffer so rxBuffer is no longer aliased during processing
+	uint16_t copy_len = (cmd.data_len > COMMAND_MAX_SIZE)
+	                    ? (COMMAND_MAX_SIZE - 3 - bufferIndex)
+	                    : cmd.data_len;
+	memcpy(cmd_data_buf, &rxBuffer[bufferIndex], copy_len);
+	cmd.data = cmd_data_buf;
 	if (cmd.data_len > COMMAND_MAX_SIZE) {
 		bufferIndex = COMMAND_MAX_SIZE - 3; // [3 bytes from the end should be the crc for a continuation packet]
 	} else {
@@ -280,6 +285,7 @@ void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
 		printf("COMM RX OVERRUN: count=%lu len=%lu\r\n",
 			   (unsigned long)rx_overrun_count,
 			   (unsigned long)Len);
+		return;
 	}
 
 	memcpy(rxBuffer, Buf, Len);
