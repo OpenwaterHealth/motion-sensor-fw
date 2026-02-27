@@ -368,7 +368,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!func_ret)
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Program FPGA on camera %d\r\n", i);
+	    			printf("Failed to Program FPGA on camera %d\r\n", i+1);
 	    		}
 	        }
 	    }
@@ -797,6 +797,23 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			}
 			break;
 		}
+		// Before changing power state, discover whether or not the FSIN_ext is enabled or disabled. Disable it if it is not already disabled, and re-enable it after power on sequence is complete. 
+		// This is required to prevent FSIN from triggering spuriously during power state changes
+		bool fsin_ext_was_enabled = false;
+		if(X02C1B_FSIN_EXT_status(&fsin_ext_was_enabled) != 0){
+			printf("Failed to read FSIN_EXT status\r\n");
+			uartResp->packet_type = OW_ERROR;
+			break;
+		}
+		if(fsin_ext_was_enabled){
+			if(X02C1B_FSIN_EXT_disable() != 0){
+				printf("Failed to disable FSIN_EXT\r\n");
+				uartResp->packet_type = OW_ERROR;
+				break;
+			}
+		}
+		delay_ms(10); // Short delay to ensure FSIN_ext is fully disabled before power state changes
+
 		/* 1) Enable power for all cameras in the mask */
 		for (uint8_t i = 0; i < 8; i++) {
 			if ((cmd.addr >> i) & 0x01) {
@@ -817,8 +834,16 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		// delay_ms(1000);
 		// /* 3) Scan all camera slots to set isPresent */
 		// scan_camera_sensors();
-
 		//TODO due to a bug in the scan camera sensors, we will just set the isPresent for each of these to TRUE if it is powered and assume that the cameras are always OK.
+
+		// Restore FSIN_ext to its previous state if it was originally enabled
+		delay_ms(10); // Short delay to ensure FSIN_ext is fully disabled before power state changes
+		if(fsin_ext_was_enabled){
+			if(X02C1B_FSIN_EXT_enable() != 0){
+				printf("Failed to re-enable FSIN_EXT\r\n");
+				uartResp->packet_type = OW_ERROR;
+			}
+		}
 		break;
 
 	case OW_CAMERA_POWER_OFF:
@@ -833,6 +858,22 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			}
 			break;
 		}
+		// Before changing power state, discover whether or not the FSIN_ext is enabled or disabled. Disable it if it is not already disabled, and re-enable it after power off sequence is complete.
+		// This is required to prevent FSIN from triggering spuriously during power state changes
+		fsin_ext_was_enabled = false;
+		if(X02C1B_FSIN_EXT_status(&fsin_ext_was_enabled) != 0){
+			printf("Failed to read FSIN_EXT status\r\n");
+			uartResp->packet_type = OW_ERROR;
+			break;
+		}
+		if(fsin_ext_was_enabled){
+			if(X02C1B_FSIN_EXT_disable() != 0){
+				printf("Failed to disable FSIN_EXT\r\n");
+				uartResp->packet_type = OW_ERROR;
+				break;
+			}
+		}
+		delay_ms(10); // Short delay to ensure FSIN_ext is fully disabled before power state changes
 	    for (uint8_t i = 0; i < 8; i++) {
 	        if ((cmd.addr >> i) & 0x01) {
 	        	if(!disable_camera_power(i))
@@ -847,6 +888,14 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	}
 	        }
 	    }
+		// Restore FSIN_ext to its previous state if it was originally enabled
+		delay_ms(10);
+		if(fsin_ext_was_enabled){
+			if(X02C1B_FSIN_EXT_enable() != 0){
+				printf("Failed to re-enable FSIN_EXT\r\n");
+				uartResp->packet_type = OW_ERROR;
+			}
+		}
 		break;
 
 	case OW_CAMERA_POWER_STATUS:

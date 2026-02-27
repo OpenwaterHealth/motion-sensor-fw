@@ -300,6 +300,13 @@ int X02C1B_FSIN_EXT_enable()
     return HAL_OK;
 }
 
+int X02C1B_FSIN_EXT_status(bool *is_enabled)
+{
+    if (is_enabled == NULL) return -1;
+    *is_enabled = ext_fsin_enabled;
+    return HAL_OK;
+}
+
 int X02C1B_FSIN_EXT_disable()
 {
 	if(!ext_fsin_enabled) return HAL_OK;

@@ -1456,7 +1456,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 		}
 	}
 
-	delay_us(200);
+	delay_us(10);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 		{
