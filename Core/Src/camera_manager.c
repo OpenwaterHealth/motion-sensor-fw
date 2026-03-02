@@ -42,7 +42,7 @@ __ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END;
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 volatile uint8_t frame_id = 0;
-extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
+extern volatile uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
 extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
