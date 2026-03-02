@@ -24,6 +24,7 @@
 #define CAM_TEMP_INTERVAL_MS   1000u          // 1 Hz
 
 #define DEBUG_FLAG_USB_PRINTF (1u << 0)
+#define DEBUG_FLAG_HISTO_SPARSE (1u << 3)  /* Send histogram data in small chunks over ~15s to reduce EMI */
 
 
 #define I2C_IRQ_PRIORITY 0
