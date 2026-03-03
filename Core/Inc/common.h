@@ -23,7 +23,8 @@
 
 #define CAM_TEMP_INTERVAL_MS   1000u          // 1 Hz
 
-#define DEBUG_FLAG_USB_PRINTF (1u << 0)
+#define DEBUG_FLAG_USB_PRINTF     (1u << 0)
+#define DEBUG_FLAG_HISTO_THROTTLE (1u << 1)  /* Only send histogram packet every 5s; others pretend success */
 
 
 #define I2C_IRQ_PRIORITY 0

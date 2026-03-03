@@ -7,6 +7,11 @@
 #include "usbd_histo.h"
 #include "usbd_ctlreq.h"
 #include "usbd_desc.h"
+#include "common.h"
+#include "logging.h"
+#include "utils.h"
+
+#define HISTO_THROTTLE_INTERVAL_MS 5000u
 
 /* Private typedef */
 typedef struct {
@@ -333,6 +338,9 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
   return ret;
 }
 
+/* Last timestamp when a histogram packet was actually sent (for DEBUG_FLAG_HISTO_THROTTLE) */
+static uint32_t histo_last_send_ms = 0;
+
 uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t len, uint8_t ep_idx)
 {
   UNUSED(ep_idx);
@@ -356,6 +364,16 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
     printf("HISTO SendData fail: len too large (%u > %u)\r\n",
            len, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
+  }
+
+  /* Debug flag: only send histogram packet every 5 seconds; others pretend success */
+  if ((logging_get_debug_flags() & DEBUG_FLAG_HISTO_THROTTLE) != 0u) {
+    uint32_t now_ms = get_timestamp_ms();
+    uint32_t elapsed = (histo_last_send_ms != 0u) ? (now_ms - histo_last_send_ms) : HISTO_THROTTLE_INTERVAL_MS;
+    if (elapsed < HISTO_THROTTLE_INTERVAL_MS) {
+      return USBD_OK;  /* Pretend sent, do not enqueue or transmit */
+    }
+    histo_last_send_ms = now_ms;
   }
 
   /* Ensure pdev is stored (in case called before Init, though this shouldn't happen) */
