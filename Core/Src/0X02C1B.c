@@ -279,6 +279,7 @@ int X02C1B_get_gain(CameraDevice *cam)
 
 int X02C1B_FSIN_EXT_enable()
 {
+    printf("Enabling FSIN_EXT\r\n");
 	if(ext_fsin_enabled) return HAL_OK;
 
     /*Configure GPIO pin Output Level */
@@ -309,6 +310,7 @@ int X02C1B_FSIN_EXT_status(bool *is_enabled)
 
 int X02C1B_FSIN_EXT_disable()
 {
+    printf("Disabling FSIN_EXT\r\n");
 	if(!ext_fsin_enabled) return HAL_OK;
     /*Configure GPIO pin : FSIN_EN_Pin */
     GPIO_InitTypeDef GPIO_InitStruct = {0};

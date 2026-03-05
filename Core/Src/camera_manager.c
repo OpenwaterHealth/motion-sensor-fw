@@ -1540,6 +1540,10 @@ _Bool enable_camera_power(uint8_t cam_id){
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
 	cam->isPowered = true;
+	if (TCA9548A_EnableChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+		printf("Failed to enable mux channel for Camera %d\r\n", cam_id + 1);
+		return false;
+	}
 
 	printf("Enabled Power for Camera %d\r\n", cam_id+1);
 	return true;
@@ -1553,6 +1557,10 @@ _Bool disable_camera_power(uint8_t cam_id){
 	}
 
 	CameraDevice *cam = get_camera_byID(cam_id);
+	if (TCA9548A_DisableChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+		printf("Failed to disable mux channel for Camera %d\r\n", cam_id + 1);
+		return false;
+	}
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
 	cam->isPowered = false;
@@ -1581,6 +1589,8 @@ void power_off_all_cameras(void) {
 	event_bits_enabled = 0x00;
 	for (uint8_t i = 0; i < CAMERA_COUNT; i++) {
 		CameraDevice *cam = &cam_array[i];
+		/* Disconnect this camera's mux channel before cutting camera power. */
+		(void)TCA9548A_DisableChannel(&hi2c1, 0x70, cam->i2c_target);
 		HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET);
 		cam->isPowered = false;
 		cam->isPresent = false;

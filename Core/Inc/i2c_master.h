@@ -20,5 +20,7 @@ uint8_t read_data_register_of_slave(I2C_HandleTypeDef * pI2c, uint8_t slave_addr
 void reset_slaves(I2C_HandleTypeDef * pI2c);
 HAL_StatusTypeDef TCA9548A_SelectChannel(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t channel);
 HAL_StatusTypeDef TCA9548A_SelectBroadcast(I2C_HandleTypeDef *hi2c, uint8_t address);
+HAL_StatusTypeDef TCA9548A_EnableChannel(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t channel);
+HAL_StatusTypeDef TCA9548A_DisableChannel(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t channel);
 
 #endif /* INC_I2C_MASTER_H_ */
