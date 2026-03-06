@@ -1599,5 +1599,5 @@ void power_off_all_cameras(void) {
 		cam->streaming_enabled = false;
 		cam_temp[i] = 25.0f;
 	}
-	printf("All cameras powered off (fake data mode)\r\n");
+	printf("All cameras powered off\r\n");
 }
