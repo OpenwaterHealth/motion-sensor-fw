@@ -301,15 +301,17 @@ void comms_host_check_received(void) {
 	resp = process_if_command(cmd);
 
 NextDataPacket:
-	if(comms_interface_send(&resp)){
+    const bool success = comms_interface_send(&resp);
+	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
+	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
+	ptrReceive = 0;
+	if(success){
 		printf(".\r\n");
 	}
 	else {
 		printf("!\r\n");
 	}
-	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
-	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
-	ptrReceive = 0;
+
 }
 
 
