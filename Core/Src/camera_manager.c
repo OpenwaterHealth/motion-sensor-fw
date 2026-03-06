@@ -20,8 +20,6 @@
 #include <stdbool.h>
 
 #define CAM_TEMP_TOTAL_CAMS   8
-#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
-#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
 
 volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
 static uint32_t next_temp_ms = 0;
@@ -856,9 +854,12 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 
 void poll_camera_temperatures(void)
 {
-    if (get_timestamp_ms() >= next_temp_ms)
+    uint32_t now = get_timestamp_ms();
+
+    if ((next_temp_ms == 0u) || (now >= next_temp_ms))
     {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+        /* Schedule from current time to keep a constant cadence without catch-up bursts. */
+        next_temp_ms = now + CAM_TEMP_POLL_INTERVAL_MS;
 
         // Skip to next active camera
         for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
@@ -872,15 +873,9 @@ void poll_camera_temperatures(void)
                 if (pCam != NULL)
                 {
                     cam_temp[cam] = X02C1B_read_temp(pCam);
-                    break;  // One camera per 100ms interval
+                    break;  // One camera per configured interval
                 }
             }
-        }
-
-        // If we wrapped back to camera 0, add the idle pause
-        if (next_cam_idx == 0)
-        {
-            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
         }
     }
 }
@@ -1536,4 +1531,22 @@ _Bool get_camera_power_status(uint8_t cam_id){
 
 	CameraDevice *cam = get_camera_byID(cam_id);
 	return cam->isPowered;
+}
+
+void power_off_all_cameras(void) {
+	/* Physically power off all cameras (GPIO low) and clear state. Used when entering fake data mode. */
+	event_bits_enabled = 0x00;
+	for (uint8_t i = 0; i < CAMERA_COUNT; i++) {
+		CameraDevice *cam = &cam_array[i];
+		/* Disconnect this camera's mux channel before cutting camera power. */
+		(void)TCA9548A_DisableChannel(&hi2c1, 0x70, cam->i2c_target);
+		HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET);
+		cam->isPowered = false;
+		cam->isPresent = false;
+		cam->isProgrammed = false;
+		cam->isConfigured = false;
+		cam->streaming_enabled = false;
+		cam_temp[i] = 25.0f;
+	}
+	printf("All cameras powered off\r\n");
 }
