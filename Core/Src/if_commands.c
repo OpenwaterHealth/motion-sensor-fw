@@ -21,7 +21,7 @@
 #include <inttypes.h>
 #include <string.h>
 
-extern uint8_t event_bits_enabled;
+extern volatile uint8_t event_bits_enabled;
 
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
