@@ -17,19 +17,37 @@
 
 uint8_t I2C_current_target = 0x00; // Default target address
 
+static void TCA9548A_ResetHardware(void)
+{
+    /* Active-low reset; this deselects all channels per datasheet. */
+    HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
+    delay_ms(1);
+    HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
+    delay_ms(1);
+    printf("TCA reset\r\n");
+    I2C_current_target = 0x00;
+}
+
 static HAL_StatusTypeDef TCA9548A_WriteControl(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t data)
 {
     if (I2C_current_target == data) {
         return HAL_OK; // no need to change
     }
 
-    HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
-    if (ret == HAL_OK) {
-        I2C_current_target = data;
-    } else {
-        printf("TCA9548A control write failed\r\n");
+    HAL_StatusTypeDef ret = HAL_ERROR;
+    for (uint8_t attempt = 0; attempt < 3; attempt++) {
+        ret = HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
+        if (ret == HAL_OK) {
+            I2C_current_target = data;
+            return HAL_OK;
+        }
+
+        printf("TCA9548A control write failed (attempt %u)\r\n", (unsigned)(attempt + 1));
         printf("requested: 0x%02X current: 0x%02X addr: 0x%02X ret: %d err: %lu\r\n",
                data, I2C_current_target, address, ret, hi2c->ErrorCode);
+
+        /* Recover bus by resetting mux state machine and deselecting channels. */
+        TCA9548A_ResetHardware();
     }
 
     return ret;
