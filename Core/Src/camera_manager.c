@@ -21,8 +21,6 @@
 #include <stdbool.h>
 
 #define CAM_TEMP_TOTAL_CAMS   8
-#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
-#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
 
 volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
 static uint32_t next_temp_ms = 0;
@@ -874,9 +872,12 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 
 void poll_camera_temperatures(void)
 {
-    if (get_timestamp_ms() >= next_temp_ms)
+    uint32_t now = get_timestamp_ms();
+
+    if ((next_temp_ms == 0u) || (now >= next_temp_ms))
     {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+        /* Schedule from current time to keep a constant cadence without catch-up bursts. */
+        next_temp_ms = now + CAM_TEMP_POLL_INTERVAL_MS;
 
         // Skip to next active camera
         for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
@@ -890,15 +891,9 @@ void poll_camera_temperatures(void)
                 if (pCam != NULL)
                 {
                     cam_temp[cam] = X02C1B_read_temp(pCam);
-                    break;  // One camera per 100ms interval
+                    break;  // One camera per configured interval
                 }
             }
-        }
-
-        // If we wrapped back to camera 0, add the idle pause
-        if (next_cam_idx == 0)
-        {
-            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
         }
     }
 }
