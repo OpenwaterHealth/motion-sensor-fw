@@ -17,6 +17,42 @@
 
 uint8_t I2C_current_target = 0x00; // Default target address
 
+static void TCA9548A_ResetHardware(void)
+{
+    /* Active-low reset; this deselects all channels per datasheet. */
+    HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_RESET);
+    delay_ms(1);
+    HAL_GPIO_WritePin(MUX_RESET_GPIO_Port, MUX_RESET_Pin, GPIO_PIN_SET);
+    delay_ms(1);
+    printf("TCA reset\r\n");
+    I2C_current_target = 0x00;
+}
+
+static HAL_StatusTypeDef TCA9548A_WriteControl(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t data)
+{
+    if (I2C_current_target == data) {
+        return HAL_OK; // no need to change
+    }
+
+    HAL_StatusTypeDef ret = HAL_ERROR;
+    for (uint8_t attempt = 0; attempt < 3; attempt++) {
+        ret = HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
+        if (ret == HAL_OK) {
+            I2C_current_target = data;
+            return HAL_OK;
+        }
+
+        printf("TCA9548A control write failed (attempt %u)\r\n", (unsigned)(attempt + 1));
+        printf("requested: 0x%02X current: 0x%02X addr: 0x%02X ret: %d err: %lu\r\n",
+               data, I2C_current_target, address, ret, hi2c->ErrorCode);
+
+        /* Recover bus by resetting mux state machine and deselecting channels. */
+        TCA9548A_ResetHardware();
+    }
+
+    return ret;
+}
+
 uint8_t I2C_scan(I2C_HandleTypeDef * pI2c, uint8_t* addr_list, size_t list_size, bool display) {
 
 	uint8_t found = 0;
@@ -155,18 +191,31 @@ HAL_StatusTypeDef TCA9548A_SelectChannel(I2C_HandleTypeDef *hi2c, uint8_t addres
     }
 
     uint8_t data = (1 << channel);  // Set the corresponding bit for the channel
-
-    if(I2C_current_target == data) return HAL_OK; // no need to change
-    
-    I2C_current_target = data;
-    return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
+    return TCA9548A_WriteControl(hi2c, address, data);
 }
 
 HAL_StatusTypeDef TCA9548A_SelectBroadcast(I2C_HandleTypeDef *hi2c, uint8_t address)
 {
     uint8_t data = 0xFF;  // Set the corresponding bit for the channel
-    if(I2C_current_target == data) return HAL_OK; // no need to change
+    return TCA9548A_WriteControl(hi2c, address, data);
+}
 
-    I2C_current_target = data;
-    return HAL_I2C_Master_Transmit(hi2c, address << 1, &data, 1, HAL_MAX_DELAY);
+HAL_StatusTypeDef TCA9548A_EnableChannel(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t channel)
+{
+    if (channel > 7) {
+        return HAL_ERROR;
+    }
+
+    uint8_t data = (uint8_t)(I2C_current_target | (1u << channel));
+    return TCA9548A_WriteControl(hi2c, address, data);
+}
+
+HAL_StatusTypeDef TCA9548A_DisableChannel(I2C_HandleTypeDef *hi2c, uint8_t address, uint8_t channel)
+{
+    if (channel > 7) {
+        return HAL_ERROR;
+    }
+
+    uint8_t data = (uint8_t)(I2C_current_target & (uint8_t)~(1u << channel));
+    return TCA9548A_WriteControl(hi2c, address, data);
 }

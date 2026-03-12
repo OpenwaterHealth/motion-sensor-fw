@@ -30,6 +30,7 @@ typedef struct {
 	bool 			isProgrammed;
 	bool 			isConfigured;
 	bool 			isPowered;
+	bool            isPresent;
 	uint8_t 		gain;
 	uint8_t 		exposure;
 	uint8_t *pRecieveHistoBuffer;
@@ -82,6 +83,7 @@ _Bool check_streaming(void);
 _Bool enable_camera_power(uint8_t cam_id);
 _Bool disable_camera_power(uint8_t cam_id);
 _Bool get_camera_power_status(uint8_t cam_id);
+void power_off_all_cameras(void);
 
 void Camera_USART_RxCpltCallback_Handler(USART_HandleTypeDef *husart);
 void Camera_SPI_RxCpltCallback_Handler(SPI_HandleTypeDef *hspi);
@@ -90,14 +92,15 @@ uint32_t read_usercode_fpga(uint8_t cam_id);
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update);
 
 void fill_frame_buffers(void);
-void print_active_cameras(uint8_t cameras_present);
+void print_active_cameras(void);
 
 
 void CAM_UART_RxCpltCallback(USART_HandleTypeDef *husart);
 void CAM_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi);
 
 void poll_camera_temperatures(void);
-void scan_camera_sensors(bool scanI2cAtStart);
-uint8_t get_cameras_present(void);  // Get bitmask of present cameras
+void scan_camera_sensor(uint8_t cam_id);  /* Scan single camera slot; sets isPresent */
+void scan_camera_sensors(void);
+uint8_t get_cameras_present(void);  // Get bitmask of present cameras (computed from cam_array[].isPresent)
 
 #endif /* INC_CAMERA_MANAGER_H_ */

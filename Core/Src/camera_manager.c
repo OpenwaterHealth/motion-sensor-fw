@@ -6,6 +6,7 @@
  */
 
 #include "main.h"
+#include "logging.h"
 #include "crosslink.h"
 #include "0X02C1B.h"
 #include "i2c_master.h"
@@ -20,8 +21,6 @@
 #include <stdbool.h>
 
 #define CAM_TEMP_TOTAL_CAMS   8
-#define CAM_TEMP_IDLE_EXTRA_MS 200 // idle after 8 cameras
-#define CAM_TEMP_CYCLE_MS ((CAM_TEMP_INTERVAL_MS * CAM_TEMP_TOTAL_CAMS) + CAM_TEMP_IDLE_EXTRA_MS)
 
 volatile float cam_temp[CAMERA_COUNT] = {0};   // °C ×100
 static uint32_t next_temp_ms = 0;
@@ -33,7 +32,6 @@ static uint8_t  next_cam_idx = 0;
 CameraDevice cam_array[CAMERA_COUNT];	// array of all the cameras
 
 static int _active_cam_idx = 0;
-static uint8_t cameras_present = 0x00;
 
 volatile bool usb_failed = false;
 
@@ -42,9 +40,8 @@ __ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END;
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 volatile uint8_t frame_id = 0;
-extern uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
+extern volatile uint8_t event_bits_enabled; // holds the event bits for the cameras to be enabled
 extern uint8_t event_bits;
-extern bool fake_data_gen;
 extern USBD_HandleTypeDef hUsbDeviceHS;
 extern uint32_t pulse_count;
 
@@ -65,6 +62,24 @@ static uint8_t camera_failure_counters[CAMERA_COUNT] = {0};  // Track consecutiv
 static bool camera_failure_detected[CAMERA_COUNT] = {false};  // Track if failure has been detected
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
+
+
+static bool camera_is_present(uint8_t cam_id) {
+	CameraDevice *cam = &cam_array[cam_id];
+	if (!cam->isPresent) {
+		printf("Camera %d not present\r\n", cam_id + 1);
+		return false;
+	}
+	return true;
+}
+
+static bool camera_request_is_valid(uint8_t cam_id) {
+	if (cam_id >= CAMERA_COUNT) {
+		printf("Camera %d index out of range\r\n", cam_id + 1);
+		return false;
+	}
+	return camera_is_present(cam_id);
+}
 
 
 static void init_camera(CameraDevice *cam){
@@ -98,6 +113,8 @@ static void init_camera(CameraDevice *cam){
 	cam->streaming_enabled = false;
 	cam->isConfigured = false;
 	cam->isProgrammed = false;
+	cam->isPowered = true;
+	cam->isPresent = false;
 }
 
 void init_camera_sensors() {
@@ -248,9 +265,9 @@ void init_camera_sensors() {
 	cam_array[7].i2c_target = 7;
 	cam_array[7].pRecieveHistoBuffer = NULL;
 
+
 	for(i=0; i<CAMERA_COUNT; i++){
 		cam_array[i].pRecieveHistoBuffer =(uint8_t *)&frame_buffer[_active_buffer][i * HISTOGRAM_DATA_SIZE];
-		cam_array[i].isPowered = true; // Initialize all cameras as powered on
 		init_camera(&cam_array[i]);
 	}
 
@@ -258,6 +275,9 @@ void init_camera_sensors() {
 
 	event_bits = 0x00;
 	event_bits_enabled = 0x00;
+
+	/* Start with all cameras powered off; scan will power on only those needed. */
+	power_off_all_cameras();
 
 	fill_frame_buffers();
 }
@@ -280,7 +300,13 @@ CameraDevice* get_camera_byID(int id) {
 }
 
 uint8_t get_cameras_present(void) {
-	return cameras_present;
+	uint8_t mask = 0;
+	for (int i = 0; i < CAMERA_COUNT; ++i) {
+		if (cam_array[i].isPresent) {
+			mask |= (uint8_t)(1u << i);
+		}
+	}
+	return mask;
 }
 
 // Get SPI/USART status for the specified camera ID
@@ -294,12 +320,11 @@ uint8_t get_cameras_present(void) {
 // Bits 3–6: Reserved (unused)
 //
 uint8_t get_camera_status(uint8_t cam_id) {
-	
 	uint8_t status_flags = 0x00;
 
 	if (cam_id < 0 || cam_id >= CAMERA_COUNT) {
 		printf("Get Camera %d Status Failed\r\n", cam_id + 1);
-		return false;
+		return 0x00;
 	}
 
 	CameraDevice *cam = get_camera_byID(cam_id);
@@ -385,12 +410,12 @@ uint8_t get_camera_status(uint8_t cam_id) {
 	return status_flags;
 }
 
-void print_active_cameras(uint8_t cameras_present)
+void print_active_cameras(void)
 {
     printf("Active cameras: ");
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < CAMERA_COUNT; ++i)
     {
-        if (cameras_present & (1 << i))
+        if (cam_array[i].isPresent)
         {
             printf("%d ", i + 1);  // Cameras are 1-based
         }
@@ -402,8 +427,7 @@ void print_active_cameras(uint8_t cameras_present)
 /* -------- START FPGA FUNCTIONS -------- */
 _Bool reset_camera(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Hard Reset Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -426,8 +450,7 @@ _Bool reset_camera(uint8_t cam_id)
 
 _Bool enable_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Enable FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -443,8 +466,7 @@ _Bool enable_fpga(uint8_t cam_id)
 
 _Bool disable_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Disable FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -461,8 +483,7 @@ _Bool disable_fpga(uint8_t cam_id)
 
 _Bool activate_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -487,8 +508,7 @@ _Bool activate_fpga(uint8_t cam_id)
 
 _Bool verify_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -513,8 +533,7 @@ _Bool verify_fpga(uint8_t cam_id)
 
 _Bool enter_sram_prog_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -539,8 +558,7 @@ _Bool enter_sram_prog_fpga(uint8_t cam_id)
 
 _Bool exit_sram_prog_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -565,8 +583,7 @@ _Bool exit_sram_prog_fpga(uint8_t cam_id)
 
 _Bool erase_sram_fpga(uint8_t cam_id)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -594,8 +611,7 @@ _Bool erase_sram_fpga(uint8_t cam_id)
 uint32_t read_status_fpga(uint8_t cam_id)
 {
 	uint32_t ret_val = 0;
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return ret_val;
 	}
@@ -618,8 +634,7 @@ uint32_t read_status_fpga(uint8_t cam_id)
 uint32_t read_usercode_fpga(uint8_t cam_id)
 {
 	uint32_t ret_val = 0;
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Activate FPGA Camera %d Failed\r\n", cam_id+1);
 		return ret_val;
 	}
@@ -642,12 +657,10 @@ uint32_t read_usercode_fpga(uint8_t cam_id)
 _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint32_t Data_Len, _Bool force_update)
 {
 	printf("C%d: programming...", cam_id+1);
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
-
 	// printf("Program FPGA Camera %d Started\r\n", cam_id+1);
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
@@ -679,22 +692,13 @@ _Bool program_sram_fpga(uint8_t cam_id, bool rom_bitstream, uint8_t* pData, uint
 _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 {
 	// printf("C%d: programming...", cam_id+1);
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Program FPGA Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
 
 	_active_cam_idx = cam_id;
 	CameraDevice *cam = &cam_array[_active_cam_idx];
-
-	// Check if camera is powered on before attempting to program
-	if(!cam->isPowered)
-	{
-		printf("Cannot program FPGA - Camera %d is powered off\r\n", cam_id+1);
-		cam->isProgrammed = false;
-		return false;
-	}
 
 	if(!force_update)
 	{
@@ -737,48 +741,61 @@ _Bool program_fpga(uint8_t cam_id, _Bool force_update)
 /* -------- END FPGA FUNCTIONS -------- */
 
 /* -------- START CAMERA I2C FUNCTIONS -------- */
-void scan_camera_sensors(bool scanI2cAtStart){
-  // Scan for I2C cameras
-  for (int i = 0; i < CAMERA_COUNT; i++)
-  {
+
+/** Scan a single camera slot for I2C camera (0x36) and FPGA (0x40); sets cam_array[cam_id].isPresent. */
+void scan_camera_sensor(uint8_t cam_id) {
+	if (cam_id >= CAMERA_COUNT) {
+		return;
+	}
 	uint8_t addresses_found[10];
 	uint8_t found;
 	bool camera_found = false, fpga_found = false;
 
-	TCA9548A_SelectChannel(&hi2c1, 0x70, i);
+	TCA9548A_SelectChannel(&hi2c1, 0x70, cam_id);
 	delay_ms(10);
 
-	if (scanI2cAtStart)
-	  printf("I2C Scanning bus %d\r\n", i + 1);
-	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), scanI2cAtStart);
+	found = I2C_scan(&hi2c1, addresses_found, sizeof(addresses_found), true);
 
-	for (int j = 0; j < found; j++)
-	{
-	  if (addresses_found[j] == 0x36)
-		camera_found = true;
-	  else if (addresses_found[j] == 0x40)
-		fpga_found = true;
+	for (uint8_t j = 0; j < found; j++) {
+		if (addresses_found[j] == 0x36) {
+			camera_found = true;
+		} else if (addresses_found[j] == 0x40) {
+			fpga_found = true;
+		}
 	}
 
-	if (camera_found && fpga_found)
-	  cameras_present |= 0x01 << i;
-	else
-	  printf("Camera %d not found\r\n", i + 1);
-  }
+	if (camera_found && fpga_found) {
+		cam_array[cam_id].isPresent = true;
+	} else {
+		cam_array[cam_id].isPresent = false;
+		printf("Camera %d not found\r\n", cam_id + 1);
+	}
+}
 
-  if (cameras_present == 0xFF)
-  {
-	printf("All cameras found\r\n");
-  }else{
-	  print_active_cameras(cameras_present);
-  }
+void scan_camera_sensors(void) {
+	for (int i = 0; i < CAMERA_COUNT; i++) {
+		scan_camera_sensor((uint8_t)i);
+	}
+
+	bool all_present = true;
+	for (int i = 0; i < CAMERA_COUNT; ++i) {
+		if (!cam_array[i].isPresent) {
+			all_present = false;
+			break;
+		}
+	}
+
+	if (all_present) {
+		printf("All cameras found\r\n");
+	} else {
+		print_active_cameras();
+	}
 }
 
 _Bool configure_camera_sensor(uint8_t cam_id)
 {
 	// printf("C%d: configuring...", cam_id+1);
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -823,8 +840,7 @@ _Bool configure_camera_sensor(uint8_t cam_id)
 
 _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Configure Camera %d Registers Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -856,9 +872,12 @@ _Bool configure_camera_testpattern(uint8_t cam_id, uint8_t test_pattern)
 
 void poll_camera_temperatures(void)
 {
-    if (get_timestamp_ms() >= next_temp_ms)
+    uint32_t now = get_timestamp_ms();
+
+    if ((next_temp_ms == 0u) || (now >= next_temp_ms))
     {
-        next_temp_ms += CAM_TEMP_INTERVAL_MS;
+        /* Schedule from current time to keep a constant cadence without catch-up bursts. */
+        next_temp_ms = now + CAM_TEMP_POLL_INTERVAL_MS;
 
         // Skip to next active camera
         for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
@@ -866,21 +885,15 @@ void poll_camera_temperatures(void)
             uint8_t cam = next_cam_idx;
             next_cam_idx = (next_cam_idx + 1) % CAM_TEMP_TOTAL_CAMS;
 
-            if (cameras_present & (1 << cam))
+            if (cam_array[cam].isPresent)
             {
                 CameraDevice *pCam = get_camera_byID(cam);
                 if (pCam != NULL)
                 {
                     cam_temp[cam] = X02C1B_read_temp(pCam);
-                    break;  // One camera per 100ms interval
+                    break;  // One camera per configured interval
                 }
             }
-        }
-
-        // If we wrapped back to camera 0, add the idle pause
-        if (next_cam_idx == 0)
-        {
-            next_temp_ms += CAM_TEMP_IDLE_EXTRA_MS;
         }
     }
 }
@@ -933,8 +946,7 @@ void fill_frame_buffers(void) {
 /* -------- START HISTOGRAM TRANSFER FUNCTIONS -------- */
 _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 {
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Capture HISTO for Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -959,8 +971,7 @@ _Bool get_single_histogram(uint8_t cam_id, uint8_t* data, uint16_t* data_len)
 _Bool capture_single_histogram(uint8_t cam_id)
 {
 	_Bool ret = true;
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
-	{
+	if (!camera_request_is_valid(cam_id)) {
 		printf("Capture HISTO for Camera %d Failed\r\n", cam_id+1);
 		return false;
 	}
@@ -1023,6 +1034,9 @@ _Bool capture_single_histogram(uint8_t cam_id)
 
 // Check for cameras that have stopped posting data
 static void check_camera_failures(void) {
+	if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+		return;  /* No hardware posting data in fake data mode */
+	}
 	// Check each camera that is supposed to be enabled
 	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; cam_id++) {
 		bool is_enabled = (event_bits_enabled & (1 << cam_id)) != 0;
@@ -1080,13 +1094,11 @@ _Bool send_data(void) {
 	check_camera_failures();
 	
 	bool success = false;
-	if (fake_data_gen) // Call FAKE data sender if enabled)
-    {
-        success = send_fake_data();
-    }
-    else {
-       success = send_histogram_data();
-    }
+	if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+		success = send_fake_data();
+	} else {
+		success = send_histogram_data();
+	}
 	poll_camera_temperatures();
 
     if (success) {
@@ -1109,8 +1121,10 @@ _Bool check_streaming(void){
 		}
 		if((current_time - most_recent_frame_time_local) > STREAMING_TIMEOUT_MS){
 			uint32_t elapsed = current_time - streaming_start_time;
-			send_data(); // send data one last frame to finish the buffers 
-			total_frames_failed = total_frames_failed - 1; // subtract one from the total frames failed because the first frame is a skip and the last frame is an extra
+			send_data(); // send data one last frame to finish the buffers
+			if (total_frames_failed > 0) {
+				total_frames_failed--;  // first frame skip / last frame extra
+			}
 			printf("Scan finished (%lu ms, %lu frames)\r\n", elapsed, total_frames_sent);
 			if(total_frames_failed > 0){
 				printf("%lu frames failed\r\n", total_frames_failed);
@@ -1258,8 +1272,8 @@ _Bool send_fake_data(void) {
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 16) & 0xFF);
 	packet_buffer[offset++] = (uint8_t)((timestamp >> 24) & 0xFF);
 
-	// --- Data ---
-	for (uint8_t cam_id = 0; cam_id < count; ++cam_id) {
+	// --- Data --- (iterate over all cameras so payload length matches header)
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
 		if((event_bits_enabled & (0x01 << cam_id)) != 0) {
 			uint32_t *histo_ptr = (uint32_t *) cam_array[cam_id].pRecieveHistoBuffer;
 			packet_buffer[offset++] = HISTO_SOH;
@@ -1307,6 +1321,11 @@ _Bool send_fake_data(void) {
 _Bool start_data_reception(uint8_t cam_id){
 	if(verbose_on) printf("Start data reception on camera: %d... ",cam_id+1);
 	HAL_StatusTypeDef status;
+
+	if (!camera_request_is_valid(cam_id)) {
+		return false;
+	}
+
 	CameraDevice cam = cam_array[cam_id];
 
     // Check if the device is BUSY
@@ -1366,6 +1385,11 @@ _Bool start_data_reception(uint8_t cam_id){
 _Bool abort_data_reception(uint8_t cam_id){
 	if(verbose_on) printf("Abort data reception C: %d... ",cam_id);
 	HAL_StatusTypeDef status;
+
+	if (!camera_request_is_valid(cam_id)) {
+		return false;
+	}
+
 	// disable the reception
 	CameraDevice* cam = get_camera_byID(cam_id);
 	if(cam->useUsart) {
@@ -1405,6 +1429,10 @@ _Bool abort_data_reception(uint8_t cam_id){
 _Bool enable_camera_stream(uint8_t cam_id){
 	// printf("C%d: enable...", cam_id+1);
 
+	if (!camera_request_is_valid(cam_id)) {
+		return false;
+	}
+
 	bool status = false;
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(enabled){
@@ -1423,7 +1451,7 @@ _Bool enable_camera_stream(uint8_t cam_id){
 		}
 	}
 
-	delay_us(200);
+	delay_us(10);
 
 	if(TCA9548A_SelectChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK)
 		{
@@ -1454,6 +1482,10 @@ _Bool enable_camera_stream(uint8_t cam_id){
 
 _Bool disable_camera_stream(uint8_t cam_id){
 	// printf("C%d: disable...", cam_id+1);
+	if (!camera_request_is_valid(cam_id)) {
+		return false;
+	}
+
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
 	if(!enabled){
 		printf("already done\r\n");
@@ -1503,6 +1535,10 @@ _Bool enable_camera_power(uint8_t cam_id){
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_SET); // Set power pin high
 	cam->isPowered = true;
+	if (TCA9548A_EnableChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+		printf("Failed to enable mux channel for Camera %d\r\n", cam_id + 1);
+		return false;
+	}
 
 	printf("Enabled Power for Camera %d\r\n", cam_id+1);
 	return true;
@@ -1516,9 +1552,14 @@ _Bool disable_camera_power(uint8_t cam_id){
 	}
 
 	CameraDevice *cam = get_camera_byID(cam_id);
+	if (TCA9548A_DisableChannel(&hi2c1, 0x70, cam->i2c_target) != HAL_OK) {
+		printf("Failed to disable mux channel for Camera %d\r\n", cam_id + 1);
+		return false;
+	}
 
 	HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET); // Set power pin low
 	cam->isPowered = false;
+	cam->isPresent = false;
 	cam->isProgrammed = false; // Clear programmed status when power is off
 	cam->isConfigured = false; // Clear configured status when power is off
 	cam->streaming_enabled = false; // Clear streaming status when power is off
@@ -1528,7 +1569,7 @@ _Bool disable_camera_power(uint8_t cam_id){
 }
 
 _Bool get_camera_power_status(uint8_t cam_id){
-	if(cam_id < 0 || cam_id >= CAMERA_COUNT)
+	if(cam_id >= CAMERA_COUNT)
 	{
 		printf("Get Power Status for Camera %d Failed\r\n", cam_id+1);
 		return false;
@@ -1536,4 +1577,22 @@ _Bool get_camera_power_status(uint8_t cam_id){
 
 	CameraDevice *cam = get_camera_byID(cam_id);
 	return cam->isPowered;
+}
+
+void power_off_all_cameras(void) {
+	/* Physically power off all cameras (GPIO low) and clear state. Used when entering fake data mode. */
+	event_bits_enabled = 0x00;
+	for (uint8_t i = 0; i < CAMERA_COUNT; i++) {
+		CameraDevice *cam = &cam_array[i];
+		/* Disconnect this camera's mux channel before cutting camera power. */
+		(void)TCA9548A_DisableChannel(&hi2c1, 0x70, cam->i2c_target);
+		HAL_GPIO_WritePin(cam->power_port, cam->power_pin, GPIO_PIN_RESET);
+		cam->isPowered = false;
+		cam->isPresent = false;
+		cam->isProgrammed = false;
+		cam->isConfigured = false;
+		cam->streaming_enabled = false;
+		cam_temp[i] = 25.0f;
+	}
+	printf("All cameras powered off\r\n");
 }
