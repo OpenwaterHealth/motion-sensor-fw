@@ -879,6 +879,9 @@ void poll_camera_temperatures(void)
         /* Schedule from current time to keep a constant cadence without catch-up bursts. */
         next_temp_ms = now + CAM_TEMP_POLL_INTERVAL_MS;
 
+        // Remember the currently active camera to restore after temperature reading
+        CameraDevice *active_cam = get_active_cam();
+
         // Skip to next active camera
         for (uint8_t i = 0; i < CAM_TEMP_TOTAL_CAMS; i++)
         {
@@ -890,10 +893,24 @@ void poll_camera_temperatures(void)
                 CameraDevice *pCam = get_camera_byID(cam);
                 if (pCam != NULL)
                 {
-                    cam_temp[cam] = X02C1B_read_temp(pCam);
+                    // Select the correct I2C channel for this camera before reading temperature
+                    if (TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) == HAL_OK)
+                    {
+                        cam_temp[cam] = X02C1B_read_temp(pCam);
+                    }
+                    else
+                    {
+                        printf("Failed to select Camera %d channel for temperature reading\r\n", cam + 1);
+                    }
                     break;  // One camera per configured interval
                 }
             }
+        }
+
+        // Restore the active camera's I2C channel
+        if (active_cam != NULL)
+        {
+            TCA9548A_SelectChannel(&hi2c1, 0x70, active_cam->i2c_target);
         }
     }
 }
