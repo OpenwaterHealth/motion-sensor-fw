@@ -28,6 +28,8 @@
 #define DEBUG_FLAG_HISTO_THROTTLE (1u << 1)  /* Only send histogram packet every 5s; others pretend success */
 #define DEBUG_FLAG_FAKE_DATA  (1u << 2)
 #define DEBUG_FLAG_HISTO_SPARSE (1u << 3)  /* Send histogram data in small chunks over ~15s to reduce EMI */
+#define DEBUG_FLAG_COMM_VERBOSE (1u << 4)  /* Enable cmd id and "." response prints in uart_comms */
+#define DEBUG_FLAG_CMD_VERBOSE (1u << 5)  /* Enable printf in command handlers (if_commands.c) */
 
 
 #define I2C_IRQ_PRIORITY 0
