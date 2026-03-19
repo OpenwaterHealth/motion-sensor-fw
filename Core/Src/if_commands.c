@@ -747,15 +747,6 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			result = X02C1B_fsin_off();
-
-			//TODO(fix this garbage, this resets the usart at the finish of a frame. this should be done more gracefully))
-			for(int i = 0;i<CAMERA_COUNT; i++){
-				CameraDevice *pCam = get_camera_byID(i);
-				if(pCam->useUsart){
-					pCam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
-					pCam->pUart->Instance->CR1 |= USART_CR1_UE;
-				}
-			}
 		} else {
 			result = X02C1B_fsin_on();
 		}
@@ -764,6 +755,19 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			// error
 			VERBOSE_CMD("Failed Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 			uartResp->packet_type = OW_ERROR;
+		}
+		break;
+	case OW_CAMERA_RESET_UART:
+		VERBOSE_CMD("[CMD] OW_CAMERA_RESET_UART addr=0x%02X\r\n", cmd.addr);
+		uartResp->command = OW_CAMERA_RESET_UART;
+		uartResp->packet_type = OW_RESP;
+		for (uint8_t i = 0; i < CAMERA_COUNT; i++) {
+			if ((cmd.addr >> i) & 0x01) {
+				if (!reset_camera_usart(i)) {
+					uartResp->packet_type = OW_ERROR;
+					VERBOSE_CMD("Failed to reset USART on camera %d\r\n", i);
+				}
+			}
 		}
 		break;
 	case OW_CAMERA_SWITCH:

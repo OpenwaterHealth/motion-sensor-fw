@@ -464,6 +464,47 @@ _Bool enable_fpga(uint8_t cam_id)
 	return true;
 }
 
+_Bool reset_camera_usart(uint8_t cam_id)
+{
+	if (cam_id >= CAMERA_COUNT) {
+		printf("Reset Camera USART %d Failed: index out of range\r\n", cam_id+1);
+		return false;
+	}
+
+	/* Do not gate on isPresent — the USART/SPI peripheral exists independently of
+	 * whether an I2C presence scan has confirmed a sensor in this slot.
+	 *
+	 * Sequence: HAL abort → flush FIFO / clear OVR flag → force HAL state READY.
+	 * We deliberately avoid toggling UE/SPE (disable/re-enable) because on
+	 * STM32H7 that does NOT flush the internal FIFO, leaving stale bytes that
+	 * cause immediate overrun as soon as the next DMA is armed.  The correct
+	 * flush path is USART_RXDATA_FLUSH_REQUEST / __HAL_SPI_CLEAR_OVRFLAG. */
+	CameraDevice *cam = get_camera_byID(cam_id);
+	if (cam->useUsart && cam->pUart != NULL) {
+		/* Abort any in-flight DMA — this sets State → READY in the HAL. */
+		HAL_USART_Abort(cam->pUart);
+		/* Flush the USART RXFIFO via the hardware request register.
+		 * Toggling UE (disable/re-enable) does NOT flush the FIFO on STM32H7
+		 * and leaves stale bytes that cause immediate overrun when DMA is armed.
+		 * USART_RXDATA_FLUSH_REQUEST is the correct flush mechanism. */
+		__HAL_USART_SEND_REQ(cam->pUart, USART_RXDATA_FLUSH_REQUEST);
+		/* Clear any pending overrun error flag. */
+		__HAL_USART_CLEAR_OREFLAG(cam->pUart);
+		/* Force the HAL state machine back to READY (guards against any
+		 * pending DMA-complete interrupt that could have re-set it). */
+		cam->pUart->State = HAL_USART_STATE_READY;
+	} else if (!cam->useUsart && cam->pSpi != NULL) {
+		/* Abort any in-flight DMA. */
+		HAL_SPI_Abort(cam->pSpi);
+		/* Clear any pending SPI overrun flag by reading DR then SR.
+		 * This also drains any stale byte from the SPI shift register. */
+		__HAL_SPI_CLEAR_OVRFLAG(cam->pSpi);
+		/* Force the HAL state machine back to READY. */
+		cam->pSpi->State = HAL_SPI_STATE_READY;
+	}
+	return true;
+}
+
 _Bool disable_fpga(uint8_t cam_id)
 {
 	if (!camera_request_is_valid(cam_id)) {
@@ -1476,9 +1517,22 @@ _Bool enable_camera_stream(uint8_t cam_id){
 			return false;
 		}
 
-	bool stream_on_status= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
+	/* Force the USART/SPI peripheral into a known-clean state before arming DMA.
+	 * This guards against the case where the previous scan's teardown left the
+	 * peripheral stuck in BUSY_RX (e.g. HAL_USART_Abort raced with a pending
+	 * DMA-complete interrupt).  Also clear any stale event_bits bit so the
+	 * first send_histogram_data() call of the new scan doesn't see garbage. */
+	reset_camera_usart(cam_id);
+	__disable_irq();
+	event_bits &= ~(1u << cam_id);
+	__enable_irq();
 
+	/* Arm DMA BEFORE stream_on so the receiver is ready when the sensor
+	 * starts clocking data.  Arming after stream_on causes an immediate SPI
+	 * overrun on fast cameras (e.g. SPI4 / cam 8). */
 	bool data_recp_status= start_data_reception(cam_id);
+
+	bool stream_on_status= (X02C1B_stream_on(cam) < 0); // returns -1 if failed
 
 	status |= data_recp_status | stream_on_status;
 	if(!status)
@@ -1488,6 +1542,9 @@ _Bool enable_camera_stream(uint8_t cam_id){
 	}
 	event_bits_enabled |= (1 << cam_id);
 	cam->streaming_enabled = true;
+
+	// This sets the reset on the camera HIGH which is required for operation.
+	// There is a mistake in the schematics between the agg and camera, this actually controls GPIO0 from the FPGA perspective.
 	HAL_GPIO_WritePin(cam->gpio1_port, cam->gpio1_pin, GPIO_PIN_SET); // Set GPIO1 high
 	
 	// Reset failure counter when enabling camera
