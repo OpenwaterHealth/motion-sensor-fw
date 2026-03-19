@@ -59,6 +59,7 @@ CameraDevice* set_active_camera(int id);
 CameraDevice* get_camera_byID(int id);
 
 _Bool reset_camera(uint8_t cam_id);
+_Bool reset_camera_usart(uint8_t cam_id);
 _Bool enable_fpga(uint8_t cam_id);
 _Bool disable_fpga(uint8_t cam_id);
 _Bool activate_fpga(uint8_t cam_id);

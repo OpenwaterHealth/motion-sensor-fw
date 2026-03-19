@@ -23,6 +23,12 @@
 
 extern volatile uint8_t event_bits_enabled;
 
+#define VERBOSE_CMD(...) do { \
+	if ((logging_get_debug_flags() & DEBUG_FLAG_CMD_VERBOSE) != 0u) { \
+		printf(__VA_ARGS__); \
+	} \
+} while(0)
+
 static uint32_t id_words[3] = {0};
 static uint8_t camera_status[8] = {0};
 static uint8_t camera_power_status = 0;
@@ -42,18 +48,22 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_CMD_NOP:
+		VERBOSE_CMD("[CMD] OW_CMD_NOP\r\n");
 		uartResp->command = OW_CMD_NOP;
 		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_PING:
+		VERBOSE_CMD("[CMD] OW_CMD_PING\r\n");
 		uartResp->command = OW_CMD_PING;
 		uartResp->packet_type = OW_RESP;
 		break;
 	case OW_CMD_VERSION:
+		VERBOSE_CMD("[CMD] OW_CMD_VERSION\r\n");
 		uartResp->data_len = sizeof(FW_VERSION_STRING);
 		uartResp->data = (uint8_t*)FW_VERSION_STRING;
 		break;
 	case OW_CMD_HWID:
+		VERBOSE_CMD("[CMD] OW_CMD_HWID\r\n");
 		uartResp->command = OW_CMD_HWID;
 		uartResp->packet_type = OW_RESP;
 		id_words[0] = HAL_GetUIDw0();
@@ -63,6 +73,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = (uint8_t *)&id_words;
 		break;
 	case OW_CMD_ECHO:
+		VERBOSE_CMD("[CMD] OW_CMD_ECHO len=%u\r\n", (unsigned)cmd.data_len);
 		// exact copy
 		uartResp->command = OW_CMD_ECHO;
 		uartResp->packet_type = OW_RESP;
@@ -70,12 +81,13 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = cmd.data;
 		break;
 	case OW_CMD_TOGGLE_LED:
-		// printf("Toggle LED\r\n");
+		VERBOSE_CMD("[CMD] OW_CMD_TOGGLE_LED\r\n");
 		uartResp->command = OW_CMD_TOGGLE_LED;
 		uartResp->packet_type = OW_RESP;
 		HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 		break;
 	case OW_CMD_DEBUG_FLAGS: {
+		VERBOSE_CMD("[CMD] OW_CMD_DEBUG_FLAGS reserved=0x%02X len=%u\r\n", cmd.reserved, (unsigned)cmd.data_len);
 		uartResp->command = OW_CMD_DEBUG_FLAGS;
 		// reserved bit0: 0 = get, 1 = set
 		if (cmd.reserved & 0x01) {
@@ -83,7 +95,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 				uartResp->packet_type = OW_ERROR;
 				uartResp->data_len = 0;
 				uartResp->data = NULL;
-				printf("Invalid data length for debug flags\r\n");
+				VERBOSE_CMD("Invalid data length for debug flags\r\n");
 				break;
 			}
 			uint32_t new_flags = 0;
@@ -101,13 +113,14 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		break;
 	}
 	case OW_CMD_I2C_BROADCAST:
-		printf("Broadcasting I2C on all channels\r\n");
+		VERBOSE_CMD("[CMD] OW_CMD_I2C_BROADCAST - Broadcasting I2C on all channels\r\n");
 		uartResp->command = OW_CMD_I2C_BROADCAST;
 		uartResp->packet_type = OW_RESP;
 		TCA9548A_SelectBroadcast(pCam->pI2c, 0x70);
 		break;
 
 	case OW_CMD_USR_CFG:
+		VERBOSE_CMD("[CMD] OW_CMD_USR_CFG reserved=%u len=%u\r\n", cmd.reserved, (unsigned)cmd.data_len);
 		// reserved == 0: READ
 		// reserved == 1: WRITE (cmd->data is JSON text)
 		if (cmd.reserved == 0) {
@@ -160,6 +173,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		break;
 		
 	case OW_CMD_RESET:
+		VERBOSE_CMD("[CMD] OW_CMD_RESET\r\n");
 		uartResp->command = OW_CMD_RESET;
 		uartResp->packet_type = OW_RESP;
 		// softreset
@@ -172,7 +186,7 @@ static void process_basic_command(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CMD_DFU:
-		printf("Enter DFU\r\n");
+		VERBOSE_CMD("[CMD] OW_CMD_DFU - Enter DFU\r\n");
 		uartResp->command = OW_CMD_DFU;
 		uartResp->packet_type = OW_RESP;
 		uartResp->data_len = 0;
@@ -197,6 +211,7 @@ static void process_sensor_command(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_CTRL_FAN_CTL: {
+		VERBOSE_CMD("[CMD] OW_CTRL_FAN_CTL reserved=0x%02X\r\n", cmd.reserved);
 		uartResp->command = OW_CTRL_FAN_CTL;
 		uartResp->packet_type = OW_RESP;
 		// reserved bit0: 0 = get, 1 = set
@@ -211,7 +226,7 @@ static void process_sensor_command(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data_len = 1;
 		uartResp->data = (uint8_t *)&uartResp->reserved;
 		uartResp->reserved = HAL_GPIO_ReadPin(FAN_CTL_GPIO_Port, FAN_CTL_Pin) == GPIO_PIN_SET ? 1 : 0;
-		printf("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
+		VERBOSE_CMD("FAN: %s\r\n", uartResp->reserved ? "HIGH (ON)" : "LOW (OFF)");
 		break;
 	}
 	default:
@@ -262,6 +277,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_FPGA_ON:
+		VERBOSE_CMD("[CMD] OW_FPGA_ON addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_ON;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -269,12 +285,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!enable_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to enable FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to enable FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_OFF:
+		VERBOSE_CMD("[CMD] OW_FPGA_OFF addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_OFF;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -282,12 +299,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!disable_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to disable FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to disable FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_ACTIVATE:
+		VERBOSE_CMD("[CMD] OW_FPGA_ACTIVATE addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_ACTIVATE;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -301,6 +319,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_FPGA_ID:
+		VERBOSE_CMD("[CMD] OW_FPGA_ID addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_ID;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -308,12 +327,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!verify_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Activate FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to Activate FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_ENTER_SRAM_PROG:
+		VERBOSE_CMD("[CMD] OW_FPGA_ENTER_SRAM_PROG addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_ENTER_SRAM_PROG;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -321,12 +341,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!enter_sram_prog_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Activate FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to Activate FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_EXIT_SRAM_PROG:
+		VERBOSE_CMD("[CMD] OW_FPGA_EXIT_SRAM_PROG addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_EXIT_SRAM_PROG;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -334,12 +355,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!exit_sram_prog_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Activate FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to Activate FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_ERASE_SRAM:
+		VERBOSE_CMD("[CMD] OW_FPGA_ERASE_SRAM addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_ERASE_SRAM;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -347,12 +369,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!erase_sram_fpga(i))
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Activate FPGA on camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to Activate FPGA on camera %d\r\n", i);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_PROG_SRAM:
+		VERBOSE_CMD("[CMD] OW_FPGA_PROG_SRAM addr=0x%02X reserved=%u\r\n", cmd.addr, cmd.reserved);
 		uartResp->command = OW_FPGA_PROG_SRAM;
 		uartResp->packet_type = OW_RESP;
 		// TODO: Add parameter to force update currently defaults to false
@@ -368,12 +391,13 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    		if(!func_ret)
 	    		{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to Program FPGA on camera %d\r\n", i+1);
+	    			VERBOSE_CMD("Failed to Program FPGA on camera %d\r\n", i+1);
 	    		}
 	        }
 	    }
 		break;
 	case OW_FPGA_USERCODE:
+		VERBOSE_CMD("[CMD] OW_FPGA_USERCODE addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_USERCODE;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -383,6 +407,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_FPGA_BITSTREAM:
+		VERBOSE_CMD("[CMD] OW_FPGA_BITSTREAM addr=0x%02X reserved=%u len=%u\r\n", cmd.addr, cmd.reserved, (unsigned)cmd.data_len);
 		uartResp->command = OW_FPGA_BITSTREAM;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
@@ -401,11 +426,12 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 			// printf("BITSTREAM Size: %ld bytes CRC: 0x%04X\r\n",bitstream_len, calc_crc);
 			if(crc_valid != calc_crc) {
     			uartResp->packet_type = OW_ERROR;
-    			printf("Failed crc check\r\n");
+    			VERBOSE_CMD("Failed crc check\r\n");
 			}
 		}
 		break;
 	case OW_FPGA_STATUS:
+		VERBOSE_CMD("[CMD] OW_FPGA_STATUS addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_STATUS;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -415,6 +441,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_FPGA_RESET:
+		VERBOSE_CMD("[CMD] OW_FPGA_RESET addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_FPGA_RESET;
 		uartResp->packet_type = OW_RESP;
 	    for (uint8_t i = 0; i < 8; i++) {
@@ -422,7 +449,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!reset_camera(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to reset camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to reset camera %d\r\n", i);
 
 	        	}
 	        }
@@ -432,6 +459,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 
 		break;
 	case OW_FPGA_SOFT_RESET:
+		VERBOSE_CMD("[CMD] OW_FPGA_SOFT_RESET\r\n");
 		uartResp->command = OW_FPGA_SOFT_RESET;
 		uartResp->packet_type = OW_RESP;
 		//fpga_soft_reset(pCam);
@@ -441,7 +469,7 @@ static void process_fpga_commands(UartPacket *uartResp, UartPacket cmd)
 			// method 2: diable and reenable the usart
 			pCam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
 			pCam->pUart->Instance->CR1 |= USART_CR1_UE;
-			printf("Usart buffer reset\r\n");
+			VERBOSE_CMD("Usart buffer reset\r\n");
 		}
 		break;
 	default:
@@ -458,7 +486,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_IMU_GET_TEMP:
-		// printf("OW_IMU_GET_TEMP\r\n");
+		VERBOSE_CMD("[CMD] OW_IMU_GET_TEMP\r\n");
 		uartResp->command = OW_IMU_GET_TEMP;
 		uartResp->packet_type = OW_RESP;
 		imu_temp = ICM_ReadTemperature();
@@ -466,6 +494,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		uartResp->data = (uint8_t *)&imu_temp;
 		break;
 	case OW_IMU_GET_ACCEL:
+		VERBOSE_CMD("[CMD] OW_IMU_GET_ACCEL\r\n");
 		uartResp->command = OW_IMU_GET_ACCEL;
 		uartResp->packet_type = OW_RESP;
 		if(ICM_ReadAccel(&accel) != HAL_OK)
@@ -473,7 +502,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 		    uartResp->data_len = 0;
 		    uartResp->data = NULL;
-			printf("Failed to read accelerometer data\r\n");
+			VERBOSE_CMD("Failed to read accelerometer data\r\n");
 		}else{
 			uartResp->data_len = sizeof(accel);
 			uartResp->data = (uint8_t *)&accel;
@@ -481,6 +510,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_IMU_GET_GYRO:
+		VERBOSE_CMD("[CMD] OW_IMU_GET_GYRO\r\n");
 		uartResp->command = OW_IMU_GET_GYRO;
 		uartResp->packet_type = OW_RESP;
 		if(ICM_ReadGyro(&gyro) != HAL_OK)
@@ -488,7 +518,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 		    uartResp->data_len = 0;
 		    uartResp->data = NULL;
-			printf("Failed to read gyroscope data\r\n");
+			VERBOSE_CMD("Failed to read gyroscope data\r\n");
 		}else{
 			uartResp->data_len = sizeof(gyro);
 			uartResp->data = (uint8_t *)&gyro;
@@ -496,6 +526,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_IMU_ON:
+		VERBOSE_CMD("[CMD] OW_IMU_ON\r\n");
 		uartResp->command = OW_IMU_ON;
 		uartResp->packet_type = OW_RESP;
 	    uartResp->data_len = 0;
@@ -504,10 +535,11 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		if(HAL_TIM_Base_Start_IT(&IMU_TIMER)!= HAL_OK)
 		{
 			uartResp->packet_type = OW_ERROR;
-			printf("Failed to turn on IMU data\r\n");
+			VERBOSE_CMD("Failed to turn on IMU data\r\n");
 		}
 		break;
 	case OW_IMU_OFF:
+		VERBOSE_CMD("[CMD] OW_IMU_OFF\r\n");
 		uartResp->command = OW_IMU_OFF;
 		uartResp->packet_type = OW_RESP;
 	    uartResp->data_len = 0;
@@ -515,7 +547,7 @@ static void process_imu_commands(UartPacket *uartResp, UartPacket cmd)
 		if(HAL_TIM_Base_Stop_IT(&IMU_TIMER)!= HAL_OK)
 		{
 			uartResp->packet_type = OW_ERROR;
-			printf("Failed to turn off IMU data\r\n");
+			VERBOSE_CMD("Failed to turn off IMU data\r\n");
 		}
 		break;
 	default:
@@ -532,26 +564,28 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	switch (cmd.command)
 	{
 	case OW_CAMERA_SCAN:
-		// printf("Reading Camera %d ID\r\n",pCam->id+1);
+		VERBOSE_CMD("[CMD] OW_CAMERA_SCAN\r\n");
 		uartResp->command = OW_CAMERA_SCAN;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_detect(pCam)){
 			// error
-			printf("Failed Reading Camera %d ID\r\n",pCam->id+1);
+			VERBOSE_CMD("Failed Reading Camera %d ID\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
 	case OW_CAMERA_ON:
+		VERBOSE_CMD("[CMD] OW_CAMERA_ON\r\n");
 		uartResp->command = OW_CAMERA_ON;
 		uartResp->packet_type = OW_RESP;
 		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) == 0u) {
 			if(X02C1B_stream_on(pCam)){
-				printf("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
+				VERBOSE_CMD("Failed Setting Camera %d Stream on\r\n",pCam->id+1);
 				uartResp->packet_type = OW_ERROR;
 			}
 		}
 		break;
 	case OW_CAMERA_SET_CONFIG:
+		VERBOSE_CMD("[CMD] OW_CAMERA_SET_CONFIG addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_SET_CONFIG;
 		uartResp->packet_type = OW_RESP;
 		/* In fake data mode, treat as no-op success and skip hardware */
@@ -563,13 +597,14 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!configure_camera_sensor(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed set registers for camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed set registers for camera %d\r\n", i);
 
 	        	}
 	        }
 	    }
 		break;
 	case OW_CAMERA_STREAM:
+		VERBOSE_CMD("[CMD] OW_CAMERA_STREAM addr=0x%02X reserved=%u\r\n", cmd.addr, cmd.reserved);
 		uartResp->command = OW_CAMERA_STREAM;
 		uartResp->packet_type = OW_RESP;
 		/* In fake data mode, just update logical enable mask and skip hardware */
@@ -595,13 +630,13 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		if(status != cmd.addr) // if the status bits are not true for all the cameras addressed, error
 		{
 			uartResp->packet_type = OW_ERROR;
-			printf("Failed to %d on mask %02X\r\n", cmd.reserved, status);
+			VERBOSE_CMD("Failed to %d on mask %02X\r\n", cmd.reserved, status);
 
 		}
 		else uartResp->packet_type = OW_ACK;
 		break;
 	case OW_CAMERA_SINGLE_HISTOGRAM:
-		// printf("Capture single histogram frame\r\n");
+		VERBOSE_CMD("[CMD] OW_CAMERA_SINGLE_HISTOGRAM addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_SINGLE_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
 		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
@@ -613,14 +648,14 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!capture_single_histogram(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to capture histo for camera %d\r\n", i+1);
+	    			VERBOSE_CMD("Failed to capture histo for camera %d\r\n", i+1);
 
 	        	}
 	        }
 	    }
 		break;
 	case OW_CAMERA_GET_HISTOGRAM:
-		// printf("Capture single histogram frame\r\n");
+		VERBOSE_CMD("[CMD] OW_CAMERA_GET_HISTOGRAM addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_GET_HISTOGRAM;
 		uartResp->packet_type = OW_RESP;
 		uartResp->addr = cmd.addr;
@@ -635,7 +670,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	{
 	        		uartResp->reserved &= ~(1 << i);
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed get histo for camera %d\r\n", i+1);
+	    			VERBOSE_CMD("Failed get histo for camera %d\r\n", i+1);
 
 	        	} else {
 	        		uartResp->reserved |= (1 << i);
@@ -645,9 +680,10 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    }
 		break;
 	case OW_CAMERA_SET_TESTPATTERN:
+		VERBOSE_CMD("[CMD] OW_CAMERA_SET_TESTPATTERN addr=0x%02X len=%u\r\n", cmd.addr, (unsigned)cmd.data_len);
 		if(cmd.data_len != 1){
 			uartResp->packet_type = OW_ERROR;
-			printf("Invalid data length for test pattern\r\n");
+			VERBOSE_CMD("Invalid data length for test pattern\r\n");
 			break;
 		}
 		uint8_t test_pattern = cmd.data[0];
@@ -662,24 +698,25 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!configure_camera_testpattern(i,test_pattern))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed set camera test pattern for camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed set camera test pattern for camera %d\r\n", i);
 
 	        	}
 	        }
 	    }
 		break;
 	case OW_CAMERA_OFF:
+		VERBOSE_CMD("[CMD] OW_CAMERA_OFF\r\n");
 		uartResp->command = OW_CAMERA_OFF;
 		uartResp->packet_type = OW_RESP;
 		if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) == 0u) {
 			if(X02C1B_stream_off(pCam)<0){
-				printf("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
+				VERBOSE_CMD("Failed Setting Camera %d Stream off\r\n",pCam->id+1);
 				uartResp->packet_type = OW_ERROR;
 			}
 		}
 		break;
 	case OW_CAMERA_STATUS:
-		// printf("Camera status 0x%02X\r\n", cmd.addr);
+		VERBOSE_CMD("[CMD] OW_CAMERA_STATUS addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_STATUS;
 		uartResp->packet_type = OW_RESP;
 
@@ -695,62 +732,66 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	    uartResp->data_len = 8;
 		break;
 	case OW_CAMERA_RESET:
-		// printf("Camera %d Sensor Reset\r\n",pCam->id+1);
+		VERBOSE_CMD("[CMD] OW_CAMERA_RESET\r\n");
 		uartResp->command = OW_CAMERA_RESET;
 		uartResp->packet_type = OW_RESP;
 		if(X02C1B_soft_reset(pCam)<0){
 			// error
-			printf("Failed Camera %d Sensor Reset\r\n",pCam->id+1);
+			VERBOSE_CMD("Failed Camera %d Sensor Reset\r\n",pCam->id+1);
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
 	case OW_CAMERA_FSIN:
-		// printf("Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
+		VERBOSE_CMD("[CMD] OW_CAMERA_FSIN reserved=%u (%s)\r\n", cmd.reserved, cmd.reserved?"Enable":"Disable");
 		uartResp->command = OW_CAMERA_FSIN;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
 			result = X02C1B_fsin_off();
-
-			//TODO(fix this garbage, this resets the usart at the finish of a frame. this should be done more gracefully))
-			for(int i = 0;i<CAMERA_COUNT; i++){
-				CameraDevice *pCam = get_camera_byID(i);
-				if(pCam->useUsart){
-					pCam->pUart->Instance->CR1 &= ~USART_CR1_UE; // Disable USART
-					pCam->pUart->Instance->CR1 |= USART_CR1_UE;
-				}
-			}
 		} else {
 			result = X02C1B_fsin_on();
 		}
 
 		if(result != 0){
 			// error
-			printf("Failed Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
+			VERBOSE_CMD("Failed Camera FSIN %s\r\n", cmd.reserved?"Enable":"Disable");
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
+	case OW_CAMERA_RESET_UART:
+		VERBOSE_CMD("[CMD] OW_CAMERA_RESET_UART addr=0x%02X\r\n", cmd.addr);
+		uartResp->command = OW_CAMERA_RESET_UART;
+		uartResp->packet_type = OW_RESP;
+		for (uint8_t i = 0; i < CAMERA_COUNT; i++) {
+			if ((cmd.addr >> i) & 0x01) {
+				if (!reset_camera_usart(i)) {
+					uartResp->packet_type = OW_ERROR;
+					VERBOSE_CMD("Failed to reset USART on camera %d\r\n", i);
+				}
+			}
+		}
+		break;
 	case OW_CAMERA_SWITCH:
-		printf("Switching to Camera %d... ",cmd.data[0]+1);
+		VERBOSE_CMD("[CMD] OW_CAMERA_SWITCH - Switching to Camera %d... ",cmd.data[0]+1);
 		uint8_t channel = cmd.data[0];
 		uartResp->command = OW_CAMERA_SWITCH;
 		uartResp->packet_type = OW_RESP;
 		// printf("Switching to camera %d\r\n",channel+1);
         if(!TCA9548A_SelectChannel(pCam->pI2c, 0x70, channel)){
 			set_active_camera(channel);
-			printf(" done\r\n");
+			VERBOSE_CMD(" done\r\n");
         } else{
-			printf("Failed to select Camera %d channel\r\n", channel + 1);
+			VERBOSE_CMD("Failed to select Camera %d channel\r\n", channel + 1);
 			uartResp->packet_type = OW_ERROR;
 		}
         break;
 	case OW_CAMERA_READ_TEMP:
-		// printf("Reading Camera %d Temp\r\n",pCam->id+1);
+		VERBOSE_CMD("[CMD] OW_CAMERA_READ_TEMP\r\n");
 		uartResp->command = OW_CAMERA_READ_TEMP;
 		uartResp->packet_type = OW_RESP;
 
 		if(TCA9548A_SelectChannel(&hi2c1, 0x70, pCam->i2c_target) != HAL_OK)
 		{
-			printf("failed to select Camera %d channel\r\n", pCam->id + 1);
+			VERBOSE_CMD("failed to select Camera %d channel\r\n", pCam->id + 1);
 			uartResp->packet_type = OW_ERROR;
 	        uartResp->data_len = 0;
 	        uartResp->data = NULL; // No valid data to send
@@ -758,7 +799,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			cam_temp = X02C1B_read_temp(pCam);
 			if(cam_temp<0){
 				// error
-				printf("Failed Reading Camera %d Temp\r\n",pCam->id+1);
+				VERBOSE_CMD("Failed Reading Camera %d Temp\r\n",pCam->id+1);
 				uartResp->packet_type = OW_ERROR;
 				uartResp->data_len = 0;
 				uartResp->data = NULL; // No valid data to send
@@ -769,7 +810,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		}
 		break;
 	case OW_CAMERA_FSIN_EXTERNAL:
-		// printf("FSIN_EXT %s\r\n", cmd.reserved == 0 ? "disable" : "enable");
+		VERBOSE_CMD("[CMD] OW_CAMERA_FSIN_EXTERNAL reserved=%u (%s)\r\n", cmd.reserved, cmd.reserved == 0 ? "disable" : "enable");
 		uartResp->command = OW_CAMERA_FSIN_EXTERNAL;
 		uartResp->packet_type = OW_RESP;
 		if(cmd.reserved == 0){
@@ -780,12 +821,13 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 
 		if(result != 0){
 			// error
-			printf("Failed Enabling FSIN_EXT...\r\n");
+			VERBOSE_CMD("Failed Enabling FSIN_EXT...\r\n");
 			uartResp->packet_type = OW_ERROR;
 		}
 		break;
 
 	case OW_CAMERA_POWER_ON:
+		VERBOSE_CMD("[CMD] OW_CAMERA_POWER_ON addr=0x%02X\r\n", cmd.addr);
 		uartResp->command = OW_CAMERA_POWER_ON;
 		uartResp->packet_type = OW_RESP;
 		/* In fake data mode, cameras remain powered off; treat as no-op success */
@@ -819,7 +861,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			if ((cmd.addr >> i) & 0x01) {
 				if (!enable_camera_power(i)) {
 					uartResp->packet_type = OW_ERROR;
-					printf("Failed to power on camera %d\r\n", i);
+					VERBOSE_CMD("Failed to power on camera %d\r\n", i);
 					break;
 				}
 				camera_status[i] = 0x00;
@@ -840,7 +882,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		delay_ms(10); // Short delay to ensure FSIN_ext is fully disabled before power state changes
 		if(fsin_ext_was_enabled){
 			if(X02C1B_FSIN_EXT_enable() != 0){
-				printf("Failed to re-enable FSIN_EXT\r\n");
+				VERBOSE_CMD("Failed to re-enable FSIN_EXT\r\n");
 				uartResp->packet_type = OW_ERROR;
 			}
 		}
@@ -862,13 +904,13 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		// This is required to prevent FSIN from triggering spuriously during power state changes
 		fsin_ext_was_enabled = false;
 		if(X02C1B_FSIN_EXT_status(&fsin_ext_was_enabled) != 0){
-			printf("Failed to read FSIN_EXT status\r\n");
+			VERBOSE_CMD("Failed to read FSIN_EXT status\r\n");
 			uartResp->packet_type = OW_ERROR;
 			break;
 		}
 		if(fsin_ext_was_enabled){
 			if(X02C1B_FSIN_EXT_disable() != 0){
-				printf("Failed to disable FSIN_EXT\r\n");
+				VERBOSE_CMD("Failed to disable FSIN_EXT\r\n");
 				uartResp->packet_type = OW_ERROR;
 				break;
 			}
@@ -879,7 +921,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 	        	if(!disable_camera_power(i))
 	        	{
 	    			uartResp->packet_type = OW_ERROR;
-	    			printf("Failed to power off camera %d\r\n", i);
+	    			VERBOSE_CMD("Failed to power off camera %d\r\n", i);
 	        	}
 	        	else
 	        	{
@@ -892,13 +934,14 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 		delay_ms(10);
 		if(fsin_ext_was_enabled){
 			if(X02C1B_FSIN_EXT_enable() != 0){
-				printf("Failed to re-enable FSIN_EXT\r\n");
+				VERBOSE_CMD("Failed to re-enable FSIN_EXT\r\n");
 				uartResp->packet_type = OW_ERROR;
 			}
 		}
 		break;
 
 	case OW_CAMERA_POWER_STATUS:
+		VERBOSE_CMD("[CMD] OW_CAMERA_POWER_STATUS\r\n");
 		uartResp->command = OW_CAMERA_POWER_STATUS;
 		uartResp->packet_type = OW_RESP;
 		
@@ -927,7 +970,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 			uartResp->data_len = 0;
 			uartResp->data = NULL;
-			printf("Invalid camera ID: %d\r\n", cmd.addr);
+			VERBOSE_CMD("Invalid camera ID: %d\r\n", cmd.addr);
 			break;
 		}
 		
@@ -937,7 +980,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 			uartResp->data_len = 0;
 			uartResp->data = NULL;
-			printf("Failed to get camera device for ID: %d\r\n", cmd.addr);
+			VERBOSE_CMD("Failed to get camera device for ID: %d\r\n", cmd.addr);
 			break;
 		}
 		
@@ -956,7 +999,7 @@ static void process_camera_commands(UartPacket *uartResp, UartPacket cmd)
 			uartResp->packet_type = OW_ERROR;
 			uartResp->data_len = 0;
 			uartResp->data = NULL;
-			printf("Failed to select I2C channel for camera %d\r\n", cmd.addr + 1);
+			VERBOSE_CMD("Failed to select I2C channel for camera %d\r\n", cmd.addr + 1);
 			break;
 		}
 		
@@ -1073,11 +1116,12 @@ UartPacket process_if_command(UartPacket cmd)
 		process_imu_commands(&uartReturn, cmd);
 		break;
 	case OW_I2C_PASSTHRU:
-		printf("I2C Passthru Target: 0x%02X Data: ", cmd.command);
-		for (int i = 0; i < cmd.data_len; i++) {
-			printf("0x%02X ", cmd.data[i]);
+		VERBOSE_CMD("[CMD] OW_I2C_PASSTHRU Target: 0x%02X Data: ", cmd.command);
+		for (int i = 0; i < cmd.data_len && i < 16; i++) {
+			VERBOSE_CMD("0x%02X ", cmd.data[i]);
 		}
-		printf("Len: %d\r\n", cmd.data_len);
+		if (cmd.data_len > 16) VERBOSE_CMD("... ");
+		VERBOSE_CMD("Len: %d\r\n", cmd.data_len);
 
 		uartReturn.command = OW_I2C_PASSTHRU;
 		uartReturn.packet_type = OW_RESP;

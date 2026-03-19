@@ -11,6 +11,8 @@
 #include "usbd_comms.h"
 #include "usbd_def.h"
 #include "utils.h"
+#include "logging.h"
+#include "common.h"
 
 #include <string.h>
 
@@ -228,7 +230,9 @@ void comms_host_check_received(void) {
 
 	cmd.id = (rx_work_buf[bufferIndex] << 8 | (rx_work_buf[bufferIndex + 1] & 0xFF));
 	bufferIndex += 2;
-	printf("0x%04X\r\n", cmd.id);
+	if ((logging_get_debug_flags() & DEBUG_FLAG_COMM_VERBOSE) != 0u) {
+		printf("0x%04X\r\n", cmd.id);
+	}
 	cmd.packet_type = rx_work_buf[bufferIndex++];
 	cmd.command = rx_work_buf[bufferIndex++];
 	cmd.addr = rx_work_buf[bufferIndex++];
@@ -305,11 +309,13 @@ NextDataPacket:
 	// printf("[RESP] ID:0x%04X Cmd:0x%02X Type:0x%02X -> Resp:0x%02X Len:%d\r\n",
 	// 	   cmd.id, cmd.command, cmd.packet_type, resp.packet_type, resp.data_len);
 	ptrReceive = 0;
-	if(success){
-		printf(".\r\n");
-	}
-	else {
-		printf("!\r\n");
+	if ((logging_get_debug_flags() & DEBUG_FLAG_COMM_VERBOSE) != 0u) {
+		if(success){
+			printf(".\r\n");
+		}
+		else {
+			printf("!\r\n");
+		}
 	}
 
 }
