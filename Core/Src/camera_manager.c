@@ -36,7 +36,8 @@ static int _active_cam_idx = 0;
 volatile bool usb_failed = false;
 
 __ALIGN_BEGIN volatile uint8_t frame_buffer[1][CAMERA_COUNT * HISTOGRAM_DATA_SIZE] __ALIGN_END; // Double buffer
-__ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END; 
+__ALIGN_BEGIN uint8_t packet_buffer[HISTO_JSON_BUFFER_SIZE] __ALIGN_END;
+__ALIGN_BEGIN uint8_t uncmp_payload[HISTO_JSON_BUFFER_SIZE] __ALIGN_END;  // Staging buffer for compression
 
 static uint8_t _active_buffer = 0; // Index of the buffer currently being written to
 volatile uint8_t frame_id = 0;
@@ -1152,8 +1153,11 @@ _Bool send_data(void) {
 	check_camera_failures();
 	
 	bool success = false;
-	if ((logging_get_debug_flags() & DEBUG_FLAG_FAKE_DATA) != 0u) {
+	uint32_t dflags = logging_get_debug_flags();
+	if ((dflags & DEBUG_FLAG_FAKE_DATA) != 0u) {
 		success = send_fake_data();
+	} else if ((dflags & DEBUG_FLAG_HISTO_CMP) != 0u) {
+		success = send_histogram_data_cmp();
 	} else {
 		success = send_histogram_data();
 	}
@@ -1287,6 +1291,149 @@ _Bool send_histogram_data(void) {
 		printf("USBD_HISTO_SendData failed: %d\r\n", tx_status);
 	}
 
+
+	frame_id++;
+
+	return status;
+}
+
+/*
+ * PackBits-style byte-level RLE compressor.
+ * Control byte < 0x80: literal run of (ctrl + 1) bytes follow (1–128).
+ * Control byte >= 0x80: repeat run – next byte repeated (ctrl - 0x80 + 3) times (3–130).
+ * Returns compressed size, or -1 if dst_max would be exceeded.
+ */
+static int rle_compress(const uint8_t *src, int src_len, uint8_t *dst, int dst_max) {
+	int si = 0, di = 0;
+	while (si < src_len) {
+		/* Try to find a run of identical bytes (min 3) */
+		uint8_t val = src[si];
+		int run_start = si;
+		while (si < src_len && src[si] == val && (si - run_start) < 130) {
+			si++;
+		}
+		int run_len = si - run_start;
+
+		if (run_len >= 3) {
+			/* Encode as repeat run */
+			if (di + 2 > dst_max) return -1;
+			dst[di++] = (uint8_t)(0x80 + (run_len - 3));
+			dst[di++] = val;
+		} else {
+			/* Collect literals until we hit a run of 3+ identical bytes */
+			si = run_start;
+			int lit_start = si;
+			while (si < src_len) {
+				if (si + 2 < src_len && src[si] == src[si + 1] && src[si] == src[si + 2]) {
+					break;
+				}
+				si++;
+				if (si - lit_start >= 128) break;
+			}
+			int lit_len = si - lit_start;
+			if (di + 1 + lit_len > dst_max) return -1;
+			dst[di++] = (uint8_t)(lit_len - 1);
+			memcpy(dst + di, src + lit_start, lit_len);
+			di += lit_len;
+		}
+	}
+	return di;
+}
+
+_Bool send_histogram_data_cmp(void) {
+	_Bool status = true;
+	int p_off = 0;   /* offset into uncmp_payload (uncompressed staging) */
+	uint8_t ready_bits = 0;
+
+	if (event_bits_enabled == 0x00) {
+		return true;
+	}
+	__disable_irq();
+	ready_bits = event_bits;
+	event_bits = 0x00;
+	__enable_irq();
+
+	uint8_t count = 0;
+	bool skip_no_data_log = streaming_first_frame;
+	streaming_first_frame = false;
+	for (int i = 0; i < CAMERA_COUNT; ++i) {
+		if (ready_bits & (1 << i)) {
+			count++;
+		}
+	}
+	if (count == 0) {
+		if (!skip_no_data_log) {
+			printf("No cameras have data to send\r\n");
+		}
+		return false;
+	}
+
+	/* --- Build uncompressed payload into uncmp_payload --- */
+
+	/* Timestamp (4 bytes) */
+	uint32_t timestamp = get_timestamp_ms();
+	uncmp_payload[p_off++] = (uint8_t)(timestamp & 0xFF);
+	uncmp_payload[p_off++] = (uint8_t)((timestamp >> 8) & 0xFF);
+	uncmp_payload[p_off++] = (uint8_t)((timestamp >> 16) & 0xFF);
+	uncmp_payload[p_off++] = (uint8_t)((timestamp >> 24) & 0xFF);
+
+	/* Per-camera data blocks */
+	for (uint8_t cam_id = 0; cam_id < CAMERA_COUNT; ++cam_id) {
+		if ((ready_bits & (0x01 << cam_id)) != 0) {
+			uint32_t *histo_ptr = (uint32_t *)cam_array[cam_id].pRecieveHistoBuffer;
+			uncmp_payload[p_off++] = HISTO_SOH;
+			uncmp_payload[p_off++] = cam_id;
+			memcpy(uncmp_payload + p_off, histo_ptr, HISTO_SIZE_32B * 4);
+			p_off += HISTO_SIZE_32B * 4;
+
+			uint32_t temp_bits;
+			memcpy(&temp_bits, (uint8_t *)&cam_temp[cam_id], 4);
+			uncmp_payload[p_off++] = (uint8_t)(temp_bits & 0xFF);
+			uncmp_payload[p_off++] = (uint8_t)((temp_bits >> 8) & 0xFF);
+			uncmp_payload[p_off++] = (uint8_t)((temp_bits >> 16) & 0xFF);
+			uncmp_payload[p_off++] = (uint8_t)((temp_bits >> 24) & 0xFF);
+
+			uncmp_payload[p_off++] = HISTO_EOH;
+
+			/* Re-arm reception as soon as data is copied */
+			start_data_reception(cam_id);
+		}
+	}
+
+	/* --- Compress payload into packet_buffer (after header) --- */
+	int cmp_len = rle_compress(uncmp_payload, p_off,
+	                           packet_buffer + HISTO_HEADER_SIZE,
+	                           HISTO_JSON_BUFFER_SIZE - HISTO_HEADER_SIZE - HISTO_TRAILER_SIZE);
+	if (cmp_len < 0) {
+		printf("RLE compression failed (output too large)\r\n");
+		return false;
+	}
+
+	/* --- Header --- */
+	uint32_t total_size = HISTO_HEADER_SIZE + (uint32_t)cmp_len + HISTO_TRAILER_SIZE;
+	int offset = 0;
+	packet_buffer[offset++] = HISTO_SOF;
+	packet_buffer[offset++] = TYPE_HISTO_CMP;
+	packet_buffer[offset++] = (uint8_t)(total_size & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 8) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 16) & 0xFF);
+	packet_buffer[offset++] = (uint8_t)((total_size >> 24) & 0xFF);
+
+	/* Skip over the compressed data we already wrote */
+	offset = HISTO_HEADER_SIZE + cmp_len;
+
+	/* --- Footer --- */
+	uint16_t crc = util_crc16(packet_buffer, offset - 1);
+	packet_buffer[offset++] = crc & 0xFF;
+	packet_buffer[offset++] = (crc >> 8) & 0xFF;
+	packet_buffer[offset++] = HISTO_EOF;
+
+	/* Send data */
+	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
+	if (tx_status != USBD_OK) {
+		status = false;
+		printf("USBD_HISTO_SendData failed: %d\r\n", tx_status);
+	}
 
 	frame_id++;
 

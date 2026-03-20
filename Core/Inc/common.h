@@ -30,6 +30,7 @@
 #define DEBUG_FLAG_HISTO_SPARSE (1u << 3)  /* Send histogram data in small chunks over ~15s to reduce EMI */
 #define DEBUG_FLAG_COMM_VERBOSE (1u << 4)  /* Enable cmd id and "." response prints in uart_comms */
 #define DEBUG_FLAG_CMD_VERBOSE (1u << 5)  /* Enable printf in command handlers (if_commands.c) */
+#define DEBUG_FLAG_HISTO_CMP  (1u << 6)  /* Send compressed histogram packets (TYPE_HISTO_CMP) */
 
 
 #define I2C_IRQ_PRIORITY 0
