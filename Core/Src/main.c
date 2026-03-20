@@ -165,6 +165,66 @@ static void MX_TIM15_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* Print last reset cause - helps diagnose thermal/brownout (BOR) or watchdog (IWDG) */
+static void print_reset_cause(void)
+{
+	uint8_t first = 1;
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_BORRST)) {
+		printf("Reset cause: BOR (Brown-Out) - possible thermal/voltage droop\r\n");
+		first = 0;
+	}
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST)) {
+		printf("%sReset cause: POR (Power-On)\r\n", first ? "" : "         ");
+		first = 0;
+	}
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST)) {
+		printf("%sReset cause: PIN (External NRST)\r\n", first ? "" : "         ");
+		first = 0;
+	}
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST)) {
+		printf("%sReset cause: Software\r\n", first ? "" : "         ");
+		first = 0;
+	}
+#if defined(RCC_FLAG_IWDG1RST)
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST)) {
+		printf("%sReset cause: IWDG (Independent Watchdog) - possible lockup/thermal\r\n", first ? "" : "         ");
+		first = 0;
+	}
+#endif
+#if defined(RCC_FLAG_WWDG1RST)
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_WWDG1RST)) {
+		printf("%sReset cause: WWDG (Window Watchdog)\r\n", first ? "" : "         ");
+		first = 0;
+	}
+#endif
+#if defined(RCC_FLAG_LPWR1RST)
+	if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWR1RST)) {
+		printf("%sReset cause: LPWR (Low-power)\r\n", first ? "" : "         ");
+		first = 0;
+	}
+#endif
+	if (first) {
+		printf("Reset cause: unknown\r\n");
+	}
+	__HAL_RCC_CLEAR_RESET_FLAGS();
+}
+
+/* Poll MCU junction temperature; print warning if above high threshold */
+#define MCU_TEMP_CHECK_MS  5000u
+static void poll_mcu_temperature(void)
+{
+	static uint32_t last_check_ms = 0;
+	uint32_t now = HAL_GetTick();
+	if ((last_check_ms != 0u) && ((now - last_check_ms) < MCU_TEMP_CHECK_MS)) {
+		return;
+	}
+	last_check_ms = now;
+	uint32_t level = HAL_PWREx_GetTemperatureLevel();
+	if (level == PWR_TEMP_ABOVE_HIGH_THRESHOLD) {
+		printf("[THERMAL] MCU junction temp ABOVE HIGH THRESHOLD - reduce load/cooling!\r\n");
+	}
+}
+
 static void PrintI2CSpeed(I2C_HandleTypeDef *hi2c)
 {
   // Assuming the timing is configured in I2C_TIMINGR register
@@ -268,6 +328,8 @@ int main(void)
        FW_BUILD_TIME_STRING);
   printf("CPU Clock Frequency: %lu MHz\r\n",
          HAL_RCC_GetSysClockFreq() / 1000000);
+  print_reset_cause();
+  HAL_PWREx_EnableMonitoring();  /* Enable junction temp (TEMPH/TEMPL) monitoring */
   printf("Initializing, please wait ...\r\n");
 
   // enable HS USB MUX
@@ -332,6 +394,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
   	comms_host_check_received(); // check comms  
     check_streaming();
+    poll_mcu_temperature();  /* Print warning if MCU junction temp above threshold */
   }
 
   /* USER CODE END 3 */

@@ -1331,7 +1331,16 @@ _Bool send_histogram_data(void) {
  * Control byte < 0x80: literal run of (ctrl + 1) bytes follow (1–128).
  * Control byte >= 0x80: repeat run – next byte repeated (ctrl - 0x80 + 3) times (3–130).
  * Returns compressed size, or -1 if dst_max would be exceeded.
+ *
+ * NOTE: __attribute__((optimize("O3"))) forces GCC to compile this single
+ * function at -O3 even when the rest of the file is built at -O0 or -Og.
+ * This is critical: rle_compress() runs in interrupt context and must finish
+ * within the ~25 ms frame budget.  Benchmarks on STM32H7 @ 480 MHz:
+ *   -O0 / compressible data:    ~9 ms   (barely OK for zeros/fake data)
+ *   -O0 / incompressible data: ~37 ms   (EXCEEDS budget → SPI overrun!)
+ *   -O3 / incompressible data: ~3–5 ms  (safe margin)
  */
+__attribute__((optimize("O3")))
 static int rle_compress(const uint8_t *src, int src_len, uint8_t *dst, int dst_max) {
 	int si = 0, di = 0;
 	while (si < src_len) {
@@ -1448,6 +1457,18 @@ _Bool send_histogram_data_cmp(void) {
 		printf("[CMP] FAIL: compression overflow, %d cams, uncmp=%d, dst_max=%d, time=%luus (fail #%lu)\r\n",
 		       count, p_off, dst_max, (unsigned long)elapsed_us, (unsigned long)cmp_fail_count);
 		return false;
+	}
+
+	/* Warn if compression time is eating into the frame budget.
+	 * Frame period is ~25 ms (40 fps).  Anything above 20 ms risks an SPI
+	 * overrun on the next frame — the symptom is "Camera N stopped posting
+	 * data" followed by cascading overrun errors on SPI3/SPI4. */
+#define CMP_BUDGET_WARNING_US  20000UL  /* 20 ms */
+	if (elapsed_us > CMP_BUDGET_WARNING_US) {
+		printf("[CMP] WARN: compression took %lu us (>20 ms frame budget!), %d cams, "
+		       "%d->%d bytes (ratio %d%%)\r\n",
+		       (unsigned long)elapsed_us, count, p_off, cmp_len,
+		       (p_off > 0) ? (cmp_len * 100 / p_off) : 0);
 	}
 
 	/* Track compression statistics */
