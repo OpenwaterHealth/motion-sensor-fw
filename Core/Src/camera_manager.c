@@ -51,6 +51,14 @@ extern uint32_t pulse_count;
 volatile uint32_t total_frames_sent = 0;
 volatile uint32_t total_frames_failed = 0;
 
+// Compression statistics (running averages)
+static uint32_t cmp_total_uncompressed = 0;  // Sum of all uncompressed payload sizes
+static uint32_t cmp_total_compressed = 0;    // Sum of all compressed payload sizes
+static uint32_t cmp_frame_count = 0;         // Number of compressed frames sent
+static uint32_t cmp_fail_count = 0;          // Number of compression failures
+static uint32_t cmp_usb_fail_count = 0;      // Number of USB send failures (compressed)
+static uint32_t cmp_max_time_us = 0;         // Worst-case compression time in µs
+
 #define STREAMING_TIMEOUT_MS 150
 volatile uint32_t most_recent_frame_time = 0;
 volatile uint32_t streaming_start_time = 0;
@@ -1191,9 +1199,30 @@ _Bool check_streaming(void){
 			if(total_frames_failed > 0){
 				printf("%lu frames failed\r\n", total_frames_failed);
 			}
+			/* Print compression stats if compression was used */
+			if (cmp_frame_count > 0) {
+				uint32_t avg_ratio = (cmp_total_compressed * 100) / cmp_total_uncompressed;
+				printf("[CMP] Compression stats: %lu frames compressed, avg ratio %lu%% (%lu -> %lu bytes total)\r\n",
+				       (unsigned long)cmp_frame_count, (unsigned long)avg_ratio,
+				       (unsigned long)cmp_total_uncompressed, (unsigned long)cmp_total_compressed);
+				printf("[CMP] Max compress time: %lu us\r\n", (unsigned long)cmp_max_time_us);
+				if (cmp_fail_count > 0) {
+					printf("[CMP] Compression overflows: %lu\r\n", (unsigned long)cmp_fail_count);
+				}
+				if (cmp_usb_fail_count > 0) {
+					printf("[CMP] USB send failures: %lu\r\n", (unsigned long)cmp_usb_fail_count);
+				}
+			}
+			/* Reset all stats */
 			pulse_count = 0;
 			total_frames_sent = 0;
 			total_frames_failed = 0;
+			cmp_total_uncompressed = 0;
+			cmp_total_compressed = 0;
+			cmp_frame_count = 0;
+			cmp_fail_count = 0;
+			cmp_usb_fail_count = 0;
+			cmp_max_time_us = 0;
 			streaming_active = false;
 		}
 	}
@@ -1363,7 +1392,8 @@ _Bool send_histogram_data_cmp(void) {
 	}
 	if (count == 0) {
 		if (!skip_no_data_log) {
-			printf("No cameras have data to send\r\n");
+			printf("[CMP] No cameras have data to send (ready_bits=0x%02X, enabled=0x%02X)\r\n",
+			       ready_bits, event_bits_enabled);
 		}
 		return false;
 	}
@@ -1401,13 +1431,29 @@ _Bool send_histogram_data_cmp(void) {
 	}
 
 	/* --- Compress payload into packet_buffer (after header) --- */
+	int dst_max = HISTO_JSON_BUFFER_SIZE - HISTO_HEADER_SIZE - HISTO_TRAILER_SIZE;
+
+	uint32_t cyc_start = DWT->CYCCNT;
 	int cmp_len = rle_compress(uncmp_payload, p_off,
-	                           packet_buffer + HISTO_HEADER_SIZE,
-	                           HISTO_JSON_BUFFER_SIZE - HISTO_HEADER_SIZE - HISTO_TRAILER_SIZE);
+	                           packet_buffer + HISTO_HEADER_SIZE, dst_max);
+	uint32_t cyc_elapsed = DWT->CYCCNT - cyc_start;
+	uint32_t elapsed_us = cyc_elapsed / (SystemCoreClock / 1000000u);
+
+	if (elapsed_us > cmp_max_time_us) {
+		cmp_max_time_us = elapsed_us;
+	}
+
 	if (cmp_len < 0) {
-		printf("RLE compression failed (output too large)\r\n");
+		cmp_fail_count++;
+		printf("[CMP] FAIL: compression overflow, %d cams, uncmp=%d, dst_max=%d, time=%luus (fail #%lu)\r\n",
+		       count, p_off, dst_max, (unsigned long)elapsed_us, (unsigned long)cmp_fail_count);
 		return false;
 	}
+
+	/* Track compression statistics */
+	cmp_total_uncompressed += (uint32_t)p_off;
+	cmp_total_compressed += (uint32_t)cmp_len;
+	cmp_frame_count++;
 
 	/* --- Header --- */
 	uint32_t total_size = HISTO_HEADER_SIZE + (uint32_t)cmp_len + HISTO_TRAILER_SIZE;
@@ -1432,7 +1478,11 @@ _Bool send_histogram_data_cmp(void) {
 	uint8_t tx_status = USBD_HISTO_SendData(&hUsbDeviceHS, packet_buffer, offset, 0);
 	if (tx_status != USBD_OK) {
 		status = false;
-		printf("USBD_HISTO_SendData failed: %d\r\n", tx_status);
+		cmp_usb_fail_count++;
+		printf("[CMP] USB FAIL: status=%d, pkt_size=%d, %d cams, cmp_ratio=%d%%, time=%luus (usb_fail #%lu)\r\n",
+		       tx_status, offset, count,
+		       (p_off > 0) ? (cmp_len * 100 / p_off) : 0,
+		       (unsigned long)elapsed_us, (unsigned long)cmp_usb_fail_count);
 	}
 
 	frame_id++;
