@@ -1460,10 +1460,9 @@ _Bool send_histogram_data_cmp(void) {
 	}
 
 	/* Warn if compression time is eating into the frame budget.
-	 * Frame period is ~25 ms (40 fps).  Anything above 20 ms risks an SPI
-	 * overrun on the next frame — the symptom is "Camera N stopped posting
-	 * data" followed by cascading overrun errors on SPI3/SPI4. */
-#define CMP_BUDGET_WARNING_US  20000UL  /* 20 ms */
+	 * Frame period is ~25 ms (40 fps).  Anything above 10 ms is a yellow
+	 * flag worth watching; above ~20 ms risks SPI overrun on the next frame. */
+#define CMP_BUDGET_WARNING_US  10000UL  /* 10 ms */
 	if (elapsed_us > CMP_BUDGET_WARNING_US) {
 		printf("[CMP] WARN: compression took %lu us (>20 ms frame budget!), %d cams, "
 		       "%d->%d bytes (ratio %d%%)\r\n",

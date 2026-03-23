@@ -166,6 +166,15 @@ SECTIONS
     . = ALIGN(8);
   } >RAM_D1
 
+/* Fault record: intentionally NOT zeroed at reset so it survives a watchdog
+ * or NVIC soft reset.  Checked at boot to report the last CPU fault. */
+.noinit (NOLOAD) :
+{
+  . = ALIGN(4);
+  *(.noinit)
+  . = ALIGN(4);
+} >RAM_D1
+
 /* Place USB buffers in RAM_D2 */
 .ram_d2 (NOLOAD) :
 {
