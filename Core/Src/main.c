@@ -160,7 +160,7 @@ static void MX_TIM16_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_TIM15_Init(void);
 /* USER CODE BEGIN PFP */
-static void poll_main_loop_heartbeat(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -223,23 +223,6 @@ static void poll_mcu_temperature(void)
 	if (level == PWR_TEMP_ABOVE_HIGH_THRESHOLD) {
 		printf("[THERMAL] MCU junction temp ABOVE HIGH THRESHOLD - reduce load/cooling!\r\n");
 	}
-}
-
-/* Heartbeat: toggles ERROR_LED (PC14) at ~0.5 Hz (1s on / 1s off) so that
- * a slow steady blink = main loop alive, LED frozen = main loop hung or
- * MCU in a fault handler.  If the fault handlers' fast-blink is firing
- * (2–5 rapid blinks then a pause) that pattern overrides this steady blink,
- * making the two conditions easy to tell apart visually. */
-#define HEARTBEAT_PERIOD_MS  1000u
-static void poll_main_loop_heartbeat(void)
-{
-  static uint32_t last_toggle_ms = 0;
-  uint32_t now = HAL_GetTick();
-  if ((now - last_toggle_ms) >= HEARTBEAT_PERIOD_MS)
-  {
-    last_toggle_ms = now;
-    HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-  }
 }
 
 static void PrintI2CSpeed(I2C_HandleTypeDef *hi2c)
@@ -398,28 +381,6 @@ int main(void)
   //GPIO_SetHiZ(GPIOA, GPIO_PIN_2);
 
   comms_host_start();
-
-  /* Report any fault that occurred before the last reset.
-   * g_last_fault lives in .noinit RAM and survives a soft reset.
-   * This helps diagnose silent hang/fault scenarios. */
-  extern volatile FaultRecord_t g_last_fault;
-  if (g_last_fault.magic == 0xDEADBEEFUL)
-  {
-    static const char * const fault_names[] = {
-      "", "", "HardFault", "MemManage", "BusFault", "UsageFault"
-    };
-    uint32_t ft = g_last_fault.fault_type;
-    const char *fname = (ft >= 2u && ft <= 5u) ? fault_names[ft] : "Unknown";
-    printf("*** FAULT BEFORE LAST RESET: %s ***\r\n", fname);
-    printf("  HFSR=0x%08lX  CFSR=0x%08lX\r\n",
-           (unsigned long)g_last_fault.hfsr,
-           (unsigned long)g_last_fault.cfsr);
-    printf("  MMFAR=0x%08lX  BFAR=0x%08lX\r\n",
-           (unsigned long)g_last_fault.mmfar,
-           (unsigned long)g_last_fault.bfar);
-    g_last_fault.magic = 0;  /* Clear so we don't re-report on next boot */
-  }
-
   // fill_frame_buffers();
   printf("System Running\r\n");
   /* USER CODE END 2 */
@@ -431,10 +392,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  	comms_host_check_received(); // check comms
+  	comms_host_check_received(); // check comms  
     check_streaming();
     poll_mcu_temperature();  /* Print warning if MCU junction temp above threshold */
-    poll_main_loop_heartbeat(); /* Toggle ERROR_LED slowly so we can tell if main loop is alive */
   }
 
   /* USER CODE END 3 */
@@ -1677,19 +1637,14 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   }
   printf("\r\n");
 
-  /* Attempt graceful recovery for any known camera USART peripheral.
-   * Same fix as HAL_SPI_ErrorCallback: non-overrun errors (framing, noise,
-   * DMA) previously fell through to Error_Handler() and halted the MCU.
-   * Any error on a known camera USART is recoverable via abort+restart. */
-  if (cam_id >= 0)
+  if ((husart->ErrorCode & HAL_USART_ERROR_ORE) != 0U && cam_id >= 0)
   {
     abort_data_reception((uint8_t)cam_id);
     start_data_reception((uint8_t)cam_id);
     return;
   }
 
-  /* Truly unknown USART peripheral — log and continue rather than halting. */
-  printf("[USART] Unhandled USART error on unknown peripheral, continuing.\r\n");
+  Error_Handler();
 }
 
 // Error handling callback for SPI
@@ -1779,24 +1734,14 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   }
   printf("\r\n");
 
-  /* Attempt graceful recovery for any known camera SPI peripheral.
-   * Previously only overrun errors were recovered here; all other error types
-   * fell through to Error_Handler() which calls __disable_irq() + while(1),
-   * killing USB and all other peripherals.  The observed failure mode was:
-   *   Camera 6 overheats → SPI3 DMA/frame error (not OVR) →
-   *   Error_Handler() entered from interrupt context →
-   *   wait_for_usb_queues_to_finish() blocks (USB ISR can't run) →
-   *   __disable_irq() → MCU completely dark.
-   * Now any error on a known camera SPI triggers abort+restart instead. */
-  if (cam_id >= 0)
+  if ((hspi->ErrorCode & HAL_SPI_ERROR_OVR) != 0U && cam_id >= 0)
   {
     abort_data_reception((uint8_t)cam_id);
     start_data_reception((uint8_t)cam_id);
     return;
   }
 
-  /* Truly unknown SPI peripheral — log and continue rather than halting. */
-  printf("[SPI] Unhandled SPI error on unknown peripheral, continuing.\r\n");
+  Error_Handler(); // Handle any error during re-enabling
 }
 
 

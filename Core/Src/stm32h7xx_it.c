@@ -105,80 +105,13 @@ void NMI_Handler(void)
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
-/* ---------------------------------------------------------------------------
- * Fault blink helper.
- *
- * Blinks ERROR_LED (PC14) N times fast (5 Hz) then pauses 1 s, repeating
- * forever.  N encodes which fault fired:
- *   2 blinks = HardFault
- *   3 blinks = MemManage
- *   4 blinks = BusFault
- *   5 blinks = UsageFault
- *
- * Called with interrupts already disabled (we are inside a fault handler).
- * Uses direct register writes so it works even if the HAL is corrupt.
- * Also writes the fault address and status registers to a noinit RAM variable
- * so they survive a subsequent watchdog reset for post-mortem inspection.
- * ---------------------------------------------------------------------------
- */
-typedef struct {
-  uint32_t magic;      /* 0xDEADBEEF if populated */
-  uint32_t fault_type; /* 2=Hard 3=Mem 4=Bus 5=Usage */
-  uint32_t hfsr;       /* HardFault Status Register */
-  uint32_t cfsr;       /* Configurable Fault Status Register */
-  uint32_t mmfar;      /* MemManage Fault Address Register */
-  uint32_t bfar;       /* BusFault Address Register */
-  uint32_t lr_at_fault;/* LR saved on fault entry */
-  uint32_t pc_at_fault;/* PC saved on fault entry */
-} FaultRecord_t;
-
-__attribute__((section(".noinit")))
-volatile FaultRecord_t g_last_fault;
-
-static void __attribute__((noreturn)) fault_blink(uint32_t fault_type)
-{
-  /* Capture fault status registers */
-  g_last_fault.magic      = 0xDEADBEEFUL;
-  g_last_fault.fault_type = fault_type;
-  g_last_fault.hfsr       = SCB->HFSR;
-  g_last_fault.cfsr       = SCB->CFSR;
-  g_last_fault.mmfar      = SCB->MMFAR;
-  g_last_fault.bfar       = SCB->BFAR;
-  /* Caller's LR/PC are on the stack but we can't safely unwind here;
-   * a debugger can inspect the stacked frame directly. */
-
-  /* Disable all interrupts — we own the CPU now */
-  __disable_irq();
-
-  /* Configure PC14 (ERROR_LED) as push-pull output via direct register write.
-   * GPIOC clock should already be enabled from normal init. */
-  GPIOC->MODER  = (GPIOC->MODER  & ~(3U << (14 * 2))) | (1U << (14 * 2));
-  GPIOC->OTYPER &= ~(1U << 14);
-  GPIOC->OSPEEDR = (GPIOC->OSPEEDR & ~(3U << (14 * 2)));  /* low speed */
-  GPIOC->PUPDR  &= ~(3U << (14 * 2));
-
-  while (1)
-  {
-    /* Blink N times at ~5 Hz */
-    for (uint32_t i = 0; i < fault_type; i++)
-    {
-      GPIOC->BSRR = (1U << 14);           /* LED ON  */
-      for (volatile uint32_t d = 0; d < 960000U; d++) {}  /* ~100 ms @ 480 MHz */
-      GPIOC->BSRR = (1U << (14 + 16));    /* LED OFF */
-      for (volatile uint32_t d = 0; d < 960000U; d++) {}  /* ~100 ms */
-    }
-    /* Long pause between blink groups */
-    for (volatile uint32_t d = 0; d < 9600000U; d++) {}   /* ~1 s */
-  }
-}
-
 /**
   * @brief This function handles Hard fault interrupt.
   */
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  fault_blink(2);  /* 2 blinks = HardFault */
+
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -193,7 +126,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-  fault_blink(3);  /* 3 blinks = MemManage */
+
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -208,7 +141,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-  fault_blink(4);  /* 4 blinks = BusFault */
+
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -223,7 +156,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-  fault_blink(5);  /* 5 blinks = UsageFault */
+
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
