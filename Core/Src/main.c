@@ -1637,14 +1637,19 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart)
   }
   printf("\r\n");
 
-  if ((husart->ErrorCode & HAL_USART_ERROR_ORE) != 0U && cam_id >= 0)
+  /* Attempt graceful recovery for any known camera USART peripheral.
+   * Same fix as HAL_SPI_ErrorCallback: non-overrun errors (framing, noise,
+   * DMA) previously fell through to Error_Handler() and halted the MCU.
+   * Any error on a known camera USART is recoverable via abort+restart. */
+  if (cam_id >= 0)
   {
     abort_data_reception((uint8_t)cam_id);
     start_data_reception((uint8_t)cam_id);
     return;
   }
 
-  Error_Handler();
+  /* Truly unknown USART peripheral — log and continue rather than halting. */
+  printf("[USART] Unhandled USART error on unknown peripheral, continuing.\r\n");
 }
 
 // Error handling callback for SPI
@@ -1734,14 +1739,24 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   }
   printf("\r\n");
 
-  if ((hspi->ErrorCode & HAL_SPI_ERROR_OVR) != 0U && cam_id >= 0)
+  /* Attempt graceful recovery for any known camera SPI peripheral.
+   * Previously only overrun errors were recovered here; all other error types
+   * fell through to Error_Handler() which calls __disable_irq() + while(1),
+   * killing USB and all other peripherals.  The observed failure mode was:
+   *   Camera 6 overheats → SPI3 DMA/frame error (not OVR) →
+   *   Error_Handler() entered from interrupt context →
+   *   wait_for_usb_queues_to_finish() blocks (USB ISR can't run) →
+   *   __disable_irq() → MCU completely dark.
+   * Now any error on a known camera SPI triggers abort+restart instead. */
+  if (cam_id >= 0)
   {
     abort_data_reception((uint8_t)cam_id);
     start_data_reception((uint8_t)cam_id);
     return;
   }
 
-  Error_Handler(); // Handle any error during re-enabling
+  /* Truly unknown SPI peripheral — log and continue rather than halting. */
+  printf("[SPI] Unhandled SPI error on unknown peripheral, continuing.\r\n");
 }
 
 
