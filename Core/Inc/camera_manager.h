@@ -52,6 +52,11 @@ typedef struct {
 #define TYPE_HISTO_CMP 0x01
 #define HISTO_HEADER_SIZE 6
 #define HISTO_TRAILER_SIZE 3
+/* TYPE_HISTO_CMP packets carry an extra 2-byte CRC-16 of the *uncompressed*
+ * payload immediately before the normal packet footer.  This lets the SDK
+ * verify that decompression produced the correct output independently of the
+ * transport-level CRC that only covers the compressed bytes. */
+#define HISTO_CMP_UNCMP_CRC_SIZE 2
 
 
 void init_camera_sensors(void);

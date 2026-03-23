@@ -1440,7 +1440,7 @@ _Bool send_histogram_data_cmp(void) {
 	}
 
 	/* --- Compress payload into packet_buffer (after header) --- */
-	int dst_max = HISTO_JSON_BUFFER_SIZE - HISTO_HEADER_SIZE - HISTO_TRAILER_SIZE;
+	int dst_max = HISTO_JSON_BUFFER_SIZE - HISTO_HEADER_SIZE - HISTO_CMP_UNCMP_CRC_SIZE - HISTO_TRAILER_SIZE;
 
 	uint32_t cyc_start = DWT->CYCCNT;
 	int cmp_len = rle_compress(uncmp_payload, p_off,
@@ -1464,7 +1464,7 @@ _Bool send_histogram_data_cmp(void) {
 	 * flag worth watching; above ~20 ms risks SPI overrun on the next frame. */
 #define CMP_BUDGET_WARNING_US  10000UL  /* 10 ms */
 	if (elapsed_us > CMP_BUDGET_WARNING_US) {
-		printf("[CMP] WARN: compression took %lu us (>20 ms frame budget!), %d cams, "
+		printf("[CMP] WARN: compression took %lu us (>10 ms warning threshold), %d cams, "
 		       "%d->%d bytes (ratio %d%%)\r\n",
 		       (unsigned long)elapsed_us, count, p_off, cmp_len,
 		       (p_off > 0) ? (cmp_len * 100 / p_off) : 0);
@@ -1476,7 +1476,7 @@ _Bool send_histogram_data_cmp(void) {
 	cmp_frame_count++;
 
 	/* --- Header --- */
-	uint32_t total_size = HISTO_HEADER_SIZE + (uint32_t)cmp_len + HISTO_TRAILER_SIZE;
+	uint32_t total_size = HISTO_HEADER_SIZE + (uint32_t)cmp_len + HISTO_CMP_UNCMP_CRC_SIZE + HISTO_TRAILER_SIZE;
 	int offset = 0;
 	packet_buffer[offset++] = HISTO_SOF;
 	packet_buffer[offset++] = TYPE_HISTO_CMP;
@@ -1488,7 +1488,16 @@ _Bool send_histogram_data_cmp(void) {
 	/* Skip over the compressed data we already wrote */
 	offset = HISTO_HEADER_SIZE + cmp_len;
 
-	/* --- Footer --- */
+	/* --- Uncompressed payload CRC (2 bytes, written before the packet footer) ---
+	 * Computed over the uncompressed payload using the same algorithm and
+	 * off-by-one convention as the packet CRC (covers bytes 0..p_off-2).
+	 * The decompressor checks this after expanding the payload to confirm
+	 * that the decompressor produced the correct output. */
+	uint16_t uncmp_crc = util_crc16(uncmp_payload, (uint32_t)p_off - 1u);
+	packet_buffer[offset++] = uncmp_crc & 0xFF;
+	packet_buffer[offset++] = (uncmp_crc >> 8) & 0xFF;
+
+	/* --- Packet footer (CRC covers header + compressed data + uncmp_crc) --- */
 	uint16_t crc = util_crc16(packet_buffer, offset - 1);
 	packet_buffer[offset++] = crc & 0xFF;
 	packet_buffer[offset++] = (crc >> 8) & 0xFF;
