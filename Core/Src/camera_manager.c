@@ -1803,8 +1803,17 @@ _Bool enable_camera_stream(uint8_t cam_id){
 
 _Bool disable_camera_stream(uint8_t cam_id){
 	// printf("C%d: disable...", cam_id+1);
-	if (!camera_request_is_valid(cam_id)) {
+	if (cam_id >= CAMERA_COUNT) {
+		printf("Camera %d index out of range\r\n", cam_id + 1);
 		return false;
+	}
+
+	/* A camera that is not present is already stopped — treat disable as a
+	 * no-op success.  Returning false here would cause OW_CAMERA_STREAM to
+	 * report OW_ERROR when the host tries to disable all cameras at the end
+	 * of a scan, even though the failed camera is already fully quiesced. */
+	if (!cam_array[cam_id].isPresent) {
+		return true;
 	}
 
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
