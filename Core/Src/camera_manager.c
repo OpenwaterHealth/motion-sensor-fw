@@ -68,7 +68,6 @@ bool streaming_first_frame = false;
 // Camera failure detection
 #define CAMERA_FAILURE_THRESHOLD_CYCLES 3  // Number of consecutive cycles before reporting failure
 static uint8_t camera_failure_counters[CAMERA_COUNT] = {0};  // Track consecutive cycles without event bits
-static bool camera_failure_detected[CAMERA_COUNT] = {false};  // Track if failure has been detected
 
  __ALIGN_BEGIN __attribute__((section(".sram4"))) volatile uint8_t spi6_buffer[SPI_PACKET_LENGTH] __ALIGN_END;
 
@@ -1114,20 +1113,42 @@ static void check_camera_failures(void) {
 			if (has_event_bit) {
 				// Camera set its event bit, reset failure counter
 				camera_failure_counters[cam_id] = 0;
-				if(camera_failure_detected[cam_id]){
-					camera_failure_detected[cam_id] = false;
-					printf("Camera %d has recovered from failure\r\n", cam_id + 1);
-				}
 			} else {
 				// Camera didn't set its event bit, increment failure counter
 				camera_failure_counters[cam_id]++;
-				
+
 				// Check if threshold reached
 				if (camera_failure_counters[cam_id] >= CAMERA_FAILURE_THRESHOLD_CYCLES) {
-					// Only print once per failure (when threshold is exactly reached)
+					// Only act once per failure (when threshold is exactly reached)
 					if (camera_failure_counters[cam_id] == CAMERA_FAILURE_THRESHOLD_CYCLES) {
-						camera_failure_detected[cam_id] = true;
+						cam_array[cam_id].isPresent = false;
 						printf("Camera %d has stopped posting data\r\n", cam_id + 1);
+
+						/* ── Cleanly isolate the failed camera ────────────────────────
+						 * 1. Remove from event_bits_enabled so subsequent frames never
+						 *    wait for it (and the temperature poller skips it).
+						 * 2. Tell the TCA9548A I2C mux to disconnect that channel.
+						 *    This prevents poll_camera_temperatures() from ever
+						 *    selecting it and getting the I2C bus stuck if the sensor
+						 *    is holding SDA low (the root cause of COMM going dark). */
+
+						/* 1. Clear the camera's event-enable bit (atomic) */
+						__disable_irq();
+						event_bits_enabled &= ~(uint8_t)(1u << cam_id);
+						__enable_irq();
+
+						/* 2. Deselect the camera's I2C mux channel.
+						 *    Uses the bounded TCA9548A_I2C_TIMEOUT_MS timeout (50 ms)
+						 *    so this is a one-time bounded stall, not a hang. */
+						CameraDevice *pFailed = get_camera_byID(cam_id);
+						if (pFailed != NULL) {
+							HAL_StatusTypeDef mux_ret =
+								TCA9548A_DisableChannel(&hi2c1, 0x70, pFailed->i2c_target);
+							if (mux_ret != HAL_OK) {
+								printf("Camera %d: failed to disable TCA mux channel %u (ret=%d)\r\n",
+								       cam_id + 1, (unsigned)pFailed->i2c_target, (int)mux_ret);
+							}
+						}
 					}
 				}
 			}
@@ -1782,8 +1803,17 @@ _Bool enable_camera_stream(uint8_t cam_id){
 
 _Bool disable_camera_stream(uint8_t cam_id){
 	// printf("C%d: disable...", cam_id+1);
-	if (!camera_request_is_valid(cam_id)) {
+	if (cam_id >= CAMERA_COUNT) {
+		printf("Camera %d index out of range\r\n", cam_id + 1);
 		return false;
+	}
+
+	/* A camera that is not present is already stopped — treat disable as a
+	 * no-op success.  Returning false here would cause OW_CAMERA_STREAM to
+	 * report OW_ERROR when the host tries to disable all cameras at the end
+	 * of a scan, even though the failed camera is already fully quiesced. */
+	if (!cam_array[cam_id].isPresent) {
+		return true;
 	}
 
 	bool enabled = (event_bits_enabled & (1 << cam_id)) != 0;
