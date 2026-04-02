@@ -329,10 +329,19 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 		  /* Process queue to send next packet if available */
 		  histo_process_queue();
       }
-  }else{
-	pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
-	/* Send ZLP */
-	ret = USBD_LL_Transmit (pdev, HISTOInEpAdd, NULL, 0U);
+  } else {
+    /* ep_data == 0: no active transfer.
+     * Attempt to send the next queued packet.  If the queue is empty,
+     * return without arming anything so the endpoint NAKs IN tokens
+     * until new data arrives via USBD_HISTO_SendData.
+     *
+     * Previously this branch unconditionally re-armed a ZLP, which
+     * created an unbounded ZLP storm (hundreds of DataIn ISR callbacks
+     * per second) while the endpoint was idle.  The storm wasted ISR
+     * cycles, inflated the datain counter, and made it harder to observe
+     * real transfer activity in logs and diagnostics. */
+    pdev->ep_in[HISTOInEpAdd & 0xFU].total_length = 0U;
+    ret = histo_process_queue();
   }
 
   return ret;
