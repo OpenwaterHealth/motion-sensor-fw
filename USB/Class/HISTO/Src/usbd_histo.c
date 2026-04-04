@@ -312,15 +312,12 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 #endif /* USE_USBD_COMPOSITE */
 
   if(histo_ep_data==1){
-      uint16_t max_pkt = (pdev->dev_speed == USBD_SPEED_HIGH)
-                          ? HISTO_HS_MAX_PACKET_SIZE
-                          : HISTO_FS_MAX_PACKET_SIZE;
-      tx_histo_ptr += max_pkt;
+      tx_histo_ptr += (pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE;
 
       if (tx_histo_ptr < tx_histo_total_len)
       {
           uint16_t remaining = tx_histo_total_len - tx_histo_ptr;
-          uint16_t pkt_len = MIN(max_pkt, remaining);
+          uint16_t pkt_len = MIN((pdev->dev_speed == USBD_SPEED_HIGH)?HISTO_HS_MAX_PACKET_SIZE:HISTO_FS_MAX_PACKET_SIZE, remaining);
 
           ret =  USBD_LL_Transmit(pdev, HISTOInEpAdd, &pTxHistoBuff[tx_histo_ptr], pkt_len);
           if (ret != USBD_OK) {
@@ -328,37 +325,15 @@ static uint8_t USBD_Histo_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
             histo_ep_data = 0;
           }
       }
-      else if ((tx_histo_total_len % max_pkt) == 0)
-      {
-          /* Transfer complete but the last USB packet was exactly
-           * max_pkt bytes — the host cannot distinguish this from a
-           * mid-transfer chunk.  Send a Zero-Length Packet (ZLP) so
-           * the host's dev.read() returns immediately instead of
-           * blocking until the 100 ms timeout.  Without this, every
-           * compressed histogram whose byte count is a multiple of 512
-           * causes a 100 ms stall + data loss on the host. */
-          histo_ep_data = 2;  /* state 2 = ZLP in flight */
-          ret = USBD_LL_Transmit(pdev, HISTOInEpAdd, NULL, 0U);
-          if (ret != USBD_OK) {
-            histo_tx_fail_count++;
-            histo_ep_data = 0;
-          }
-      }
       else
       {
-          /* Last USB packet was a short packet — host already knows
-           * the transfer is done.  Complete normally. */
+          // Transfer complete
           histo_ep_data = 0;
           USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
 
 		  /* Process queue to send next packet if available */
 		  histo_process_queue();
       }
-  } else if (histo_ep_data == 2) {
-      /* ZLP sent and ACK'd — transfer truly complete. */
-      histo_ep_data = 0;
-      USBD_HISTO_TxCpltCallback(pTxHistoBuff, tx_histo_total_len, HISTOInEpAdd);
-      histo_process_queue();
   } else {
     /* ep_data == 0: no active transfer.
      * Attempt to send the next queued packet.  If the queue is empty,

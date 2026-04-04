@@ -1233,6 +1233,16 @@ _Bool check_streaming(void){
 				if (cmp_usb_fail_count > 0) {
 					printf("[CMP] USB send failures: %lu\r\n", (unsigned long)cmp_usb_fail_count);
 				}
+				/* Report queue-full drops (counter is in usbd_histo.c) */
+				extern volatile uint32_t histo_enq_fail_count;
+				if (histo_enq_fail_count > 0) {
+					printf("[HISTO] Queue-full drops: %lu (enq=%lu deq=%lu datain=%lu)\r\n",
+					       (unsigned long)histo_enq_fail_count,
+					       (unsigned long)histo_enq_count,
+					       (unsigned long)histo_deq_count,
+					       (unsigned long)histo_datain_count);
+					histo_enq_fail_count = 0;
+				}
 			}
 			/* Reset all stats */
 			pulse_count = 0;
@@ -1529,10 +1539,11 @@ _Bool send_histogram_data_cmp(void) {
 	if (tx_status != USBD_OK) {
 		status = false;
 		cmp_usb_fail_count++;
-		printf("[CMP] USB FAIL: status=%d, pkt_size=%d, %d cams, cmp_ratio=%d%%, time=%luus (usb_fail #%lu)\r\n",
-		       tx_status, offset, count,
-		       (p_off > 0) ? (cmp_len * 100 / p_off) : 0,
-		       (unsigned long)elapsed_us, (unsigned long)cmp_usb_fail_count);
+		/* Do NOT printf here — we are inside the FSIN ISR at priority 0.
+		 * A printf when the UART DMA ring buffer is full spin-waits up
+		 * to 10 ms, blocking all lower-priority interrupts (SPI/USART)
+		 * and causing the cascade of camera overruns.  Stats are printed
+		 * once in the scan-finished summary instead. */
 	}
 
 	frame_id++;
