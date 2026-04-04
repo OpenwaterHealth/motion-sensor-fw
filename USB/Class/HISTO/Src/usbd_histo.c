@@ -100,10 +100,10 @@ static uint16_t tx_histo_ptr = 0;
 static __IO uint8_t histo_ep_enabled = 0;
 __IO uint8_t histo_ep_data = 0;
 static uint8_t HISTOInEpAdd = HISTO_IN_EP;
-static volatile uint32_t histo_enq_count = 0;
-static volatile uint32_t histo_deq_count = 0;
-static volatile uint32_t histo_datain_count = 0;
-static volatile uint32_t histo_tx_fail_count = 0;
+volatile uint32_t histo_enq_count = 0;
+volatile uint32_t histo_deq_count = 0;
+volatile uint32_t histo_datain_count = 0;
+volatile uint32_t histo_tx_fail_count = 0;
 
 #ifndef USB_RAM_D2
 #define USB_RAM_D2 __attribute__((section(".ram_d2")))
@@ -219,21 +219,23 @@ static uint8_t histo_queue_is_full(void)
   return (histo_queue_count >= HISTO_QUEUE_SIZE);
 }
 
+static volatile uint32_t histo_enq_fail_count = 0;  /* monotonic count of queue-full drops */
+
 static uint8_t histo_queue_enqueue(uint8_t *data, uint16_t length)
 {
   if (histo_queue_is_full()) {
-    printf("HISTO enqueue fail: queue full (count=%u size=%u enq=%lu deq=%lu datain=%lu txfail=%lu)\r\n",
-           histo_queue_count, (uint8_t)HISTO_QUEUE_SIZE,
-           (unsigned long)histo_enq_count,
-           (unsigned long)histo_deq_count,
-           (unsigned long)histo_datain_count,
-           (unsigned long)histo_tx_fail_count);
+    /* NEVER printf here — this runs inside the FSIN ISR at priority 0.
+     * printf -> logging_uart_dma_write can spin-wait up to 10 ms when the
+     * UART TX ring buffer is full, because the DMA-complete ISR (also
+     * priority 0) cannot preempt us.  That 10 ms blocks ALL SPI/USART
+     * interrupts, causing camera histogram overruns and the cascade
+     * failure.  Instead, just bump a counter; the scan-finished summary
+     * will report the total. */
+    histo_enq_fail_count++;
     return USBD_FAIL;
   }
 
   if (length > USB_HISTO_MAX_SIZE) {
-    printf("HISTO enqueue fail: length too large (%u > %u)\r\n",
-           length, (uint16_t)USB_HISTO_MAX_SIZE);
     return USBD_FAIL;
   }
 
@@ -382,24 +384,7 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 {
   UNUSED(ep_idx);
   
-  if (pdev == NULL) {
-    printf("HISTO SendData fail: pdev NULL\r\n");
-    return USBD_FAIL;
-  }
-
-  if (data == NULL) {
-    printf("HISTO SendData fail: data NULL\r\n");
-    return USBD_FAIL;
-  }
-
-  if (len == 0) {
-    printf("HISTO SendData fail: len=0\r\n");
-    return USBD_FAIL;
-  }
-
-  if (len > USB_HISTO_MAX_SIZE) {
-    printf("HISTO SendData fail: len too large (%u > %u)\r\n",
-           len, (uint16_t)USB_HISTO_MAX_SIZE);
+  if (pdev == NULL || data == NULL || len == 0 || len > USB_HISTO_MAX_SIZE) {
     return USBD_FAIL;
   }
 
@@ -420,12 +405,7 @@ uint8_t USBD_HISTO_SendData(USBD_HandleTypeDef *pdev, uint8_t *data, uint16_t le
 
   /* If queue is empty and not currently sending, send directly */
   if (histo_queue_is_empty() && histo_ep_data == 0) {
-    uint8_t ret = USBD_HISTO_SetTxBuffer(pdev, data, len);
-    if (ret != USBD_OK) {
-      printf("HISTO SendData fail: SetTxBuffer ret=%u (ep_data=%u enabled=%u)\r\n",
-             ret, histo_ep_data, histo_ep_enabled);
-    }
-    return ret;
+    return USBD_HISTO_SetTxBuffer(pdev, data, len);
   }
   
   if (histo_ep_data == 0 && !histo_queue_is_empty()) {
