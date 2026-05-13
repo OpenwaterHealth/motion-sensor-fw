@@ -174,6 +174,7 @@ void MX_USB_DEVICE_Init(void)
 
 static volatile uint32_t s_usb_last_sof_ms       = 0;
 static volatile uint32_t s_usb_tx_failure_count  = 0;
+static volatile uint8_t  s_usb_sof_seen          = 0;   /* set to 1 by first SOF after (re)init  */
 static uint32_t          s_usb_last_recover_ms   = 0;
 static uint32_t          s_usb_recover_count     = 0;
 
@@ -184,6 +185,7 @@ extern void comms_host_start(void);
 void USB_NotifySof(void)
 {
     s_usb_last_sof_ms = HAL_GetTick();
+    s_usb_sof_seen    = 1;
 }
 
 void USB_NotifyTxFailure(void)
@@ -251,6 +253,7 @@ void USB_ForceRecover(void)
      *    immediately update the timestamp. */
     s_usb_last_sof_ms      = HAL_GetTick();
     s_usb_tx_failure_count = 0;
+    s_usb_sof_seen         = 0;   /* must observe a fresh SOF before re-arming */
 
     /* 5. Re-bring-up the stack. If any step fails, give up for this attempt;
      *    USB_RecoveryCheck() will trigger us again after the backoff. */
@@ -317,13 +320,37 @@ void USB_RecoveryCheck(void)
         return;
     }
 
-    /* SOF starvation while configured -> OTG core / PHY is wedged. */
-    if ((now - s_usb_last_sof_ms) > USB_SOF_TIMEOUT_MS)
+    /* Don't arm the SOF watchdog until we've actually observed at least one
+     * SOF since the last (re)init. This prevents a boot-time false trip if
+     * Sof_enable somehow ends up disabled, and also gives the host a moment
+     * after enumeration before we start counting. */
+    if (!s_usb_sof_seen)
     {
-        printf("[USB] No SOF for %lu ms while CONFIGURED - forcing recovery\r\n",
-               (unsigned long)(now - s_usb_last_sof_ms));
-        USB_ForceRecover();
-        return;
+        s_usb_last_sof_ms = now;
+    }
+    else
+    {
+        /* Snapshot the timestamp atomically: the SOF ISR fires every 125 us
+         * at HS and writes s_usb_last_sof_ms, so a torn read here would race
+         * the ISR and produce nonsense (e.g. last > now -> unsigned wrap). */
+        uint32_t primask  = __get_PRIMASK();
+        __disable_irq();
+        uint32_t last_sof = s_usb_last_sof_ms;
+        __set_PRIMASK(primask);
+
+        /* Treat last > now (ISR ran between reading `now` and `last_sof`) as
+         * zero elapsed time - we don't want a 1 ms ISR/main-loop race to
+         * trigger a recovery. */
+        uint32_t elapsed = (now >= last_sof) ? (now - last_sof) : 0u;
+
+        if (elapsed > USB_SOF_TIMEOUT_MS)
+        {
+            /* SOF starvation while configured -> OTG core / PHY is wedged. */
+            printf("[USB] No SOF for %lu ms while CONFIGURED - forcing recovery\r\n",
+                   (unsigned long)elapsed);
+            USB_ForceRecover();
+            return;
+        }
     }
 
     /* Persistent class-level TX failures -> endpoint stuck. */
