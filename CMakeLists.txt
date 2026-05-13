@@ -160,6 +160,15 @@ if(NOT FPGA_DOWNLOAD_ERROR EQUAL 0)
 endif()
 message(STATUS "FPGA bitstream downloaded to ${FPGA_BITSTREAM_BIN}")
 
+# Locate a Python interpreter for build-time scripts (e.g. merge_hex.py).
+# Prefer python3, fall back to python (Windows installers often ship only "python").
+find_program(PYTHON_EXECUTABLE NAMES python3 python)
+if(NOT PYTHON_EXECUTABLE)
+    message(FATAL_ERROR "Python interpreter not found (looked for 'python3' and 'python'). "
+                        "Install Python 3 and ensure it is on PATH.")
+endif()
+message(STATUS "Using Python interpreter: ${PYTHON_EXECUTABLE}")
+
 # Generate hex and bin files after build
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     # Generate firmware hex and bin
@@ -174,7 +183,7 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
 
     # Merge firmware + FPGA bitstream into a single hex file
     COMMAND ${CMAKE_COMMAND} -E echo "Merging firmware + FPGA bitstream hex files..."
-    COMMAND python3 ${CMAKE_SOURCE_DIR}/merge_hex.py
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/merge_hex.py
         ${CMAKE_PROJECT_NAME}.hex
         ${CMAKE_PROJECT_NAME}-raw.hex
         openmotion-camera-fpga.hex

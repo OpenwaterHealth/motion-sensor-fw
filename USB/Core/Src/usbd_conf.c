@@ -25,7 +25,7 @@
 #include "usbd_core.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "usb_device.h"   /* USB_NotifySof() for EFT lock-up watchdog */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -241,6 +241,9 @@ static void PCD_SOFCallback(PCD_HandleTypeDef *hpcd)
 void HAL_PCD_SOFCallback(PCD_HandleTypeDef *hpcd)
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
 {
+  /* Feed the USB EFT/lock-up watchdog: a live bus produces SOFs every 125 us
+   * (HS) so this is the cheapest, most reliable liveness signal we have. */
+  USB_NotifySof();
   USBD_LL_SOF((USBD_HandleTypeDef*)hpcd->pData);
 }
 
