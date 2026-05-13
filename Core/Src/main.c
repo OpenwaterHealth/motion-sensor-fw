@@ -395,6 +395,7 @@ int main(void)
   	comms_host_check_received(); // check comms  
     check_streaming();
     poll_mcu_temperature();  /* Print warning if MCU junction temp above threshold */
+    USB_RecoveryCheck();     /* EFT/lock-up watchdog: rebuild USB stack if bus goes dead */
   }
 
   /* USER CODE END 3 */

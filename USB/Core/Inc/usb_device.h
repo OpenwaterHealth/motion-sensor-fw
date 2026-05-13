@@ -57,6 +57,36 @@
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
  void MX_USB_DEVICE_DeInit(void);
+
+/* USB EFT/lock-up recovery API.
+ *
+ * The OTG_HS core (and external ULPI PHY) can be left in a stuck state by an
+ * EFT burst on nearby cabling. The symptoms are: the device stays "connected"
+ * from the host's point of view, but no transfers ever complete and the bus
+ * goes silent (no SOF interrupts). The helpers below detect that condition
+ * and rebuild the USB stack so the host re-enumerates the device.
+ *
+ *  - USB_NotifySof()        : called from the SOF ISR; cheap timestamp.
+ *  - USB_NotifyTxFailure()  : called by class TX paths whenever SendData
+ *                             returns BUSY/FAIL or its completion times out.
+ *  - USB_NotifyTxSuccess()  : called when a TX completes normally; resets
+ *                             the consecutive-failure counter.
+ *  - USB_RecoveryCheck()    : call periodically from the main loop. Triggers
+ *                             USB_ForceRecover() when SOF starvation or
+ *                             repeated TX failures are observed while the
+ *                             device is in the CONFIGURED state.
+ *  - USB_ForceRecover()     : tear down + bring back up the USB device stack
+ *                             (also pulses the OTG_HS / ULPI peripheral
+ *                             clocks so the core/PHY are hardware-reset).
+ *  - USB_GetRecoverCount()  : how many recoveries have run since boot
+ *                             (useful for diagnostics over UART).
+ */
+void USB_NotifySof(void);
+void USB_NotifyTxFailure(void);
+void USB_NotifyTxSuccess(void);
+void USB_RecoveryCheck(void);
+void USB_ForceRecover(void);
+uint32_t USB_GetRecoverCount(void);
 /* USER CODE END PFP */
 
 /*

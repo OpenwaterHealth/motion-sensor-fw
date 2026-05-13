@@ -10,6 +10,7 @@
 #include "if_commands.h"
 #include "usbd_comms.h"
 #include "usbd_def.h"
+#include "usb_device.h"
 #include "utils.h"
 #include "logging.h"
 #include "common.h"
@@ -151,6 +152,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 			printf("COMM USB TX failed: status=0x%02X\r\n", tx_status);
 		}
 		tx_flag = 1; // reset to idle on failure
+		USB_NotifyTxFailure();
 		return false;
 	}
 
@@ -167,6 +169,7 @@ _Bool comms_interface_send(UartPacket *pResp) {
 			// Timeout handling: Log error and break out or reset the flag.
 			printf("COMM USB TX Timeout\r\n");
 			tx_flag = 1; // reset to idle on timeout
+			USB_NotifyTxFailure();
 			return false;
 		}
 	}
@@ -352,5 +355,6 @@ void USBD_COMMS_RxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
 
 void USBD_COMMS_TxCpltCallback(uint8_t *Buf, uint32_t Len, uint8_t epnum) {
 	tx_flag = 1;
+	USB_NotifyTxSuccess();
 }
 
