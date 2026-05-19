@@ -33,6 +33,7 @@
 #include "histo_fake.h"
 #include "ICM20948.h"
 #include "camera_manager.h"
+#include "system_monitor.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -347,7 +348,10 @@ int main(void)
        FW_BUILD_TIME_STRING);
   printf("CPU Clock Frequency: %lu MHz\r\n",
          HAL_RCC_GetSysClockFreq() / 1000000);
+  system_monitor_capture_reset_cause();
   print_reset_cause();
+  system_monitor_print_history();
+  system_monitor_ecc_enable();
   HAL_PWREx_EnableMonitoring();  /* Enable junction temp (TEMPH/TEMPL) monitoring */
   printf("Initializing, please wait ...\r\n");
 
@@ -416,6 +420,7 @@ int main(void)
     check_streaming();
     poll_mcu_temperature();  /* Print warning if MCU junction temp above threshold */
     USB_RecoveryCheck();     /* EFT/lock-up watchdog: rebuild USB stack if bus goes dead */
+    system_monitor_poll();   /* ECC report drain + DMA error-flag scan */
     HAL_IWDG_Refresh(&hiwdg1);
   }
 
@@ -2052,25 +2057,7 @@ static void wait_for_usb_queues_to_finish(void)
   fflush(stdout);
 }
 
-/**
-* @brief  Single or double ECC error detected callback.
-*   hramecc : RAMECC handle
-* @retval None
-*/
-void HAL_RAMECC_DetectErrorCallback(RAMECC_HandleTypeDef *hramecc)
-{
-  
-  uint32_t FAR = HAL_RAMECC_GetFailingAddress(hramecc);
-  
-  if ((HAL_RAMECC_GetRAMECCError(hramecc) & HAL_RAMECC_SINGLEERROR_DETECTED) != 0U) {
-  
-  }
-  
-  if ((HAL_RAMECC_GetRAMECCError(hramecc) & HAL_RAMECC_DOUBLEERROR_DETECTED) != 0U) {
-  }
-  
-  hramecc->RAMECCErrorCode = HAL_RAMECC_NO_ERROR;
-}
+/* HAL_RAMECC_DetectErrorCallback is implemented in system_monitor.c */
 
 /* USER CODE END 4 */
 
