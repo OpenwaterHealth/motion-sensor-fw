@@ -68,6 +68,21 @@ CRC_HandleTypeDef hcrc;
 
 I2C_HandleTypeDef hi2c1;
 
+IWDG_HandleTypeDef hiwdg1;
+
+RAMECC_HandleTypeDef hramecc1_m1;
+RAMECC_HandleTypeDef hramecc1_m2;
+RAMECC_HandleTypeDef hramecc1_m3;
+RAMECC_HandleTypeDef hramecc1_m4;
+RAMECC_HandleTypeDef hramecc1_m5;
+RAMECC_HandleTypeDef hramecc2_m1;
+RAMECC_HandleTypeDef hramecc2_m2;
+RAMECC_HandleTypeDef hramecc2_m3;
+RAMECC_HandleTypeDef hramecc2_m4;
+RAMECC_HandleTypeDef hramecc2_m5;
+RAMECC_HandleTypeDef hramecc3_m1;
+RAMECC_HandleTypeDef hramecc3_m2;
+
 RNG_HandleTypeDef hrng;
 
 SPI_HandleTypeDef hspi2;
@@ -159,6 +174,8 @@ static void MX_TIM14_Init(void);
 static void MX_TIM16_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_TIM15_Init(void);
+static void MX_IWDG1_Init(void);
+static void MX_RAMECC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -301,6 +318,8 @@ int main(void)
   MX_TIM16_Init();
   MX_TIM5_Init();
   MX_TIM15_Init();
+  MX_IWDG1_Init();
+  MX_RAMECC_Init();
   /* USER CODE BEGIN 2 */
   
   if (HAL_TIM_Base_Start(&htim5) != HAL_OK)
@@ -423,8 +442,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 3;
@@ -563,6 +583,152 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief IWDG1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_IWDG1_Init(void)
+{
+
+  /* USER CODE BEGIN IWDG1_Init 0 */
+
+  /* USER CODE END IWDG1_Init 0 */
+
+  /* USER CODE BEGIN IWDG1_Init 1 */
+
+  /* USER CODE END IWDG1_Init 1 */
+  hiwdg1.Instance = IWDG1;
+  hiwdg1.Init.Prescaler = IWDG_PRESCALER_32;
+  hiwdg1.Init.Window = 4095;
+  hiwdg1.Init.Reload = 1000-1;
+  if (HAL_IWDG_Init(&hiwdg1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN IWDG1_Init 2 */
+
+  /* USER CODE END IWDG1_Init 2 */
+
+}
+
+/**
+  * @brief RAMECC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RAMECC_Init(void)
+{
+
+  /* USER CODE BEGIN RAMECC_Init 0 */
+
+  /* USER CODE END RAMECC_Init 0 */
+
+  /* USER CODE BEGIN RAMECC_Init 1 */
+
+  /* USER CODE END RAMECC_Init 1 */
+
+  /** Initialize RAMECC1 M1 : AXI SRAM
+  */
+  hramecc1_m1.Instance = RAMECC1_Monitor1;
+  if (HAL_RAMECC_Init(&hramecc1_m1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC1 M2 : ITCM-RAM
+  */
+  hramecc1_m2.Instance = RAMECC1_Monitor2;
+  if (HAL_RAMECC_Init(&hramecc1_m2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC1 M3 : D0TCM-RAM
+  */
+  hramecc1_m3.Instance = RAMECC1_Monitor3;
+  if (HAL_RAMECC_Init(&hramecc1_m3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC1 M4 : D1TCM-RAM
+  */
+  hramecc1_m4.Instance = RAMECC1_Monitor4;
+  if (HAL_RAMECC_Init(&hramecc1_m4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC1 M5 : ETM RAM
+  */
+  hramecc1_m5.Instance = RAMECC1_Monitor5;
+  if (HAL_RAMECC_Init(&hramecc1_m5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC2 M1 : SRAM1_0
+  */
+  hramecc2_m1.Instance = RAMECC2_Monitor1;
+  if (HAL_RAMECC_Init(&hramecc2_m1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC2 M2 SRAM1_1
+  */
+  hramecc2_m2.Instance = RAMECC2_Monitor2;
+  if (HAL_RAMECC_Init(&hramecc2_m2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC2 M3 : SRAM2_0
+  */
+  hramecc2_m3.Instance = RAMECC2_Monitor3;
+  if (HAL_RAMECC_Init(&hramecc2_m3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC2 M4 : SRAM2_1
+  */
+  hramecc2_m4.Instance = RAMECC2_Monitor4;
+  if (HAL_RAMECC_Init(&hramecc2_m4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC2 M5 : SRAM3
+  */
+  hramecc2_m5.Instance = RAMECC2_Monitor5;
+  if (HAL_RAMECC_Init(&hramecc2_m5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC3 M1 : SRAM4
+  */
+  hramecc3_m1.Instance = RAMECC3_Monitor1;
+  if (HAL_RAMECC_Init(&hramecc3_m1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initialize RAMECC3 M2 : Backup RAM
+  */
+  hramecc3_m2.Instance = RAMECC3_Monitor2;
+  if (HAL_RAMECC_Init(&hramecc3_m2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RAMECC_Init 2 */
+
+  /* USER CODE END RAMECC_Init 2 */
 
 }
 
@@ -1883,6 +2049,27 @@ static void wait_for_usb_queues_to_finish(void)
   printf("USB queue wait timeout after %lu ms (some data may not have been sent).\r\n", elapsed);
   fflush(stdout);
 }
+
+/**
+* @brief  Single or double ECC error detected callback.
+*   hramecc : RAMECC handle
+* @retval None
+*/
+void HAL_RAMECC_DetectErrorCallback(RAMECC_HandleTypeDef *hramecc)
+{
+  
+  uint32_t FAR = HAL_RAMECC_GetFailingAddress(hramecc);
+  
+  if ((HAL_RAMECC_GetRAMECCError(hramecc) & HAL_RAMECC_SINGLEERROR_DETECTED) != 0U) {
+  
+  }
+  
+  if ((HAL_RAMECC_GetRAMECCError(hramecc) & HAL_RAMECC_DOUBLEERROR_DETECTED) != 0U) {
+  }
+  
+  hramecc->RAMECCErrorCode = HAL_RAMECC_NO_ERROR;
+}
+
 /* USER CODE END 4 */
 
  /* MPU Configuration */
