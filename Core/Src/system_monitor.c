@@ -153,6 +153,13 @@ void system_monitor_ecc_enable(void)
     }
 }
 
+/* Threshold of double-bit errors per boot that triggers a clean reset.
+ * Counter is per-session (zeroed by C runtime each boot) so that the
+ * persistent .noinit ecc_dbe_count can keep accumulating across resets
+ * without instantly re-triggering the reset path on the next boot. */
+#define ECC_DBE_RESET_THRESHOLD 10u
+static uint32_t s_ecc_dbe_session;
+
 static void ecc_poll(void)
 {
     for (uint32_t i = 0; i < ECC_MON_COUNT; i++) {
@@ -165,8 +172,10 @@ static void ecc_poll(void)
         if (sr & RAMECC_SR_SEDCF) {
             s_persist.ecc_sbe_count++;
         }
-        if (sr & (RAMECC_SR_DEDF | RAMECC_SR_DEBWDF)) {
+        bool dbe = (sr & (RAMECC_SR_DEDF | RAMECC_SR_DEBWDF)) != 0u;
+        if (dbe) {
             s_persist.ecc_dbe_count++;
+            s_ecc_dbe_session++;
         }
         s_persist.ecc_last_addr    = addr;
         s_persist.ecc_last_monitor = i;
@@ -181,6 +190,16 @@ static void ecc_poll(void)
         }
 
         __HAL_RAMECC_CLEAR_FLAG(h, RAMECC_FLAGS_ALL);
+
+        if (dbe && s_ecc_dbe_session >= ECC_DBE_RESET_THRESHOLD) {
+            printf("[ECC] DBE threshold reached (%lu this boot, %lu total) - resetting\r\n",
+                   (unsigned long)s_ecc_dbe_session,
+                   (unsigned long)s_persist.ecc_dbe_count);
+            /* Flush UART before pulling the trigger. */
+            for (volatile uint32_t d = 0; d < 200000u; d++) { __NOP(); }
+            __DSB();
+            NVIC_SystemReset();
+        }
     }
 }
 
