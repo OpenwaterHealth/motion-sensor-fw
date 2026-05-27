@@ -157,7 +157,9 @@ void system_monitor_ecc_enable(void)
  * Counter is per-session (zeroed by C runtime each boot) so that the
  * persistent .noinit ecc_dbe_count can keep accumulating across resets
  * without instantly re-triggering the reset path on the next boot. */
-#define ECC_DBE_RESET_THRESHOLD 10u
+//#define ECC_DBE_RESET_THRESHOLD 10u
+#define ECC_DBE_RESET_THRESHOLD 1u
+
 static uint32_t s_ecc_dbe_session;
 
 static void ecc_poll(void)
@@ -195,10 +197,11 @@ static void ecc_poll(void)
             printf("[ECC] DBE threshold reached (%lu this boot, %lu total) - resetting\r\n",
                    (unsigned long)s_ecc_dbe_session,
                    (unsigned long)s_persist.ecc_dbe_count);
+            //ytt remove first
             /* Flush UART before pulling the trigger. */
-            for (volatile uint32_t d = 0; d < 200000u; d++) { __NOP(); }
-            __DSB();
-            NVIC_SystemReset();
+            //for (volatile uint32_t d = 0; d < 200000u; d++) { __NOP(); }
+            //__DSB();
+            //NVIC_SystemReset();
         }
     }
 }

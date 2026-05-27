@@ -65,6 +65,50 @@ Reset_Handler:
 /* Call the clock system initialization function.*/
   bl  SystemInit
 
+
+//ytt add ram clean
+//================================================
+
+/* STM32H7 ITCM RAM 初始化 (以 64-bit / 雙字組寫入) */
+movs r0, #0
+movs r1, #0
+ldr  r2, =0x00000000    /* ITCM 起始地址 (D1_ITCMRAM_BASE) */
+ldr  r3, =0x00010000    /* ITCM 結束地址 (根據您的晶片大小，例如 64KB) */
+LoopInitITCM:
+strd r0, r1, [r2], #8   /* 使用 STRD 一次寫入 64 位元的 0，並將地址遞增 8 */
+cmp  r2, r3
+bcc  LoopInitITCM
+//================================================
+/* STM32H7 DTCM RAM 初始化 (以 64-bit / 雙字組寫入) */
+    movs r0, #0
+    movs r1, #0
+    ldr  r2, =0x20000000    /* DTCM 起始地址 (D1_DTCMRAM_BASE) */
+    ldr  r3, =0x20020000    /* DTCM 結束地址 (0x20000000 + 128KB) */
+LoopInitDTCM:
+    strd r0, r1, [r2], #8   /* 一次寫入 64-bit 的 0，並將地址自動加 8 */
+    cmp  r2, r3
+    bcc  LoopInitDTCM       /* 若未到達 0x20020000 則繼續迴圈 */
+//================================================
+// STM32H7 DTCM RAM 初始化 (以 64-bit / 雙字組寫入)
+// AXI RAM (512KB)
+    movs r0, #0
+    movs r1, #0
+    ldr  r2, =0x24000000
+    ldr  r3, =0x24080000
+LoopInitAXIRAM:
+    strd r0, r1, [r2], #8
+    cmp  r2, r3
+    bcc  LoopInitAXIRAM
+//================================================
+
+/* Seed ECC syndromes on every SRAM bank before .data/.bss init so that
+   the first byte/halfword store to a never-written 64-bit line does not
+   latch spurious SEDCF+DEDF in the RAMECC controller. ram_scrub() uses
+   only its own stack frame and no global/static state. */
+  bl  ram_scrub
+
+
+
 /* Copy the data segment initializers from flash to SRAM */
   ldr r0, =_sdata
   ldr r1, =_edata

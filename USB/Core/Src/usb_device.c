@@ -169,7 +169,7 @@ void MX_USB_DEVICE_Init(void)
  *==========================================================================*/
 
 #define USB_SOF_TIMEOUT_MS        500u   /* No SOF for this long while CONFIGURED -> bus is dead   */
-#define USB_TX_FAIL_THRESHOLD     10u    /* Consecutive class TX failures that trip a recovery     */
+#define USB_TX_FAIL_THRESHOLD     3u //YTT TEST 10u    /* Consecutive class TX failures that trip a recovery     */
 #define USB_RECOVER_BACKOFF_MS    2000u  /* Minimum spacing between recovery attempts              */
 
 static volatile uint32_t s_usb_last_sof_ms       = 0;
@@ -211,6 +211,13 @@ uint32_t USB_GetRecoverCount(void)
  * the main loop. Must NOT be called from an ISR. */
 void USB_ForceRecover(void)
 {
+
+	//ytt
+	//ytt
+	printf("[USB] USB_ForceRecover\r\n");
+	//NVIC_SystemReset();
+
+
     uint32_t now = HAL_GetTick();
 
     /* Throttle: don't hammer recovery if something is wrong at a deeper level. */
@@ -226,6 +233,11 @@ void USB_ForceRecover(void)
            (unsigned long)s_usb_recover_count,
            (unsigned)hUsbDeviceHS.dev_state,
            (unsigned long)s_usb_tx_failure_count);
+
+    //ytt mcu reset
+    HAL_Delay(100);
+    NVIC_SystemReset();
+    HAL_Delay(20);
 
     /* 1. Best-effort tear-down. Ignore return codes: the whole point is that
      *    the stack may already be in a bad state. */

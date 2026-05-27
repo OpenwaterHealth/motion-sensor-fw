@@ -261,6 +261,47 @@ static void PrintI2CSpeed(I2C_HandleTypeDef *hi2c)
   printf("I2C Speed: %ld Hz\r\n", scl_freq); // Print the I2C speed in kHz
 }
 
+
+
+
+
+//ytt fae
+uint32_t u32EmuationTime;
+void dump_some_flag(void)
+{
+	printf("0x%x:", HAL_GetTick());
+
+	/* Check CRS Error flag  */
+	if(__HAL_RCC_CRS_GET_FLAG(CRS_ISR_SYNCOKF)==0)
+	{
+		printf("CRS_ISR_SYNCOKF=%d,",CRS->ISR);
+	}
+	else
+	{
+		printf("CRS_ISR_SYNCOKF OK,");
+	}
+
+	if(__HAL_RCC_CRS_GET_FLAG(CRS_ISR_ERRF)==0)
+	{
+		printf("CRS_ISR_ERRF=%d,",CRS->ISR);
+	}
+	else
+	{
+		printf("CRS_ISR_ERRF OK,");
+	}
+
+	if(__HAL_RCC_CRS_GET_FLAG(CRS_ISR_SYNCMISS)==0)
+	{
+		printf("CRS_ISR_SYNCMISS=%d,",CRS->ISR);
+	}
+	else
+	{
+		printf("CRS_ISR_SYNCMISS OK,");
+	}
+	printf("USB=%d,",hUsbDeviceHS.dev_state);
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -350,6 +391,9 @@ int main(void)
          HAL_RCC_GetSysClockFreq() / 1000000);
   system_monitor_capture_reset_cause();
   print_reset_cause();
+
+
+
   system_monitor_print_history();
   system_monitor_ecc_enable();
   HAL_PWREx_EnableMonitoring();  /* Enable junction temp (TEMPH/TEMPL) monitoring */
@@ -421,6 +465,37 @@ int main(void)
     poll_mcu_temperature();  /* Print warning if MCU junction temp above threshold */
     USB_RecoveryCheck();     /* EFT/lock-up watchdog: rebuild USB stack if bus goes dead */
     system_monitor_poll();   /* ECC report drain + DMA error-flag scan */
+
+//ytt
+	if(hUsbDeviceHS.dev_state == USBD_STATE_DEFAULT )
+	{
+			//after USB BUS RESET
+			u32EmuationTime=3000;//3000ms
+			do
+			{
+				u32EmuationTime--;
+				HAL_Delay(1);
+				if(hUsbDeviceHS.dev_state != USBD_STATE_DEFAULT)
+				{
+					printf("*** EmuationTime=%d ms\n", (300-u32EmuationTime));
+					dump_some_flag();
+					break;
+				}
+			}while(u32EmuationTime>0);
+
+			if(hUsbDeviceHS.dev_state == USBD_STATE_DEFAULT )
+			{
+
+				//after reset 3000ms still default?
+				printf("usb still default\n");
+				dump_some_flag();
+				//
+			}
+	}
+
+
+
+
     HAL_IWDG_Refresh(&hiwdg1);
   }
 
@@ -2145,6 +2220,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_CRC_DeInit(&hcrc);
     
     MX_USB_DEVICE_DeInit();
+    printf("[USB] ytt TIM15\r\n");
     delay_ms(300);
     // Reset the board
     NVIC_SystemReset();

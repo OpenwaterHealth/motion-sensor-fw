@@ -476,6 +476,8 @@ USBD_StatusTypeDef USBD_SetClassConfig(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
       if (pdev->pClass[i] != NULL)
       {
         pdev->classId = i;
+        //ytt
+        printf("ytt USBD_SetClassConfig\r\n");
         /* Set configuration  and Start the Class*/
         if (pdev->pClass[i]->Init(pdev, cfgidx) != 0U)
         {
